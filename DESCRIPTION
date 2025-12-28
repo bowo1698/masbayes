@@ -1,0 +1,28 @@
+Package: genomicbayes
+Title: Rust-Accelerated MCMC Backend for Genomic Prediction
+Version: 0.1.0
+Authors@R: c(
+    person("Wibowo", "Agus", 
+           email = "aguswibowo1698@gmail.com", 
+           role = c("aut", "cre"))
+    )
+Description: High-performance MCMC sampling engines for BayesR and BayesA 
+    genomic prediction methods for multi-allelic microhaplotype.
+License: MIT + file LICENSE
+URL: https://github.com/bowo1698/genomicbayes
+BugReports: https://github.com/bowo1698/genomicbayes/issues
+Encoding: UTF-8
+Depends: 
+    R (>= 4.0.0)
+Imports:
+    coda,
+    dplyr
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+SystemRequirements: 
+    Cargo (Rust's package manager),
+    rustc (>= 1.70.0)
+RoxygenNote: 7.2.0
+VignetteBuilder: knitr

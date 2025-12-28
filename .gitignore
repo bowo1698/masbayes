@@ -1,0 +1,19 @@
+# R build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# R package build
+*.tar.gz
+/man/*.Rd~
+
+# macOS
+.DS_Store
+
+# RStudio
+*.Rproj

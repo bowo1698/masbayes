@@ -1,0 +1,8 @@
+# Compiled Object files
+*.o
+*.so
+*.dylib
+*.dll
+
+# R build artifacts
+*.rds

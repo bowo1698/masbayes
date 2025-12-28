@@ -1,0 +1,26 @@
+# Find cargo in PATH or common locations
+CARGO := $(shell command -v cargo 2>/dev/null || echo "$(HOME)/.cargo/bin/cargo")
+
+TARGET_DIR = rust/target
+LIBDIR = $(TARGET_DIR)/release
+STATLIB = $(LIBDIR)/libgenomicbayes.a
+
+# Link flags for macOS
+PKG_LIBS = -L$(LIBDIR) -lgenomicbayes -framework Security -framework CoreFoundation
+
+all: $(SHLIB)
+
+$(SHLIB): $(STATLIB)
+
+$(STATLIB):
+	@if [ ! -x "$(CARGO)" ]; then \
+		echo "Error: cargo not found. Please install Rust from https://rustup.rs"; \
+		exit 1; \
+	fi
+	$(CARGO) build --release --manifest-path=rust/Cargo.toml
+
+C_clean:
+	rm -rf $(SHLIB) $(OBJECTS)
+
+clean:
+	rm -rf $(STATLIB) $(OBJECTS) $(SHLIB) rust/target
