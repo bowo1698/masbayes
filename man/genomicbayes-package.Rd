@@ -2,7 +2,7 @@
 \alias{genomicbayes-package}
 \alias{genomicbayes}
 \docType{package}
-\title{Rust-Accelerated MCMC Backend for Genomic Prediction}
+\title{Rust-Accelerated MCMC Backend for Multiallelic-based Genomic Prediction}
 \description{
 High-performance MCMC sampling engines for BayesR and BayesA genomic prediction methods.
 Provides Rust backend functions for accelerated computation.
@@ -15,7 +15,7 @@ This package provides two main functions:
 }
 }
 \author{
-Bowo Wibowo
+Agus Wibowo
 
-Maintainer: Bowo Wibowo <bowo@example.com>
+Maintainer: aguswibowo1698@gmail.com
 }
