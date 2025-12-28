@@ -4,7 +4,7 @@
 
 #' @docType package
 #' @usage NULL
-#' @useDynLib genomicbayes, .registration = TRUE
+#' @useDynLib masbayes, .registration = TRUE
 NULL
 
 #' Run BayesR MCMC

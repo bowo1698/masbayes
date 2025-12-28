@@ -2,19 +2,19 @@ CARGO := $(shell command -v cargo 2>/dev/null || echo "$(HOME)/.cargo/bin/cargo"
 
 TARGET_DIR = rust/target
 LIBDIR = $(TARGET_DIR)/release
-STATLIB = $(LIBDIR)/libgenomicbayes.a
+STATLIB = $(LIBDIR)/libmasbayes.a
 
 # Platform-specific linking flags
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
     # macOS
-    PKG_LIBS = -L$(LIBDIR) -lgenomicbayes -framework Security -framework CoreFoundation
+    PKG_LIBS = -L$(LIBDIR) -lmasbayes -framework Security -framework CoreFoundation
 else ifeq ($(UNAME),Linux)
     # Linux
-    PKG_LIBS = -L$(LIBDIR) -lgenomicbayes -ldl -lm -lpthread
+    PKG_LIBS = -L$(LIBDIR) -lmasbayes -ldl -lm -lpthread
 else
     # Other Unix (generic)
-    PKG_LIBS = -L$(LIBDIR) -lgenomicbayes
+    PKG_LIBS = -L$(LIBDIR) -lmasbayes
 endif
 
 all: $(SHLIB)

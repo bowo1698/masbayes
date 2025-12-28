@@ -1,6 +1,6 @@
-\name{genomicbayes-package}
-\alias{genomicbayes-package}
-\alias{genomicbayes}
+\name{masbayes-package}
+\alias{masbayes-package}
+\alias{masbayes}
 \docType{package}
 \title{Rust-Accelerated MCMC Backend for Multiallelic-based Genomic Prediction}
 \description{

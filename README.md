@@ -1,4 +1,4 @@
-# genomicbayes
+# MasBayes
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -75,7 +75,7 @@ sudo yum groupinstall "Development Tools"
 
 ## Installation
 
-Once Rust is installed, you can install `genomicbayes`:
+Once Rust is installed, you can install `masbayes`:
 
 ### Install from GitHub
 ```r
@@ -84,22 +84,22 @@ if (!requireNamespace("devtools", quietly = TRUE)) {
   install.packages("devtools")
 }
 
-# Install genomicbayes
-devtools::install_github("bowo1698/genomicbayes")
+# Install masbayes
+devtools::install_github("bowo1698/masbayes")
 ```
 
 ### Verify Installation
 ```r
-library(genomicbayes)
+library(masbayes)
 
 # Check available functions
-ls("package:genomicbayes")
+ls("package:masbayes")
 # Should show: run_bayesa_mcmc, run_bayesr_mcmc
 ```
 
 ## Quick Start
 ```r
-library(genomicbayes)
+library(masbayes)
 
 # Prepare data
 W <- matrix(rnorm(100 * 50), 100, 50)  # Genotype matrix
@@ -177,11 +177,11 @@ rustup update
 
 If you use this package in your research, please cite:
 ```bibtex
-@software{genomicbayes2025,
+@software{masbayes2025,
   author = {Agus Wibowo},
-  title = {genomicbayes: Rust-Accelerated Genomic Prediction},
+  title = {masbayes: Rust-Accelerated Genomic Prediction},
   year = {2025},
-  url = {https://github.com/bowo1698/genomicbayes}
+  url = {https://github.com/bowo1698/masbayes}
 }
 ```
 
@@ -195,9 +195,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Support
 
-- Report bugs: [GitHub Issues](https://github.com/bowo1698/genomicbayes/issues)
+- Report bugs: [GitHub Issues](https://github.com/bowo1698/masbayes/issues)
 - Email: aguswibowo1698@gmail.com
-- Documentation: [Wiki](https://github.com/bowo1698/genomicbayes/wiki)
+- Documentation: [Wiki](https://github.com/bowo1698/masbayes/wiki)
 
 ## Acknowledgments
 

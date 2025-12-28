@@ -2,4 +2,4 @@
 
 export(run_bayesr_mcmc)
 export(run_bayesa_mcmc)
-useDynLib(genomicbayes, .registration = TRUE)
+useDynLib(masbayes, .registration = TRUE)

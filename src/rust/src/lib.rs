@@ -173,7 +173,7 @@ fn run_bayesa_mcmc(
 
 // Macro to generate exports
 extendr_module! {
-    mod genomicbayes_extendr;
+    mod masbayes_extendr;
     fn run_bayesr_mcmc;
     fn run_bayesa_mcmc;
 }
