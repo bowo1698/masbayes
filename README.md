@@ -13,26 +13,69 @@ Rust-accelerated MCMC backend for BayesR and BayesA genomic prediction methods.
 ## System Requirements
 
 ### Essential
-- **R** (>= 4.0.0)
-- **Rust** (>= 1.70.0) - [Install from rustup.rs](https://rustup.rs)
+- **R** (>= 4.0.0) - Standard R installation from [CRAN](https://cran.r-project.org/)
+- **Rust** (>= 1.70.0) - Required for compilation
 - **Cargo** (comes with Rust)
 
-### Platform-Specific
-- **macOS**: Xcode Command Line Tools
+**macOS & Linux** (via Terminal):
 ```bash
-  xcode-select --install
+# Install Rust using rustup (recommended method)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Follow the prompts (usually just press Enter)
+# Then activate Rust in current session:
+source $HOME/.cargo/env
+
+# Verify installation
+rustc --version
+cargo --version
 ```
-- **Linux**: gcc, make
+
+**Windows**:
+1. Download Rust installer from [https://rustup.rs](https://rustup.rs)
+2. Run `rustup-init.exe`
+3. Follow installation prompts (use default settings)
+4. Restart your terminal/command prompt
+5. Verify installation:
+
+```cmd
+   rustc --version
+   cargo --version
+```
+
+**Note:** Rust installation is a one-time setup (~5 minutes, ~500MB). Once installed, you can build this and other Rust-based R packages.
+
+---
+
+### Additional Platform Requirements
+
+These are usually already installed, but may be needed:
+
+**macOS**:
 ```bash
-  # Ubuntu/Debian
-  sudo apt-get install build-essential
-  
-  # RHEL/CentOS
-  sudo yum groupinstall "Development Tools"
+# Xcode Command Line Tools (if not already installed)
+xcode-select --install
 ```
-- **Windows**: [Rtools](https://cran.r-project.org/bin/windows/Rtools/)
+
+**Linux**:
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install build-essential
+
+# RHEL/CentOS/Fedora
+sudo yum groupinstall "Development Tools"
+```
+
+**Windows**:
+- [Rtools](https://cran.r-project.org/bin/windows/Rtools/) - for R package compilation
+- Rust installer will handle the rest
+
+---
 
 ## Installation
+
+Once Rust is installed, you can install `genomicbayes`:
 
 ### Install from GitHub
 ```r
