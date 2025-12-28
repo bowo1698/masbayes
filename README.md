@@ -14,7 +14,7 @@ Rust-accelerated MCMC backend for BayesR and BayesA genomic prediction methods.
 
 ### Essential
 - **R** (>= 4.0.0) - Standard R installation from [CRAN](https://cran.r-project.org/)
-- **Rust** (>= 1.70.0) - Required for compilation
+- **Rust** (>= 1.80.0) - Required for compilation
 - **Cargo** (comes with Rust)
 
 **macOS & Linux** (via Terminal):
