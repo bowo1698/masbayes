@@ -1,0 +1,21 @@
+CARGO := $(shell where cargo 2>NUL || echo "%USERPROFILE%\.cargo\bin\cargo.exe")
+
+TARGET = x86_64-pc-windows-gnu
+TARGET_DIR = rust/target
+LIBDIR = $(TARGET_DIR)/$(TARGET)/release
+STATLIB = $(LIBDIR)/libgenomicbayes.a
+
+PKG_LIBS = -L$(LIBDIR) -lgenomicbayes -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll
+
+all: $(SHLIB)
+
+$(SHLIB): $(STATLIB)
+
+$(STATLIB):
+	$(CARGO) build --target=$(TARGET) --release --manifest-path=rust/Cargo.toml
+
+C_clean:
+	rm -rf $(SHLIB) $(OBJECTS)
+
+clean:
+	rm -rf $(STATLIB) $(OBJECTS) $(SHLIB) rust/target
