@@ -1,10 +1,23 @@
-# Package initialization
 .onLoad <- function(libname, pkgname) {
-  # Load Rust library
   library.dynam("genomicbayes", pkgname, libname)
+}
+
+.onAttach <- function(libname, pkgname) {
+  version <- utils::packageVersion("genomicbayes")
   
-  # Print startup message
-  packageStartupMessage("genomicbayes: Rust-accelerated Bayesian genomic prediction")
+  packageStartupMessage(
+    "\n═══════════════════════════════════════════════════════════════\n",
+    " genomicbayes v", version, "\n",
+    " Rust-Accelerated Bayesian Genomic Prediction\n",
+    "───────────────────────────────────────────────────────────────\n",
+    " Features:   Multi-allelic markers\n",
+    " Methods:    BayesR (mixture) | BayesA (marker-specific)\n",
+    "───────────────────────────────────────────────────────────────\n",
+    " Functions:    run_bayesr_mcmc() | run_bayesa_mcmc()\n",
+    " Quick start:  ?genomicbayes\n",
+    " Report bugs:  github.com/bowo1698/genomicbayes/issues\n",
+    "═══════════════════════════════════════════════════════════════\n"
+  )
 }
 
 .onUnload <- function(libpath) {

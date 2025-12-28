@@ -34,7 +34,7 @@ Rust-accelerated MCMC backend for BayesR and BayesA genomic prediction methods.
 
 ## Installation
 
-### Option 1: Install from GitHub (Recommended)
+### Install from GitHub
 ```r
 # Install devtools if not already installed
 if (!requireNamespace("devtools", quietly = TRUE)) {
@@ -43,17 +43,6 @@ if (!requireNamespace("devtools", quietly = TRUE)) {
 
 # Install genomicbayes
 devtools::install_github("bowo1698/genomicbayes")
-```
-
-### Option 2: Install from Source
-```bash
-# Clone repository
-git clone https://github.com/bowo1698/genomicbayes.git
-cd genomicbayes
-
-# Build and install
-R CMD build .
-R CMD INSTALL genomicbayes_0.1.0.tar.gz
 ```
 
 ### Verify Installation

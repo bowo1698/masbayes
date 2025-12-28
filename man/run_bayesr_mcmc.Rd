@@ -1,8 +1,8 @@
 \name{run_bayesr_mcmc}
 \alias{run_bayesr_mcmc}
-\title{Run BayesR MCMC Sampling (Rust Backend)}
+\title{BayesR with MCMC sampling for multiallelic-based genomic prediction (Rust Backend)}
 \description{
-High-performance MCMC sampling for BayesR genomic prediction with mixture prior.
+BayesR for multiallelic-based genomic prediction with mixture prior.
 }
 \usage{
 run_bayesr_mcmc(w, y, wtw_diag, wty, pi_vec, sigma2_vec, 

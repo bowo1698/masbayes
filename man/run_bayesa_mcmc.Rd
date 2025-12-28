@@ -1,8 +1,8 @@
 \name{run_bayesa_mcmc}
 \alias{run_bayesa_mcmc}
-\title{Run BayesA MCMC Sampling (Rust Backend)}
+\title{BayesA with MCMC sampling for multiallelic-based genomic prediction (Rust Backend)}
 \description{
-High-performance MCMC sampling for BayesA genomic prediction with marker-specific variance.
+BayesA for multiallelic-based genomic prediction with marker-specific variance.
 }
 \usage{
 run_bayesa_mcmc(w, y, wtw_diag, wty, nu, s_squared, 
