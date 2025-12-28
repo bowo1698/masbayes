@@ -6,7 +6,7 @@ Rust-accelerated MCMC backend for BayesR and BayesA genomic prediction methods.
 
 ## Features
 
-- Multi-allelic microhaplotype support
+- Multi-allelic support (only)
 - BayesR with mixture prior (4-component)
 - BayesA with marker-specific variance
 
