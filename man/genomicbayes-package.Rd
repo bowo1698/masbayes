@@ -17,5 +17,5 @@ This package provides two main functions:
 \author{
 Agus Wibowo
 
-Maintainer: aguswibowo1698@gmail.com
+Maintainer: Agus Wibowo <aguswibowo1698@gmail.com>
 }
