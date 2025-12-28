@@ -10,7 +10,7 @@ Rust-accelerated MCMC backend for BayesR and BayesA genomic prediction methods.
 - BayesR with mixture prior (4-component)
 - BayesA with marker-specific variance
 
-## System Requirements n
+## System Requirements
 
 ### Essential
 - **R** (>= 4.0.0) - Standard R installation from [CRAN](https://cran.r-project.org/)
