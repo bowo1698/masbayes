@@ -131,6 +131,26 @@ fn construct_wah_matrix(
             &reference,
         );
         
+        // Parse block and allele from allele_ids
+        let mut blocks = Vec::new();
+        let mut alleles = Vec::new();
+        
+        for allele_id in &reference.allele_ids {
+            // Parse "hap_1_1_allele3" -> block="hap_1_1", allele=3
+            if let Some(pos) = allele_id.rfind("_allele") {
+                let block = allele_id[..pos].to_string();
+                let allele_str = &allele_id[pos+7..];  // Skip "_allele"
+                let allele: i32 = allele_str.parse().unwrap_or(0);
+                
+                blocks.push(block);
+                alleles.push(allele);
+            } else {
+                // Fallback if parsing fails
+                blocks.push(String::new());
+                alleles.push(0);
+            }
+        }
+        
         // Convert to RMatrix and set column names
         let mut w_test_rmatrix = array2_to_rmatrix(&w_test);
         let _ = w_test_rmatrix.set_attrib("dimnames", list!(NULL, reference.allele_ids.clone()));
@@ -140,6 +160,8 @@ fn construct_wah_matrix(
             W_ah = w_test_rmatrix,
             allele_info = list!(
                 allele_id = reference.allele_ids.clone(),
+                block = blocks,
+                allele = alleles,
                 freq = reference.frequencies.clone()
             ),
             dropped_alleles = if reference.dropped_alleles.is_empty() {
