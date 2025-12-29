@@ -12,14 +12,25 @@ use crate::matrix::{WMatrixBuilder, AlleleFreq, ReferenceStructure, DroppedAllel
 
 /// Convert R list to AlleleFreq vector
 fn parse_allele_freq(freq_df: List) -> Result<Vec<AlleleFreq>> {
-    let haplotype: Vec<String> = freq_df.dollar("haplotype")?.as_string_vector()?;
-    let allele: Vec<i32> = freq_df.dollar("allele")?.as_integer_vector()?;
-    let freq: Vec<f64> = freq_df.dollar("freq")?.as_real_vector()?;
+    let haplotype = freq_df.dollar("haplotype")
+        .ok_or_else(|| Error::from("Missing 'haplotype' column"))?
+        .as_string_vector()
+        .ok_or_else(|| Error::from("'haplotype' must be character vector"))?;
+    
+    let allele = freq_df.dollar("allele")
+        .ok_or_else(|| Error::from("Missing 'allele' column"))?
+        .as_integer_vector()
+        .ok_or_else(|| Error::from("'allele' must be integer vector"))?;
+    
+    let freq = freq_df.dollar("freq")
+        .ok_or_else(|| Error::from("Missing 'freq' column"))?
+        .as_real_vector()
+        .ok_or_else(|| Error::from("'freq' must be numeric vector"))?;
     
     let mut result = Vec::new();
     for i in 0..haplotype.len() {
         result.push(AlleleFreq {
-            haplotype: haplotype[i].clone(),
+            haplotype: haplotype[i].to_string(),
             allele: allele[i],
             freq: freq[i],
         });
@@ -30,29 +41,39 @@ fn parse_allele_freq(freq_df: List) -> Result<Vec<AlleleFreq>> {
 
 /// Convert R list to ReferenceStructure
 fn parse_reference_structure(ref_list: List) -> Result<ReferenceStructure> {
-    let allele_info = ref_list.dollar("allele_info")?;
+    let allele_info = ref_list.dollar("allele_info")
+        .ok_or_else(|| Error::from("Missing 'allele_info' in reference structure"))?;
     
-    let allele_ids: Vec<String> = allele_info.dollar("allele_id")?.as_string_vector()?;
-    let frequencies: Vec<f64> = allele_info.dollar("freq")?.as_real_vector()?;
+    let allele_ids = allele_info.dollar("allele_id")
+        .ok_or_else(|| Error::from("Missing 'allele_id' in allele_info"))?
+        .as_string_vector()
+        .ok_or_else(|| Error::from("'allele_id' must be character vector"))?;
+    
+    let frequencies = allele_info.dollar("freq")
+        .ok_or_else(|| Error::from("Missing 'freq' in allele_info"))?
+        .as_real_vector()
+        .ok_or_else(|| Error::from("'freq' must be numeric vector"))?;
     
     // Parse dropped alleles if exists
     let mut dropped = Vec::new();
-    if let Ok(dropped_df) = ref_list.dollar("dropped_alleles") {
-        let blocks: Vec<String> = dropped_df.dollar("block")?.as_string_vector()?;
-        let alleles: Vec<i32> = dropped_df.dollar("allele")?.as_integer_vector()?;
-        let freqs: Vec<f64> = dropped_df.dollar("freq")?.as_real_vector()?;
-        
-        for i in 0..blocks.len() {
-            dropped.push(DroppedAllele {
-                block: blocks[i].clone(),
-                allele: alleles[i],
-                freq: freqs[i],
-            });
+    if let Some(dropped_df) = ref_list.dollar("dropped_alleles") {
+        if let (Some(blocks), Some(alleles), Some(freqs)) = (
+            dropped_df.dollar("block").and_then(|r| r.as_string_vector()),
+            dropped_df.dollar("allele").and_then(|r| r.as_integer_vector()),
+            dropped_df.dollar("freq").and_then(|r| r.as_real_vector())
+        ) {
+            for i in 0..blocks.len() {
+                dropped.push(DroppedAllele {
+                    block: blocks[i].to_string(),
+                    allele: alleles[i],
+                    freq: freqs[i],
+                });
+            }
         }
     }
     
     Ok(ReferenceStructure {
-        allele_ids,
+        allele_ids: allele_ids.iter().map(|s| s.to_string()).collect(),
         frequencies,
         dropped_alleles: dropped,
     })

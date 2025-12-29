@@ -1,8 +1,7 @@
 // src/rust/src/matrix.rs
 
-use ndarray::{Array1, Array2};
-use std::collections::{HashMap, HashSet};
-use extendr_api::prelude::*;
+use ndarray::Array2;
+use std::collections::HashMap;
 
 /// Allele frequency 
 #[derive(Debug, Clone)]
@@ -110,7 +109,6 @@ impl WMatrixBuilder {
             let col2 = 2 * block_idx + 1;
             
             let block_name1 = &self.colnames[col1];
-            let block_name2 = &self.colnames[col2];
             
             // Get base block name
             let block_base = Self::get_block_base_name(block_name1);
