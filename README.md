@@ -6,7 +6,7 @@
 
 **Rust-accelerated Bayesian genomic prediction for multi-allelic microhaplotype markers**
 
-The implementation of BayesR and BayesA with specialized W_αh matrix construction for multiallelic-based genomic selection.
+The implementation of BayesR and BayesA with specialized `W_αh` matrix construction for multiallelic-based genomic selection.
 
 ---
 
@@ -308,7 +308,7 @@ If you use `masbayes` in your research, please cite:
   title = {masbayes: Rust-Accelerated Bayesian Genomic Prediction for Multi-Allelic Markers},
   year = {2025},
   url = {https://github.com/bowo1698/masbayes},
-  note = {R package version 0.1.0}
+  note = {R package version 1.1.0}
 }
 ```
 
