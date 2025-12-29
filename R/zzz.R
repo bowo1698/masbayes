@@ -10,12 +10,17 @@
     " masbayes v", version, "\n",
     " Rust-Accelerated Bayesian Genomic Prediction\n",
     "───────────────────────────────────────────────────────────────\n",
-    " Features:   Multi-allelic markers\n",
+    " Features:   Multi-allelic microhaplotypes\n",
     " Methods:    BayesR (mixture) | BayesA (marker-specific)\n",
+    " Matrix:     Fast W_αh construction (10-100x speedup)\n",
     "───────────────────────────────────────────────────────────────\n",
-    " Functions:    run_bayesr_mcmc() | run_bayesa_mcmc()\n",
-    " Quick start:  ?masbayes\n",
-    " Report bugs:  github.com/bowo1698/masbayes/issues\n",
+    " Core Functions:\n",
+    "   • construct_wah_matrix()  - Design matrix construction\n",
+    "   • run_bayesr_mcmc()       - Mixture prior MCMC\n",
+    "   • run_bayesa_mcmc()       - Marker-specific variance MCMC\n",
+    "───────────────────────────────────────────────────────────────\n",
+    " Documentation:  ?masbayes | ?construct_wah_matrix\n",
+    " Report bugs:    github.com/bowo1698/masbayes/issues\n",
     "═══════════════════════════════════════════════════════════════\n"
   )
 }

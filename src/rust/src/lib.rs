@@ -109,7 +109,7 @@ fn array1_to_vec(arr: &ndarray::Array1<f64>) -> Vec<f64> {
 /// @param drop_baseline Whether to drop most frequent allele as baseline
 /// @return List with W_ah matrix, allele_info dataframe, and dropped_alleles dataframe
 #[extendr]
-fn construct_w_matrix_rust(
+fn construct_wah_matrix(
     hap_matrix: RMatrix<i32>,
     colnames: Vec<String>,
     allele_freq_filtered: Nullable<List>,
@@ -336,5 +336,5 @@ extendr_module! {
     mod masbayes_extendr;
     fn run_bayesr_mcmc;
     fn run_bayesa_mcmc;
-    fn construct_w_matrix_rust;
+    fn construct_wah_matrix;
 }

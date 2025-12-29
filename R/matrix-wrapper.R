@@ -9,7 +9,7 @@
 #' @param drop_baseline Drop most frequent allele as baseline
 #' @return List with W_ah, allele_info, dropped_alleles
 #' @export
-construct_w_matrix_rust <- function(hap_matrix, 
+construct_wah_matrix <- function(hap_matrix, 
                                     colnames,
                                     allele_freq_filtered = NULL,
                                     reference_structure = NULL,
@@ -23,7 +23,7 @@ construct_w_matrix_rust <- function(hap_matrix,
   
   # Call Rust function
   result <- .Call(
-    wrap__construct_w_matrix_rust,
+    wrap__construct_wah_matrix,
     hap_matrix,
     as.character(colnames),
     allele_freq_filtered,

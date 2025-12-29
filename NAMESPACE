@@ -2,5 +2,5 @@
 
 export(run_bayesr_mcmc)
 export(run_bayesa_mcmc)
-export(construct_w_matrix_rust)
+export(construct_wah_matrix)
 useDynLib(masbayes, .registration = TRUE)
