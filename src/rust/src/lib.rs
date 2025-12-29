@@ -246,11 +246,47 @@ fn run_bayesr_mcmc(
     prior_params: List,
     mcmc_params: List,
 ) -> List {
+    // Validate dimensions
+    let n_obs = w.nrows();
+    let n_markers = w.ncols();
+    
+    eprintln!("=== BayesR Input Validation ===");
+    eprintln!("W dimensions: {} x {}", n_obs, n_markers);
+    eprintln!("y length: {}", y.len());
+    eprintln!("wtw_diag length: {}", wtw_diag.len());
+    eprintln!("wty length: {}", wty.len());
+    
+    // Check dimension consistency
+    if y.len() != n_obs {
+        panic!("Dimension mismatch: y length ({}) != W rows ({})", y.len(), n_obs);
+    }
+    if wtw_diag.len() != n_markers {
+        panic!("Dimension mismatch: wtw_diag length ({}) != W cols ({})", wtw_diag.len(), n_markers);
+    }
+    if wty.len() != n_markers {
+        panic!("Dimension mismatch: wty length ({}) != W cols ({})", wty.len(), n_markers);
+    }
+    
+    // Check for invalid values
+    if sigma2_e_init <= 0.0 {
+        panic!("Invalid sigma2_e_init: {}", sigma2_e_init);
+    }
+    if sigma2_ah <= 0.0 {
+        panic!("Invalid sigma2_ah: {}", sigma2_ah);
+    }
+    if pi_vec.iter().any(|&p| p < 0.0 || p > 1.0) {
+        panic!("Invalid pi_vec: values must be in [0,1]");
+    }
+    
+    eprintln!("Input validation passed!");
+
     // Extract MCMC parameters
     let n_iter = mcmc_params.dollar("n_iter").unwrap().as_integer().unwrap() as usize;
     let n_burn = mcmc_params.dollar("n_burn").unwrap().as_integer().unwrap() as usize;
     let n_thin = mcmc_params.dollar("n_thin").unwrap().as_integer().unwrap() as usize;
     let seed = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
+
+    eprintln!("MCMC params: n_iter={}, n_burn={}, n_thin={}", n_iter, n_burn, n_thin);
     
     // Extract prior parameters
     let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
@@ -261,11 +297,16 @@ fn run_bayesr_mcmc(
     let b0_medium = prior_params.dollar("b0_medium").unwrap().as_real().unwrap();
     let a0_large = prior_params.dollar("a0_large").unwrap().as_real().unwrap();
     let b0_large = prior_params.dollar("b0_large").unwrap().as_real().unwrap();
+
+    eprintln!("Prior params extracted successfully");
     
     // Convert R matrix to ndarray
+    eprintln!("Converting W matrix to ndarray...");
     let w_array = utils::rmatrix_to_array2(&w);
+    eprintln!("Conversion successful!");
     
     // Create runner
+    eprintln!("Creating BayesR runner...");
     let mut runner = BayesRRunner::new(
         w_array,
         y,
@@ -284,9 +325,13 @@ fn run_bayesr_mcmc(
         n_thin,
         seed,
     );
+    eprintln!("Runner created!");
     
     // Run MCMC
+    eprintln!("Starting MCMC...");
     let results = runner.run();
+
+    eprintln!("MCMC completed, converting results...");
     
     // Convert ndarray results to R objects
     list!(
