@@ -43,6 +43,7 @@ pub struct BayesRRunner {
     beta: Array1<f64>,
     gamma: Array1<usize>,
     sigma2_e: f64,
+    fold_id: i32,
 }
 
 impl BayesRRunner {
@@ -63,6 +64,7 @@ impl BayesRRunner {
         n_burn: usize,
         n_thin: usize,
         seed: u64,
+        fold_id: i32,
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
@@ -97,6 +99,7 @@ impl BayesRRunner {
             beta,
             gamma: Array1::<usize>::zeros(n_alleles),
             sigma2_e: sigma2_e_init,
+            fold_id,
         }
     }
     
@@ -114,12 +117,14 @@ impl BayesRRunner {
         
         let mut save_idx = 0;
         
-        eprintln!("BayesR MCMC started: {} iterations", self.n_iter);
-        eprintln!("Hyperparameters: π = [{:.3}, {:.3}, {:.3}, {:.3}]", 
+        eprintln!("[Fold {}] BayesR MCMC started: {} iterations", self.fold_id, self.n_iter);
+        eprintln!("[Fold {}] Hyperparameters: π = [{:.3}, {:.3}, {:.3}, {:.3}]", 
+                  self.fold_id,
                   self.pi_vec[0], self.pi_vec[1], self.pi_vec[2], self.pi_vec[3]);
-        eprintln!("σ² = [{:.6}, {:.6}, {:.6}, {:.6}]", 
+        eprintln!("[Fold {}] σ² = [{:.6}, {:.6}, {:.6}, {:.6}]",
+                  self.fold_id,
                   self.sigma2_vec[0], self.sigma2_vec[1], self.sigma2_vec[2], self.sigma2_vec[3]);
-        eprintln!("σ²_e = {:.6}\n", self.sigma2_e);
+        eprintln!("[Fold {}] σ²_e = {:.6}\n", self.fold_id, self.sigma2_e);
         
         // MCMC loop
         for iter in 0..self.n_iter {
@@ -268,8 +273,8 @@ impl BayesRRunner {
                 let non_zero = self.gamma.iter().filter(|&&g| g != 0).count();
                 
                 eprintln!(
-                    "Iter {} | Mean|β|={:.4} | σ²e={:.4} | π=({:.2},{:.2},{:.2},{:.2}) | Non-zero={}",
-                    iter, mean_beta_abs, self.sigma2_e,
+                    "[Fold {}] Iter {} | Mean|β|={:.4} | σ²e={:.4} | π=({:.2},{:.2},{:.2},{:.2}) | Non-zero={}",
+                    self.fold_id, iter, mean_beta_abs, self.sigma2_e,
                     self.pi_vec[0], self.pi_vec[1], self.pi_vec[2], self.pi_vec[3],
                     non_zero
                 );
@@ -280,9 +285,8 @@ impl BayesRRunner {
         let ess = utils::effective_size(&sigma2_e_samples);
         let geweke = utils::geweke_z(&sigma2_e_samples);
         
-        eprintln!("ESS: {:.0} | Geweke Z: {:.3}", ess, geweke);
-        
-        eprintln!("\nBayesR MCMC completed!");
+        eprintln!("[Fold {}] ESS: {:.0} | Geweke Z: {:.3}", self.fold_id, ess, geweke);
+        eprintln!("\n[Fold {}] BayesR MCMC completed!\n", self.fold_id);
         
         BayesRResults {
             beta_samples,

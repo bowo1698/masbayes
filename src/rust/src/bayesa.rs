@@ -36,6 +36,7 @@ pub struct BayesARunner {
     beta_a: Array1<f64>,
     sigma2_j: Array1<f64>,
     sigma2_e_a: f64,
+    fold_id: i32,
 }
 
 impl BayesARunner {
@@ -53,6 +54,7 @@ impl BayesARunner {
         n_burn: usize,
         n_thin: usize,
         seed: u64,
+        fold_id: i32,
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
@@ -77,6 +79,7 @@ impl BayesARunner {
             beta_a: Array1::<f64>::zeros(n_alleles),
             sigma2_j: Array1::<f64>::from_elem(n_alleles, s_squared),
             sigma2_e_a: sigma2_e_init,
+            fold_id,
         }
     }
     
@@ -90,9 +93,10 @@ impl BayesARunner {
         
         let mut save_idx = 0;
         
-        eprintln!("BayesA MCMC started: {} iterations", self.n_iter);
-        eprintln!("Hyperparameters: ν = {:.2}, S² = {:.6}", self.nu, self.s_squared);
-        eprintln!("σ²_e = {:.6}\n", self.sigma2_e_a);
+        eprintln!("[Fold {}] BayesA MCMC started: {} iterations", self.fold_id, self.n_iter);
+        eprintln!("[Fold {}] Hyperparameters: ν = {:.2}, S² = {:.6}", 
+                  self.fold_id, self.nu, self.s_squared);
+        eprintln!("[Fold {}] σ²_e = {:.6}\n", self.fold_id, self.sigma2_e_a);
         
         // MCMC loop
         for iter in 0..self.n_iter {
@@ -160,8 +164,8 @@ impl BayesARunner {
                 let max_sigma2_j = self.sigma2_j.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
                 
                 eprintln!(
-                    "Iter {} | Mean|β|={:.4} | σ²e={:.4} | σ²j: {:.2e}-{:.2e} (mean={:.2e})",
-                    iter, mean_beta_abs, self.sigma2_e_a,
+                    "[Fold {}] Iter {} | Mean|β|={:.4} | σ²e={:.4} | σ²j: {:.2e}-{:.2e} (mean={:.2e})",
+                    self.fold_id, iter, mean_beta_abs, self.sigma2_e_a,
                     min_sigma2_j, max_sigma2_j, mean_sigma2_j
                 );
             }
@@ -171,9 +175,8 @@ impl BayesARunner {
         let ess = utils::effective_size(&sigma2_e_samples);
         let geweke = utils::geweke_z(&sigma2_e_samples);
         
-        eprintln!("ESS: {:.0} | Geweke Z: {:.3}", ess, geweke);
-        
-        eprintln!("\nBayesA MCMC completed!");
+        eprintln!("[Fold {}] ESS: {:.0} | Geweke Z: {:.3}", self.fold_id, ess, geweke);
+        eprintln!("\n[Fold {}] BayesA MCMC completed!\n", self.fold_id);
         
         BayesAResults {
             beta_samples,

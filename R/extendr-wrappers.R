@@ -9,14 +9,14 @@ NULL
 
 #' Run BayesR MCMC
 #' @export
-run_bayesr_mcmc <- function(w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params) {
-    .Call(wrap__run_bayesr_mcmc, w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params)
+run_bayesr_mcmc <- function(w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id = 0L) {
+    .Call(wrap__run_bayesr_mcmc, w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id)
 }
 
 #' Run BayesA MCMC
 #' @export
-run_bayesa_mcmc <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, prior_params, mcmc_params) {
-    .Call(wrap__run_bayesa_mcmc, w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, prior_params, mcmc_params)
+run_bayesa_mcmc <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id = 0L) {
+    .Call(wrap__run_bayesa_mcmc, w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id)
 }
 
 #' Construct W Matrix (Rust)

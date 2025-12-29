@@ -245,6 +245,7 @@ fn run_bayesr_mcmc(
     sigma2_ah: f64,
     prior_params: List,
     mcmc_params: List,
+    fold_id: i32,
 ) -> List {
     
     // Extract MCMC parameters
@@ -284,6 +285,7 @@ fn run_bayesr_mcmc(
         n_burn,
         n_thin,
         seed,
+        fold_id,
     );
     
     // Run MCMC
@@ -324,6 +326,7 @@ fn run_bayesa_mcmc(
     sigma2_e_init: f64,
     prior_params: List,
     mcmc_params: List,
+    fold_id: i32,
 ) -> List {
     // Extract MCMC parameters
     let n_iter = mcmc_params.dollar("n_iter").unwrap().as_integer().unwrap() as usize;
@@ -353,6 +356,7 @@ fn run_bayesa_mcmc(
         n_burn,
         n_thin,
         seed,
+        fold_id,
     );
     
     // Run MCMC
