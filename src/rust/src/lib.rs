@@ -246,101 +246,16 @@ fn run_bayesr_mcmc(
     prior_params: List,
     mcmc_params: List,
 ) -> List {
-    // === FIRST LINE: Immediate logging ===
-    eprintln!("\n========================================");
-    eprintln!("RUST: run_bayesr_mcmc() ENTERED");
-    eprintln!("========================================");
     
-    // Try to get basic info
-    eprintln!("RUST: Checking input dimensions...");
-    let n_obs = w.nrows();
-    let n_markers = w.ncols();
-    eprintln!("RUST: W dimensions: {} x {}", n_obs, n_markers);
-    eprintln!("RUST: y length: {}", y.len());
-    eprintln!("RUST: wtw_diag length: {}", wtw_diag.len());
-    eprintln!("RUST: wty length: {}", wty.len());
-    
-    // Dimension checks with detailed error messages
-    eprintln!("RUST: Validating dimensions...");
-    if y.len() != n_obs {
-        eprintln!("RUST ERROR: y length mismatch!");
-        panic!("Dimension mismatch: y length ({}) != W rows ({})", y.len(), n_obs);
-    }
-    if wtw_diag.len() != n_markers {
-        eprintln!("RUST ERROR: wtw_diag length mismatch!");
-        panic!("Dimension mismatch: wtw_diag length ({}) != W cols ({})", wtw_diag.len(), n_markers);
-    }
-    if wty.len() != n_markers {
-        eprintln!("RUST ERROR: wty length mismatch!");
-        panic!("Dimension mismatch: wty length ({}) != W cols ({})", wty.len(), n_markers);
-    }
-    eprintln!("RUST: Dimension validation PASSED");
-    
-    // Extract MCMC parameters with error handling
-    eprintln!("RUST: Extracting MCMC parameters...");
-    let n_iter = match mcmc_params.dollar("n_iter") {
-        Ok(val) => match val.as_integer() {
-            Some(i) => i as usize,
-            None => {
-                eprintln!("RUST ERROR: n_iter is not an integer");
-                panic!("n_iter must be integer");
-            }
-        },
-        Err(e) => {
-            eprintln!("RUST ERROR: Failed to get n_iter from mcmc_params");
-            panic!("Missing n_iter: {:?}", e);
-        }
-    };
-    eprintln!("RUST: n_iter = {}", n_iter);
-    
-    let n_burn = match mcmc_params.dollar("n_burn") {
-        Ok(val) => match val.as_integer() {
-            Some(i) => i as usize,
-            None => panic!("n_burn must be integer"),
-        },
-        Err(e) => panic!("Missing n_burn: {:?}", e),
-    };
-    eprintln!("RUST: n_burn = {}", n_burn);
-    
-    let n_thin = match mcmc_params.dollar("n_thin") {
-        Ok(val) => match val.as_integer() {
-            Some(i) => i as usize,
-            None => panic!("n_thin must be integer"),
-        },
-        Err(e) => panic!("Missing n_thin: {:?}", e),
-    };
-    eprintln!("RUST: n_thin = {}", n_thin);
-    
-    let seed = match mcmc_params.dollar("seed") {
-        Ok(val) => match val.as_integer() {
-            Some(i) => i as u64,
-            None => panic!("seed must be integer"),
-        },
-        Err(e) => panic!("Missing seed: {:?}", e),
-    };
-    eprintln!("RUST: seed = {}", seed);
-    eprintln!("RUST: MCMC parameters extracted successfully");
+    // Extract MCMC parameters
+    let n_iter = mcmc_params.dollar("n_iter").unwrap().as_integer().unwrap() as usize;
+    let n_burn = mcmc_params.dollar("n_burn").unwrap().as_integer().unwrap() as usize;
+    let n_thin = mcmc_params.dollar("n_thin").unwrap().as_integer().unwrap() as usize;
+    let seed = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
     
     // Extract prior parameters
-    eprintln!("RUST: Extracting prior parameters...");
-    let a0_e = match prior_params.dollar("a0_e") {
-        Ok(val) => match val.as_real() {
-            Some(r) => r,
-            None => panic!("a0_e must be numeric"),
-        },
-        Err(e) => panic!("Missing a0_e: {:?}", e),
-    };
-    eprintln!("RUST: a0_e = {}", a0_e);
-    
-    let b0_e = match prior_params.dollar("b0_e") {
-        Ok(val) => match val.as_real() {
-            Some(r) => r,
-            None => panic!("b0_e must be numeric"),
-        },
-        Err(e) => panic!("Missing b0_e: {:?}", e),
-    };
-    eprintln!("RUST: b0_e = {}", b0_e);
-    
+    let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
+    let b0_e = prior_params.dollar("b0_e").unwrap().as_real().unwrap();
     let a0_small = prior_params.dollar("a0_small").unwrap().as_real().unwrap();
     let b0_small = prior_params.dollar("b0_small").unwrap().as_real().unwrap();
     let a0_medium = prior_params.dollar("a0_medium").unwrap().as_real().unwrap();
@@ -348,15 +263,10 @@ fn run_bayesr_mcmc(
     let a0_large = prior_params.dollar("a0_large").unwrap().as_real().unwrap();
     let b0_large = prior_params.dollar("b0_large").unwrap().as_real().unwrap();
     
-    eprintln!("RUST: All prior parameters extracted");
-    
     // Convert R matrix to ndarray
-    eprintln!("RUST: Converting W matrix to ndarray...");
     let w_array = utils::rmatrix_to_array2(&w);
-    eprintln!("RUST: W matrix converted successfully");
     
     // Create runner
-    eprintln!("RUST: Creating BayesRRunner...");
     let mut runner = BayesRRunner::new(
         w_array,
         y,
@@ -375,15 +285,11 @@ fn run_bayesr_mcmc(
         n_thin,
         seed,
     );
-    eprintln!("RUST: BayesRRunner created successfully");
     
     // Run MCMC
-    eprintln!("RUST: Starting MCMC sampling...");
     let results = runner.run();
     
-    eprintln!("RUST: MCMC completed, converting results to R...");
-    
-    // Convert results
+    // Convert ndarray results to R objects
     list!(
         beta_samples = array2_to_rmatrix(&results.beta_samples),
         gamma_samples = array2_to_rmatrix(&results.gamma_samples),
