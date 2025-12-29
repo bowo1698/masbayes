@@ -131,9 +131,13 @@ fn construct_wah_matrix(
             &reference,
         );
         
+        // Convert to RMatrix and set column names
+        let mut w_test_rmatrix = array2_to_rmatrix(&w_test);
+        let _ = w_test_rmatrix.set_attrib("dimnames", list!(NULL, reference.allele_ids.clone()));
+        
         // Return structure matching test set expectations
         return list!(
-            W_ah = array2_to_rmatrix(&w_test),
+            W_ah = w_test_rmatrix,
             allele_info = list!(
                 allele_id = reference.allele_ids.clone(),
                 freq = reference.frequencies.clone()
@@ -166,9 +170,17 @@ fn construct_wah_matrix(
     
     let result = builder.build();
     
-    // Convert to R objects
+    // Convert W_ah to RMatrix and set column names
+    let mut w_rmatrix = array2_to_rmatrix(&result.w_ah);
+    let colnames: Vec<String> = result.allele_info.iter()
+        .map(|a| a.allele_id.clone())
+        .collect();
+
+    // Set column names using R's colnames<- function
+    let _ = w_rmatrix.set_attrib("dimnames", list!(NULL, colnames));
+
     list!(
-        W_ah = array2_to_rmatrix(&result.w_ah),
+        W_ah = w_rmatrix,
         allele_info = list!(
             allele_id = result.allele_info.iter().map(|a| a.allele_id.clone()).collect::<Vec<_>>(),
             block = result.allele_info.iter().map(|a| a.block.clone()).collect::<Vec<_>>(),
