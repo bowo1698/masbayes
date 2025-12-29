@@ -3,6 +3,21 @@ use ndarray::{Array1, Array2};
 use rand::Rng;
 use rand_distr::{Distribution, Gamma, Normal, Dirichlet};
 
+/// Convert R matrix to ndarray Array2<i32>
+pub fn rmatrix_to_array2_i32(rmat: &RMatrix<i32>) -> Array2<i32> {
+    let nrow = rmat.nrows();
+    let ncol = rmat.ncols();
+    let mut arr = Array2::<i32>::zeros((nrow, ncol));
+    
+    for i in 0..nrow {
+        for j in 0..ncol {
+            arr[[i, j]] = rmat[[i, j]];
+        }
+    }
+    
+    arr
+}
+
 /// Convert R matrix to ndarray Array2
 pub fn rmatrix_to_array2(rmat: &RMatrix<f64>) -> Array2<f64> {
     let nrow = rmat.nrows();

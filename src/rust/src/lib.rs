@@ -1,5 +1,6 @@
 use extendr_api::prelude::*;
 
+mod matrix;
 mod bayesr;
 mod bayesa;
 mod utils;
@@ -7,6 +8,55 @@ mod types;
 
 use bayesr::BayesRRunner;
 use bayesa::BayesARunner;
+use crate::matrix::{WMatrixBuilder, AlleleFreq, ReferenceStructure, DroppedAllele};
+
+/// Convert R list to AlleleFreq vector
+fn parse_allele_freq(freq_df: List) -> Result<Vec<AlleleFreq>> {
+    let haplotype: Vec<String> = freq_df.dollar("haplotype")?.as_string_vector()?;
+    let allele: Vec<i32> = freq_df.dollar("allele")?.as_integer_vector()?;
+    let freq: Vec<f64> = freq_df.dollar("freq")?.as_real_vector()?;
+    
+    let mut result = Vec::new();
+    for i in 0..haplotype.len() {
+        result.push(AlleleFreq {
+            haplotype: haplotype[i].clone(),
+            allele: allele[i],
+            freq: freq[i],
+        });
+    }
+    
+    Ok(result)
+}
+
+/// Convert R list to ReferenceStructure
+fn parse_reference_structure(ref_list: List) -> Result<ReferenceStructure> {
+    let allele_info = ref_list.dollar("allele_info")?;
+    
+    let allele_ids: Vec<String> = allele_info.dollar("allele_id")?.as_string_vector()?;
+    let frequencies: Vec<f64> = allele_info.dollar("freq")?.as_real_vector()?;
+    
+    // Parse dropped alleles if exists
+    let mut dropped = Vec::new();
+    if let Ok(dropped_df) = ref_list.dollar("dropped_alleles") {
+        let blocks: Vec<String> = dropped_df.dollar("block")?.as_string_vector()?;
+        let alleles: Vec<i32> = dropped_df.dollar("allele")?.as_integer_vector()?;
+        let freqs: Vec<f64> = dropped_df.dollar("freq")?.as_real_vector()?;
+        
+        for i in 0..blocks.len() {
+            dropped.push(DroppedAllele {
+                block: blocks[i].clone(),
+                allele: alleles[i],
+                freq: freqs[i],
+            });
+        }
+    }
+    
+    Ok(ReferenceStructure {
+        allele_ids,
+        frequencies,
+        dropped_alleles: dropped,
+    })
+}
 
 /// Convert Array2 to RMatrix
 fn array2_to_rmatrix(arr: &ndarray::Array2<f64>) -> RMatrix<f64> {
@@ -25,6 +75,93 @@ fn array2_to_rmatrix(arr: &ndarray::Array2<f64>) -> RMatrix<f64> {
 /// Convert Array1 to Vec
 fn array1_to_vec(arr: &ndarray::Array1<f64>) -> Vec<f64> {
     arr.to_vec()
+}
+
+/// Construct W matrix from haplotype genotypes
+///
+/// @param hap_matrix Matrix of haplotype genotypes (n x 2*blocks)
+/// @param colnames Column names for haplotype matrix
+/// @param allele_freq_filtered Dataframe with columns: haplotype, allele, freq
+/// @param reference_structure Optional reference structure for test set (NULL for training)
+/// @param drop_baseline Whether to drop most frequent allele as baseline
+/// @return List with W_ah matrix, allele_info dataframe, and dropped_alleles dataframe
+#[extendr]
+fn construct_w_matrix_rust(
+    hap_matrix: RMatrix<i32>,
+    colnames: Vec<String>,
+    allele_freq_filtered: Nullable<List>,
+    reference_structure: Nullable<List>,
+    drop_baseline: bool,
+) -> List {
+    
+    // Convert to ndarray
+    let hap_array = crate::utils::rmatrix_to_array2_i32(&hap_matrix);
+    
+    // Check if using reference structure (test set)
+    if let NotNull(ref_list) = reference_structure {
+        let reference = parse_reference_structure(ref_list)
+            .expect("Failed to parse reference structure");
+        
+        let w_test = WMatrixBuilder::build_with_reference(
+            hap_array,
+            colnames,
+            &reference,
+        );
+        
+        // Return structure matching test set expectations
+        return list!(
+            W_ah = array2_to_rmatrix(&w_test),
+            allele_info = list!(
+                allele_id = reference.allele_ids.clone(),
+                freq = reference.frequencies.clone()
+            ),
+            dropped_alleles = if reference.dropped_alleles.is_empty() {
+                list!()
+            } else {
+                list!(
+                    block = reference.dropped_alleles.iter().map(|d| d.block.clone()).collect::<Vec<_>>(),
+                    allele = reference.dropped_alleles.iter().map(|d| d.allele).collect::<Vec<_>>(),
+                    freq = reference.dropped_alleles.iter().map(|d| d.freq).collect::<Vec<_>>()
+                )
+            }
+        );
+    }
+    
+    // Training set: build from scratch
+    let allele_freq = if let NotNull(freq_list) = allele_freq_filtered {
+        parse_allele_freq(freq_list).expect("Failed to parse allele frequencies")
+    } else {
+        panic!("allele_freq_filtered required for training set");
+    };
+    
+    let builder = WMatrixBuilder::new(
+        hap_array,
+        colnames,
+        allele_freq,
+        drop_baseline,
+    );
+    
+    let result = builder.build();
+    
+    // Convert to R objects
+    list!(
+        W_ah = array2_to_rmatrix(&result.w_ah),
+        allele_info = list!(
+            allele_id = result.allele_info.iter().map(|a| a.allele_id.clone()).collect::<Vec<_>>(),
+            block = result.allele_info.iter().map(|a| a.block.clone()).collect::<Vec<_>>(),
+            allele = result.allele_info.iter().map(|a| a.allele).collect::<Vec<_>>(),
+            freq = result.allele_info.iter().map(|a| a.freq).collect::<Vec<_>>()
+        ),
+        dropped_alleles = if result.dropped_alleles.is_empty() {
+            list!()
+        } else {
+            list!(
+                block = result.dropped_alleles.iter().map(|d| d.block.clone()).collect::<Vec<_>>(),
+                allele = result.dropped_alleles.iter().map(|d| d.allele).collect::<Vec<_>>(),
+                freq = result.dropped_alleles.iter().map(|d| d.freq).collect::<Vec<_>>()
+            )
+        }
+    )
 }
 
 /// Run BayesR MCMC sampling
@@ -176,4 +313,5 @@ extendr_module! {
     mod masbayes_extendr;
     fn run_bayesr_mcmc;
     fn run_bayesa_mcmc;
+    fn construct_w_matrix_rust;
 }

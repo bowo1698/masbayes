@@ -19,4 +19,10 @@ run_bayesa_mcmc <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, p
     .Call(wrap__run_bayesa_mcmc, w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, prior_params, mcmc_params)
 }
 
+#' Construct W Matrix (Rust)
+#' @export
+construct_w_matrix_rust <- function(hap_matrix, colnames, allele_freq_filtered, reference_structure, drop_baseline) {
+    .Call(wrap__construct_w_matrix_rust, hap_matrix, colnames, allele_freq_filtered, reference_structure, drop_baseline)
+}
+
 # nolint end
