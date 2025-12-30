@@ -371,27 +371,66 @@ $$
 \end{align}
 $$
 
-**Marginalized Gibbs Sampling:**
+**Marginalized Gibbs Sampling (Rust Implementation):**
 
-Instead of sampling $\beta_j$ and $\gamma_j$ sequentially, we marginalize over $\beta_j$ to sample $\gamma_j$ directly from:
+Traditional Gibbs sampling alternates between:
+1. Sample $\beta_j$ given $\gamma_j$ 
+2. Sample $\gamma_j$ given $\beta_j$
+
+This can lead to slow mixing when $\beta_j$ and $\gamma_j$ are highly correlated. Instead, we use **marginalized Gibbs sampling** where we integrate out $\beta_j$ and sample $\gamma_j$ directly from its marginal distribution:
 
 $$
-P(\gamma_j = k \mid \cdot) \propto \pi_k \cdot \frac{1}{\sqrt{1 + \lambda_j \sigma^2_k / \sigma^2_e}} \exp\left(\frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}\right)
+p(\gamma_j = k \mid y, \boldsymbol{\beta}_{-j}, \sigma^2_e, \sigma^2_k) = \int p(\gamma_j = k, \beta_j \mid y, \boldsymbol{\beta}_{-j}, \sigma^2_e, \sigma^2_k) \, d\beta_j
+$$
+
+**Step 1: Marginal Distribution for Component Assignment**
+
+By completing the square in the joint distribution, we obtain:
+
+$$
+p(\gamma_j = k \mid \cdot) \propto \pi_k \cdot \left(1 + \lambda_j \rho_{jk}\right)^{-1/2} \cdot \exp\left(\frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}\right)
 $$
 
 where:
 
 $$
-\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j, \quad r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})
+\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j, \quad r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j}), \quad \rho_{jk} = \frac{\sigma^2_k}{\sigma^2_e}
 $$
 
-Then sample $\beta_j$ conditional on $\gamma_j$:
+**Numerical Stability (Log-Sum-Exp Trick):**
+
+For numerical stability, we compute log-probabilities:
 
 $$
-\beta_j \mid \gamma_j, \cdot \sim N\left(\frac{r_j \sigma^2_{\gamma_j}}{\sigma^2_e + \lambda_j \sigma^2_{\gamma_j}}, \frac{\sigma^2_e \sigma^2_{\gamma_j}}{\sigma^2_e + \lambda_j \sigma^2_{\gamma_j}}\right)
+\log p(\gamma_j = k \mid \cdot) = \log \pi_k - \frac{1}{2}\log(1 + \lambda_j \rho_{jk}) + \frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}
 $$
 
-This approach improves mixing and convergence compared to sequential sampling.
+Then normalize using the log-sum-exp trick to prevent underflow:
+
+$$
+p(\gamma_j = k) = \frac{\exp(\log p_k - \max_k \log p_k)}{\sum_{k'} \exp(\log p_{k'} - \max_k \log p_k)}
+$$
+
+**Step 2: Conditional Sampling of Effects**
+
+After sampling $\gamma_j$, we sample $\beta_j$ from its conditional distribution:
+
+$$
+\beta_j \mid \gamma_j = k, \cdot \sim N\left(\mu_j, v_j\right)
+$$
+
+where:
+
+$$
+v_j = \frac{\sigma^2_e \sigma^2_k}{\sigma^2_e + \lambda_j \sigma^2_k}, \quad \mu_j = \frac{r_j \sigma^2_k}{\sigma^2_e + \lambda_j \sigma^2_k}
+$$
+
+**Why Marginalization Helps:**
+
+1. **Improved mixing**: By integrating out $\beta_j$, we break the correlation between $\beta_j$ and $\gamma_j$
+2. **Faster convergence**: The sampler explores the posterior more efficiently
+3. **Numerical stability**: Log-scale computation prevents underflow for small probabilities
+4. **Exact inference**: The marginal distribution is analytically tractable due to conjugacy
 
 ---
 
@@ -415,19 +454,49 @@ $$
 
 **Marginalized Gibbs Sampling:**
 
-The posterior distribution for $\beta_j$ is:
+BayesA also benefits from marginalized Gibbs sampling, though the marginalization is over the marker-specific variance rather than the component assignment.
+
+**Step 1: Sample Marker Effects**
+
+The conditional posterior for $\beta_j$ is:
 
 $$
-\beta_j \mid \sigma^2_j, \cdot \sim N\left(\frac{r_j}{\lambda_j + 1/\sigma^2_j}, \frac{\sigma^2_e}{\lambda_j + 1/\sigma^2_j}\right)
+\beta_j \mid \sigma^2_j, \cdot \sim N\left(\mu_j, v_j\right)
 $$
 
-The marker-specific variance is updated as:
+where:
+
+$$
+v_j = \frac{\sigma^2_e \sigma^2_j}{\sigma^2_e + \lambda_j \sigma^2_j}, \quad \mu_j = \frac{r_j \sigma^2_j}{\sigma^2_e + \lambda_j \sigma^2_j}
+$$
+
+with $\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ and $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})$.
+
+**Step 2: Sample Marker-Specific Variances**
+
+The marker-specific variance is updated from its full conditional:
 
 $$
 \sigma^2_j \mid \beta_j, \cdot \sim \text{InvGamma}\left(\frac{\nu + 1}{2}, \frac{\nu S^2 + \beta_j^2}{2}\right)
 $$
 
-This jointly samples marker effects and their variances, allowing automatic adaptation to heterogeneous effect sizes.
+**Interpretation:**
+
+- The scaled inverse chi-squared prior provides a natural conjugate structure
+- Each marker "learns" its own variance from the data
+- Markers with large effects get assigned large variances
+- Markers with small effects get shrunk toward zero
+- The hyperparameter $\nu$ controls the degrees of freedom: smaller values allow more variance heterogeneity
+
+**Incremental Updates:**
+
+To avoid recomputing $\mathbf{W}\boldsymbol{\beta}$ from scratch at each iteration, we use incremental updates:
+
+$$
+\mathbf{W}\boldsymbol{\beta}^{(t)} = \mathbf{W}\boldsymbol{\beta}^{(t-1)} + \mathbf{w}_j(\beta_j^{(t)} - \beta_j^{(t-1)})
+$$
+
+This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
 
 ---
 
