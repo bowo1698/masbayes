@@ -109,7 +109,7 @@ head(result$dropped_alleles)  # Baseline alleles removed
 
 ### BayesR genomic prediction
 ```r
-# Use W matrix from Example 1
+# Use the W matrix that has been constructed previously
 W_train <- result$W_ah
 y <- rnorm(n)  # Phenotypes
 
