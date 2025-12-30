@@ -76,12 +76,6 @@ from h alleles per block to (h-1) informative alleles.
   \item \strong{Test}: Use \code{reference_structure} to ensure identical 
     allele ordering and frequencies as training set.
 }
-
-\strong{Performance:}
-
-Rust implementation provides 10-100x speedup over pure R for large datasets 
-(>10K individuals, >1M alleles) through optimized memory access and parallel 
-block processing.
 }
 \value{
 A list with three components:
@@ -102,87 +96,74 @@ A list with three components:
     \code{drop_baseline = FALSE}.}
 }
 \references{
-Erbe, M., Hayes, B. J., Matukumalli, L. K., Goswami, S., Bowman, P. J., 
-  Reich, C. M., ... & Goddard, M. E. (2012). Improving accuracy of genomic 
-  predictions within and between dairy cattle breeds with imputed high-density 
-  single nucleotide polymorphism panels. \emph{Journal of Dairy Science}, 
-  95(7), 4114-4129.
-
-Moser, G., Lee, S. H., Hayes, B. J., Goddard, M. E., Wray, N. R., & 
-  Visscher, P. M. (2015). Simultaneous discovery, estimation and prediction 
-  analysis of complex traits using a Bayesian mixture model. 
-  \emph{PLoS Genetics}, 11(4), e1004969.
+Da, Y. (2015). Multi-allelic haplotype model based on genetic partition for genomic
+  prediction and variance component estimation using SNP markers. \emph{BMC Genetics},
+  16(144).
 }
 \examples{
 \dontrun{
 # Simulated haplotype data
 set.seed(123)
-n <- 1000
-n_blocks <- 100
+n <- 100  # Number of individuals
+B <- 10   # Number of haplotype blocks
 
-# Generate diploid haplotypes (2 columns per block)
+# Haplotype matrix: n individuals × 2B columns (diploid)
+# Each cell contains allele ID (1, 2, or 3)
 hap_matrix <- matrix(
-  sample(1:5, n * n_blocks * 2, replace = TRUE),
-  nrow = n,
-  ncol = n_blocks * 2
+  sample(1:3, n * B * 2, replace = TRUE, prob = c(0.6, 0.3, 0.1)),
+  nrow = n, ncol = B * 2
 )
 
-# Column names
-col_names <- paste0("block_", rep(1:n_blocks, each = 2), 
-                   c("", "_copy"))
+# Column names: each block has 2 copies (diploid)
+colnames <- paste0("block_", rep(1:B, each = 2))
 
-# Compute allele frequencies
-allele_freq <- data.frame(
-  haplotype = rep(col_names, each = 5),
-  allele = rep(1:5, n_blocks * 2),
-  freq = runif(n_blocks * 2 * 5, 0.05, 0.95)
+# Allele frequencies (required for W matrix construction)
+# Must be a LIST with: haplotype, allele, freq
+allele_freq <- list(
+  haplotype = rep(paste0("block_", 1:B), each = 3), # can be blk or anything with "_"
+  allele = rep(1:3, B),
+  freq = rep(c(0.6, 0.3, 0.1), B)
 )
 
-# Filter rare alleles (MAF > 0.01)
-allele_freq_filtered <- list(
-  haplotype = allele_freq$haplotype,
-  allele = as.integer(allele_freq$allele),
-  freq = allele_freq$freq
-)
-
-# Build W matrix for training set
-result <- construct_wah_matrix(
+# Build Wah matrix for training set
+train_Wah <- construct_wah_matrix(
   hap_matrix = hap_matrix,
-  colnames = col_names,
-  allele_freq_filtered = allele_freq_filtered,
+  colnames = colnames,
+  allele_freq_filtered = allele_freq,
   reference_structure = NULL,
   drop_baseline = TRUE
 )
 
-# Examine output
-dim(result$W_ah)  # n × m matrix
-head(result$allele_info)
-head(result$dropped_alleles)
+# This results in a list of W_ah matrix, allele_info, and dropped_alleles 
+names(train_Wah)
+dim(train_Wah$W_ah)  # n × m matrix
+head(train_Wah$allele_info)
+head(train_Wah$dropped_alleles)
 
 # For test set: use reference structure
+n_test <- 200
 test_hap <- matrix(
-  sample(1:5, 500 * n_blocks * 2, replace = TRUE),
-  nrow = 500,
-  ncol = n_blocks * 2
+  sample(1:3, n_test * B * 2, replace = TRUE, prob = c(0.6, 0.3, 0.1)),
+  nrow = n_test, ncol = B * 2
 )
 
-result_test <- construct_wah_matrix(
+test_Wah <- construct_wah_matrix(
   hap_matrix = test_hap,
-  colnames = col_names,
+  colnames = colnames,
   allele_freq_filtered = NULL,
-  reference_structure = result,  # Use training structure
+  reference_structure = train_Wah,  # Use training structure
   drop_baseline = TRUE
 )
 
 # Dimensions match
-ncol(result$W_ah) == ncol(result_test$W_ah)  # TRUE
+ncol(train_Wah$W_ah) == ncol(test_Wah$W_ah)
 }
 }
 \seealso{
 \code{\link{run_bayesr_mcmc}}, \code{\link{run_bayesa_mcmc}}
 }
 \author{
-Bowo Wibowo
+Agus Wibowo
 }
 \keyword{array}
 \keyword{multivariate}

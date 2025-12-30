@@ -4,21 +4,34 @@
 \docType{package}
 \title{Rust-Accelerated MCMC Backend for Multi-Allelic Genomic Prediction}
 \description{
-High-performance MCMC sampling engines for BayesR and BayesA genomic prediction methods 
-with native support for multi-allelic microhaplotype markers. Provides approximately 10x 
-speedup over pure R implementations through Rust-accelerated computation while maintaining 
-identical statistical properties.
+MasBayes supports multi-allelic-based markers for genomic prediction, where markers such as haplotypes
+or microhaplotypes can be used as predictors directly feeding into prediction models without being
+decomposed into biallelic markers. We implemented the W_αh matrix as described by Da, Y. (2015)
+and developed BayesA and BayesR models specifically for multiallelic markers. Both matrix constructions
+and Bayesian models were built on Rust programming to optimise computational efficiency rather than
+purely using the R implementation. In addition, we also implemented marginalised Gibbs sampling
+for Bayesian models to reduce correlation between parameters within the MCMC chain and hasten
+convergence, while baseline allele dropping was also implemented to only estimate informative
+alleles per haplotype block.
 }
 \details{
 \strong{Package Overview}
 
 The \pkg{masbayes} package implements Bayesian variable selection methods for genomic 
-prediction using a high-performance Rust backend. The package is specifically designed 
-for multi-allelic microhaplotype data but also works with standard bi-allelic SNPs.
+prediction using Rust backend. The package is specifically designed 
+for multi-allelic microhaplotype data.
 
 \strong{Main Functions}
 
 \itemize{
+  \item \code{\link{construct_wah_matrix}}: W_αh matrix construction for multi-allelic markers
+  \itemize{
+    \item Allele frequency-based coding scheme
+    \item Optional baseline allele dropping to avoid collinearity
+    \item Training/test set consistency via reference structure
+    \item Handles microhaplotypes and phased SNP blocks
+  }
+
   \item \code{\link{run_bayesr_mcmc}}: BayesR with 4-component mixture prior
   \itemize{
     \item Zero effect component (markers with no effect)
@@ -46,7 +59,7 @@ for multi-allelic microhaplotype data but also works with standard bi-allelic SN
 
 \strong{Typical Workflow}
 
-1. Prepare genotype matrix (W) and phenotypes (y)
+1. Prepare genotype matrix (Wah) and phenotypes (y)
 
 2. Calculate summary statistics: WtW diagonal and Wty
 
@@ -55,15 +68,6 @@ for multi-allelic microhaplotype data but also works with standard bi-allelic SN
 4. Extract posterior means for genomic prediction
 
 5. Calculate breeding values: GEBV = W \%*\% beta_hat
-
-\strong{Performance Benchmarks}
-
-Typical speedup on standard hardware (M1 MacBook Pro, 16GB RAM):
-\itemize{
-  \item 1K markers, 50K iterations: 30 seconds (vs 5 min in R)
-  \item 10K markers, 50K iterations: 5 minutes (vs 50 min in R)
-  \item 100K markers, 50K iterations: 48 minutes (vs 8 hours in R)
-}
 
 \strong{Statistical Background}
 
@@ -75,7 +79,7 @@ BayesA uses marker-specific variances:
 \deqn{\beta_j \sim N(0, \sigma^2_j)}
 \deqn{\sigma^2_j \sim \chi^{-2}(\nu, S^2)}
 
-Both methods use Gibbs sampling for posterior inference.
+Both methods use marginalised Gibbs sampling for posterior inference.
 
 \strong{System Requirements}
 
@@ -86,9 +90,9 @@ Both methods use Gibbs sampling for posterior inference.
 }
 }
 \author{
-Agus Bowo Wibowo \email{aguswibowo1698@gmail.com}
+Agus Wibowo \email{aguswibowo1698@gmail.com}
 
-Maintainer: Agus Bowo Wibowo \email{aguswibowo1698@gmail.com}
+Maintainer: Agus Wibowo \email{aguswibowo1698@gmail.com}
 }
 \references{
 Erbe M, et al. (2012) Improving accuracy of genomic predictions within and between 
@@ -100,6 +104,10 @@ genome-wide dense marker maps. \emph{Genetics}, 157(4), 1819-1829.
 
 Moser G, et al. (2015) Simultaneous discovery, estimation and prediction analysis 
 of complex traits using a Bayesian mixture model. \emph{PLoS Genetics}, 11(4), e1004969.
+
+Da, Y. (2015). Multi-allelic haplotype model based on genetic partition for genomic
+prediction and variance component estimation using SNP markers. \emph{BMC Genetics},
+16(144).
 }
 \seealso{
 \code{\link{run_bayesr_mcmc}}, \code{\link{run_bayesa_mcmc}}
@@ -112,6 +120,7 @@ Useful links:
 }
 \examples{
 # See function documentation for detailed examples
+?construct_wah_matrix
 ?run_bayesr_mcmc
 ?run_bayesa_mcmc
 }

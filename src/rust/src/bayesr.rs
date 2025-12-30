@@ -268,13 +268,14 @@ impl BayesRRunner {
             }
             
             // 5. Monitor convergence
-            if iter % 1000 == 0 {
+            let monitor_interval = (self.n_iter / 10).max(100).min(1000);
+            if iter % monitor_interval == 0 {
                 let mean_beta_abs = self.beta.iter().map(|b| b.abs()).sum::<f64>() / (self.n_alleles as f64);
                 let non_zero = self.gamma.iter().filter(|&&g| g != 0).count();
                 
                 eprintln!(
-                    "[Fold {}] Iter {} | Mean|β|={:.4} | σ²e={:.4} | π=({:.2},{:.2},{:.2},{:.2}) | Non-zero={}",
-                    self.fold_id, iter, mean_beta_abs, self.sigma2_e,
+                    "[Fold {}] Iter {}/{} | Mean|β|={:.4} | σ²e={:.4} | π=({:.2},{:.2},{:.2},{:.2}) | Non-zero={}",
+                    self.fold_id, iter, self.n_iter, mean_beta_abs, self.sigma2_e,
                     self.pi_vec[0], self.pi_vec[1], self.pi_vec[2], self.pi_vec[3],
                     non_zero
                 );

@@ -157,15 +157,16 @@ impl BayesARunner {
             }
             
             // 5. Monitor convergence
-            if iter % 1000 == 0 {
+            let monitor_interval = (self.n_iter / 10).max(100).min(1000);
+            if iter % monitor_interval == 0 {
                 let mean_beta_abs = self.beta_a.iter().map(|b| b.abs()).sum::<f64>() / (self.n_alleles as f64);
                 let mean_sigma2_j = self.sigma2_j.mean().unwrap();
                 let min_sigma2_j = self.sigma2_j.iter().cloned().fold(f64::INFINITY, f64::min);
                 let max_sigma2_j = self.sigma2_j.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
                 
                 eprintln!(
-                    "[Fold {}] Iter {} | Mean|β|={:.4} | σ²e={:.4} | σ²j: {:.2e}-{:.2e} (mean={:.2e})",
-                    self.fold_id, iter, mean_beta_abs, self.sigma2_e_a,
+                    "[Fold {}] Iter {}/{} | Mean|β|={:.4} | σ²e={:.4} | σ²j: {:.2e}-{:.2e} (mean={:.2e})",
+                    self.fold_id, iter, self.n_iter, mean_beta_abs, self.sigma2_e_a,
                     min_sigma2_j, max_sigma2_j, mean_sigma2_j
                 );
             }
