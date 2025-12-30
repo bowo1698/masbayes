@@ -33,7 +33,8 @@ cargo --version
 2. Install [Rtools](https://cran.r-project.org/bin/windows/Rtools/) (if not already installed)
 3. Ensure MSVC toolchain: `rustup default stable-msvc`
 
-**Why Rust?** Provides 10-100x speedup for genomic computations while maintaining memory safety.
+**Why Rust?**
+Rust is a low-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, provides simpler and more readable syntax than C++.
 
 ---
 
@@ -497,8 +498,8 @@ This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
 
 ## Want to help us?
 
-Contributions are welcome!
-You can email me to improve Rust, add new model implementation, documentation, benchmarks, or bug reporting. I will appreciate!
+Contributions are welcome and very beneficial!
+You can email me to improve the Rust implementation, add a new model, documentation, benchmarks, or bug reporting. I will appreciate, really!
 
 ---
 
@@ -506,7 +507,7 @@ You can email me to improve Rust, add new model implementation, documentation, b
 
 MIT License - see [LICENSE](LICENSE) file
 
-Copyright (c) 2025 Agus Bowo Wibowo
+Copyright (c) 2025 Agus Wibowo
 
 ---
 
