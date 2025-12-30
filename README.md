@@ -71,7 +71,7 @@ library(masbayes)
 
 # Simulated haplotype data (n × 2B matrix)
 set.seed(123)
-n <- 1000  # individuals
+n <- 10  # individuals
 B <- 100   # haplotype blocks
 
 hap_matrix <- matrix(
@@ -81,17 +81,18 @@ hap_matrix <- matrix(
 )
 
 # Column names (pairs of haplotypes)
-col_names <- paste0("block_", rep(1:B, each = 2), c("", "_copy"))
+col_names <- paste0("block_", rep(1:B, each = 2))
 
-# Allele frequencies (pre-filtered for MAF > 0.01)
+# Allele frequencies (required for W matrix construction)
+# Must be a LIST with: haplotype, allele, freq
 allele_freq <- list(
-  haplotype = rep(col_names, each = 5),
+  haplotype = rep(paste0("blk_", 1:B), each = 3),
   allele = rep(1:5, B * 2),
-  freq = runif(B * 2 * 5, 0.05, 0.95)
+  freq = rep(c(0.6, 0.3, 0.1), B)
 )
 
 # Construct W_αh matrix
-result <- construct_wah_matrix(
+train_Wah <- construct_wah_matrix(
   hap_matrix = hap_matrix,
   colnames = col_names,
   allele_freq_filtered = allele_freq,
@@ -100,89 +101,127 @@ result <- construct_wah_matrix(
 )
 
 # Output
-dim(result$W_ah)          # n × m (m = total informative alleles)
-head(result$allele_info)  # Metadata for each column
-head(result$dropped_alleles)  # Baseline alleles removed
+dim(train_Wah$W_ah)          # n × m (m = total informative alleles)
+head(train_Wah$allele_info)  # Metadata for each column
+head(train_Wah$dropped_alleles)  # Baseline alleles removed
 ```
 
 ---
 
 ### BayesR genomic prediction
 ```r
-# Use the W matrix that has been constructed previously
-W_train <- result$W_ah
+# Use the W matrix that has been constructed by construct_wah_matrix()
+W <- train_Wah$W_ah
 y <- rnorm(n)  # Phenotypes
 
 # Precompute sufficient statistics
-wtw_diag <- colSums(W_train^2)
-wty <- as.vector(crossprod(W_train, y))
+wtw_diag <- colSums(W^2)
+wty <- as.vector(crossprod(W, y))
 
 # Hyperparameters
 prior_params <- list(
-  a0_e = 10,       # Residual variance prior df
-  b0_e = 1.0,      # Residual variance prior scale
-  a0_small = 5,    # Small effects prior df
+  a0_e = 3.0,       # Residual variance prior df
+  b0_e = 0.5,      # Residual variance prior scale
+  a0_small = 5.0,    # Small effects prior df
   b0_small = 0.001,
-  a0_medium = 5,   # Medium effects prior df
-  b0_medium = 0.01,
-  a0_large = 5,    # Large effects prior df
+  a0_medium = 5.0,   # Medium effects prior df
+  b0_medium = 0.005,
+  a0_large = 5.0,    # Large effects prior df
   b0_large = 0.1
 )
 
 mcmc_params <- list(
-  n_iter = 50000,  # Total iterations
-  n_burn = 20000,  # Burn-in
-  n_thin = 10,     # Thinning interval
-  seed = 123
+  n_iter = as.integer(100), # Total iteration is typically more than 10000
+  n_burn = as.integer(20),  # Burn-in can be a half of n_iter
+  n_thin = as.integer(2),   # Thinning interval can be 3, 5, or 10
+  seed = as.integer(42)
 )
 
 # Run BayesR MCMC
-result_bayes <- run_bayesr_mcmc(
-  w = W_train,
+result_bayesr <- run_bayesr_mcmc(
+  w = W,
   y = y,
   wtw_diag = wtw_diag,
   wty = wty,
   pi_vec = c(0.90, 0.05, 0.03, 0.02),  # Mixture proportions
   sigma2_vec = c(0, 0.001, 0.01, 0.1),  # Variance components
-  sigma2_e_init = var(y),
+  sigma2_e_init = var(y) * 0.5, # Initial error variance
   sigma2_ah = var(y) * 0.5,  # Initial genetic variance
   prior_params = prior_params,
   mcmc_params = mcmc_params
 )
 
 # Posterior means
-beta_hat <- colMeans(result_bayes$beta_samples)
-pi_post <- colMeans(result_bayes$pi_samples)
+beta_hat <- colMeans(result_bayesr$beta_samples)
+pi_post <- colMeans(result_bayesr$pi_samples)
 
 # Genomic predictions
-GEBV <- W_train %*% beta_hat
+GEBV <- W %*% beta_hat
+
+# Posterior mixture proportions
+pi_post <- colMeans(res$pi_samples)
+names(pi_post) <- c("Zero", "Small", "Medium", "Large")
+print(pi_post)
+
+# Identify markers with non-zero effects
+gamma_mode <- apply(res$gamma_samples, 2, function(x) {
+  as.numeric(names(sort(table(x), decreasing = TRUE)[1]))
+})
+important_markers <- which(gamma_mode > 0)
 
 # Convergence diagnostics
-library(coda)
-sigma2_e_mcmc <- mcmc(result_bayes$sigma2_e_samples)
-effectiveSize(sigma2_e_mcmc)
-plot(sigma2_e_mcmc)
+plot(res$sigma2_e_samples, type = "l", main = "Residual Variance Trace")
+matplot(res$pi_samples, type = "l", main = "Mixture Proportions", 
+        ylab = "Proportion", col = 1:4, lty = 1)
+legend("topright", legend = c("Zero", "Small", "Medium", "Large"), 
+       col = 1:4, lty = 1)
 ```
 
 ---
 
 ### BayesA with marker-specific variance
 ```r
+# Use the W matrix that has been constructed by construct_wah_matrix()
+W <- result$W_ah
+y <- rnorm(n)  # Phenotypes
+
+# Precompute sufficient statistics
+wtw_diag <- as.numeric(colSums(W^2))
+wty <- as.vector(crossprod(W, y))
+
+# Prior parameters
+prior_params <- list(
+  a0_e = 3.0,
+  b0_e = var(y) * 0.5 * 2
+)
+
+# MCMC parameters
+mcmc_params <- list(
+  n_iter = as.integer(100), # typically more than 10000
+  n_burn = as.integer(20),  # half of n_iter
+  n_thin = as.integer(2),   # can be 3, 5, or 10
+  seed = as.integer(42)
+)
+
 # Run BayesA
 result_bayesa <- run_bayesa_mcmc(
-  w = W_train,
+  w = W,
   y = y,
   wtw_diag = wtw_diag,
   wty = wty,
   nu = 4.5,                    # Prior df for marker variances
-  s_squared = var(y) / ncol(W_train),  # Prior scale
+  s_squared = var(y) / ncol(W),  # Prior scale
   sigma2_e_init = var(y) * 0.5,
-  prior_params = list(
-    a0_e = 10,
-    b0_e = var(y) * 0.5 * 9
-  ),
+  prior_params = prior_params,
   mcmc_params = mcmc_params
 )
+
+# Posterior inference
+beta_hat <- colMeans(result_bayesa$beta_samples)
+GEBV <- W %*% beta_hat
+
+# Prediction accuracy
+cor(GEBV, y)
 
 # Marker-specific variances
 sigma2_j_hat <- colMeans(result_bayesa$sigma2_j_samples)
@@ -292,65 +331,103 @@ BayesA with marker-specific variance (scaled inverse chi-squared prior).
 
 ### W_αh Matrix Coding
 
-For allele *k* with frequency *p_k*:
-```
-W[i,k] = { -2(1-p_k)    if genotype = k/k (homozygous)
-         { -(1-2p_k)    if genotype = k/other (heterozygous)
-         { 2p_k         if genotype = other/other
-```
+For allele *k* with frequency *p_k* in individual *i*:
+
+$$
+W_{i,k} = \begin{cases}
+  -2(1-p_k) & \text{if genotype } k/k \text{ (homozygous)} \\
+  -(1-2p_k) & \text{if genotype } k/\text{other} \text{ (heterozygous)} \\
+  2p_k & \text{if genotype other/other}
+\end{cases}
+$$
 
 This ensures:
-- E[W_k] = 0 (centered)
-- Var[W_k] ∝ 2p_k(1-p_k) (standardized)
+- $\mathbb{E}[W_k] = 0$ (centered)
+- $\text{Var}(W_k) \propto 2p_k(1-p_k)$ (standardized)
 
 ---
 
 ### BayesR Mixture Model
 
-**Likelihood:**
-```
-y | β, σ²_e ~ N(Wβ, σ²_e I)
-```
+**Hierarchical Model:**
 
-**Prior:**
-```
-β_j | γ_j, σ²_γ ~ N(0, σ²_γ[γ_j])
-γ_j ~ Categorical(π)
-
-π = (π_0, π_small, π_medium, π_large)
-σ²_γ = (0, σ²_small, σ²_medium, σ²_large)
-```
+$$
+\begin{align}
+y \mid \boldsymbol{\beta}, \sigma^2_e &\sim N(\mathbf{W}\boldsymbol{\beta}, \sigma^2_e \mathbf{I}) \\
+\beta_j \mid \gamma_j, \sigma^2_{\gamma_j} &\sim N(0, \sigma^2_{\gamma_j}) \\
+\gamma_j &\sim \text{Categorical}(\boldsymbol{\pi}) \\
+\boldsymbol{\pi} &= (\pi_0, \pi_{\text{small}}, \pi_{\text{medium}}, \pi_{\text{large}}) \\
+\boldsymbol{\sigma}^2_{\gamma} &= (10^{-8}, \sigma^2_{\text{small}}, \sigma^2_{\text{medium}}, \sigma^2_{\text{large}})
+\end{align}
+$$
 
 **Hyperpriors:**
-```
-σ²_e ~ InvGamma(a_e, b_e)
-σ²_k ~ InvGamma(a_k, b_k)  for k ∈ {small, medium, large}
-π ~ Dirichlet(α)
-```
+
+$$
+\begin{align}
+\sigma^2_e &\sim \text{InvGamma}(a_e, b_e) \\
+\sigma^2_k &\sim \text{InvGamma}(a_k, b_k) \quad \text{for } k \in \{\text{small, medium, large}\} \\
+\boldsymbol{\pi} &\sim \text{Dirichlet}(\boldsymbol{\alpha})
+\end{align}
+$$
+
+**Marginalized Gibbs Sampling:**
+
+Instead of sampling $\beta_j$ and $\gamma_j$ sequentially, we marginalize over $\beta_j$ to sample $\gamma_j$ directly from:
+
+$$
+P(\gamma_j = k \mid \cdot) \propto \pi_k \cdot \frac{1}{\sqrt{1 + \lambda_j \sigma^2_k / \sigma^2_e}} \exp\left(\frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}\right)
+$$
+
+where $\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ and $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})$.
+
+Then sample $\beta_j$ conditional on $\gamma_j$:
+
+$$
+\beta_j \mid \gamma_j, \cdot \sim N\left(\frac{r_j \sigma^2_{\gamma_j}}{\sigma^2_e + \lambda_j \sigma^2_{\gamma_j}}, \frac{\sigma^2_e \sigma^2_{\gamma_j}}{\sigma^2_e + \lambda_j \sigma^2_{\gamma_j}}\right)
+$$
+
+This approach improves mixing and convergence compared to sequential sampling.
 
 ---
 
 ### BayesA Model
 
-**Likelihood:**
-```
-y | β, σ²_e ~ N(Wβ, σ²_e I)
-```
+**Hierarchical Model:**
 
-**Prior:**
-```
-β_j | σ²_j ~ N(0, σ²_j)
-σ²_j ~ ScaledInvChiSq(ν, S²)
-```
+$$
+\begin{align}
+y \mid \boldsymbol{\beta}, \sigma^2_e &\sim N(\mathbf{W}\boldsymbol{\beta}, \sigma^2_e \mathbf{I}) \\
+\beta_j \mid \sigma^2_j &\sim N(0, \sigma^2_j) \\
+\sigma^2_j &\sim \text{ScaledInvChiSq}(\nu, S^2)
+\end{align}
+$$
 
 **Hyperprior:**
-```
-σ²_e ~ InvGamma(a_e, b_e)
-```
+
+$$
+\sigma^2_e \sim \text{InvGamma}(a_e, b_e)
+$$
+
+**Marginalized Gibbs Sampling:**
+
+The posterior distribution for $\beta_j$ is:
+
+$$
+\beta_j \mid \sigma^2_j, \cdot \sim N\left(\frac{r_j}{\lambda_j + 1/\sigma^2_j}, \frac{\sigma^2_e}{\lambda_j + 1/\sigma^2_j}\right)
+$$
+
+The marker-specific variance is updated as:
+
+$$
+\sigma^2_j \mid \beta_j, \cdot \sim \text{InvGamma}\left(\frac{\nu + 1}{2}, \frac{\nu S^2 + \beta_j^2}{2}\right)
+$$
+
+This jointly samples marker effects and their variances, allowing automatic adaptation to heterogeneous effect sizes.
 
 ---
 
-## Contributing
+## Help me!
 
 Contributions are welcome!
 You can email me to improve Rust, add new model implementation, documentation, benchmarks, or bug reporting. I will appreciate!

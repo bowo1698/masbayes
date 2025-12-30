@@ -148,8 +148,8 @@ prior_params <- list(
   a0_e = 3.0,
   b0_e = 0.5,
   a0_small = 3.0,
-  b0_small = 0.0005,
-  a0_medium = 3.0,
+  b0_small = 0.001,
+  a0_medium = 5.0,
   b0_medium = 0.005,
   a0_large = 3.0,
   b0_large = 0.05
@@ -157,10 +157,10 @@ prior_params <- list(
 
 # MCMC parameters
 mcmc_params <- list(
-  n_iter = 10000L,
-  n_burn = 2000L,
-  n_thin = 5L,
-  seed = 123L
+  n_iter = as.integer(100),
+  n_burn = as.integer(20),
+  n_thin = as.integer(2),
+  seed = as.integer(42)
 )
 
 # Run BayesR
