@@ -417,5 +417,5 @@ If you use `masbayes` in your research, please cite:
 ---
 
 <p align="center">
-  <strong>masbayes</strong> - Making genomic prediction faster, one allele at a time 🦀🧬
+  <strong>masbayes</strong> - Making genomic prediction faster and saving your money for genotyping🧬
 </p>
