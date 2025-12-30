@@ -425,12 +425,7 @@ $$
 v_j = \frac{\sigma^2_e \sigma^2_k}{\sigma^2_e + \lambda_j \sigma^2_k}, \quad \mu_j = \frac{r_j \sigma^2_k}{\sigma^2_e + \lambda_j \sigma^2_k}
 $$
 
-**Why Marginalization Helps:**
-
-1. **Improved mixing**: By integrating out $\beta_j$, we break the correlation between $\beta_j$ and $\gamma_j$
-2. **Faster convergence**: The sampler explores the posterior more efficiently
-3. **Numerical stability**: Log-scale computation prevents underflow for small probabilities
-4. **Exact inference**: The marginal distribution is analytically tractable due to conjugacy
+By using marginalised Gibbs sampling, it can improve mixing as we break the correlation between $\beta_j$ and $\gamma_j$.
 
 ---
 
@@ -500,7 +495,7 @@ This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
 
 ---
 
-## Help me!
+## Want to help us?
 
 Contributions are welcome!
 You can email me to improve Rust, add new model implementation, documentation, benchmarks, or bug reporting. I will appreciate!
