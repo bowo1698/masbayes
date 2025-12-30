@@ -6,18 +6,7 @@
 
 **Rust-accelerated Bayesian genomic prediction for multi-allelic microhaplotype markers**
 
-The implementation of BayesR and BayesA with specialized `W_αh` matrix construction for multiallelic-based genomic selection.
-
----
-
-## Features
-
-- **Multi-allelic marker support** - Designed for haplotypes or microhaplotypes with 3-10+ alleles per locus
-- **W_αh matrix construction** - To increase computational efficiency over pure R (Rust-accelerated)
-- **BayesR mixture prior** - 4-component variable selection (zero, small, medium, large effects)
-- **BayesA marker-specific variance** - Scaled inverse chi-squared priors
-- **Baseline allele dropping** - Automatic handling of (h-1) informative alleles per block
-- **MCMC diagnostics** - Built-in ESS and Geweke convergence tests
+MasBayes supports multi-allelic-based markers for genomic prediction, where markers such as haplotypes or microhaplotypes can be used as predictors directly feeding into prediction models without being decomposed into biallelic markers. We implemented the `W_αh` matrix as described by Da, Y. (2015) and developed BayesA and BayesR models specifically for multiallelic markers. Both matrix constructions and Bayesian models were built on Rust programming to optimise computational efficiency rather than purely using the R implementation. In addition, we also implemented marginalised Gibbs sampling for Bayesian models to reduce correlation between parameters within the MCMC chain and hasten convergence, while baseline allele dropping was also implemented to only estimate informative alleles per haplotype block.
 
 ---
 
@@ -299,21 +288,6 @@ BayesA with marker-specific variance (scaled inverse chi-squared prior).
 
 ---
 
-## Citation
-
-If you use `masbayes` in your research, please cite:
-```bibtex
-@software{masbayes2025,
-  author = {Agus Wibowo},
-  title = {masbayes: Rust-Accelerated Bayesian Genomic Prediction for Multi-Allelic Markers},
-  year = {2025},
-  url = {https://github.com/bowo1698/masbayes},
-  note = {R package version 1.1.0}
-}
-```
-
----
-
 ## Theoretical Background
 
 ### W_αh Matrix Coding
@@ -378,20 +352,8 @@ y | β, σ²_e ~ N(Wβ, σ²_e I)
 
 ## Contributing
 
-Contributions are welcome! Areas of interest:
-
-1. **Performance optimization** - Further Rust improvements
-2. **Additional models** - BayesB, BayesC variants
-3. **Documentation** - Tutorials, vignettes
-4. **Testing** - More unit tests, benchmarks
-5. **Bug reports** - Real-world use cases
-
-**How to contribute:**
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Contributions are welcome!
+You can email me to improve Rust, add new model implementation, documentation, benchmarks, or bug reporting. I will appreciate!
 
 ---
 
@@ -405,10 +367,8 @@ Copyright (c) 2025 Agus Bowo Wibowo
 
 ## Support & Contact
 
-- **Issues**: [GitHub Issues](https://github.com/bowo1698/masbayes/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/bowo1698/masbayes/discussions)
 - **Email**: aguswibowo1698@gmail.com
-- **Documentation**: [Wiki](https://github.com/bowo1698/masbayes/wiki) (coming soon)
+- **Documentation**: (coming soon)
 
 ---
 
@@ -422,25 +382,37 @@ Copyright (c) 2025 Agus Bowo Wibowo
 
 ### References
 
-- Meuwissen, T. H. E. et al. Prediction of total genetic value using genome-wide dense marker maps. Genetics 157, 1819–1829 (2001).
+- Meuwissen, T. H. E. et al. Prediction of total genetic value using genome-wide dense marker maps. [Genetics 157, 1819–1829 (2001)](https://doi.org/10.1093/genetics/157.4.1819).
 
-- Erbe, M. et al. Improving accuracy of genomic predictions within and between dairy cattle breeds with imputed high-density single nucleotide polymorphism panels. J. Dairy Sci. 95, 4114–4129 (2012).
+- Erbe, M. et al. Improving accuracy of genomic predictions within and between dairy cattle breeds with imputed high-density single nucleotide polymorphism panels. [J. Dairy Sci. 95, 4114–4129 (2012)](https://doi.org/10.3168/jds.2011-5019).
 
-- Moser, G. et al. Simultaneous discovery, estimation and prediction analysis of complex traits using a Bayesian mixture model. PLoS Genet. 11, e1004969 (2015).
+- Moser, G. et al. Simultaneous discovery, estimation and prediction analysis of complex traits using a Bayesian mixture model. [PLoS Genet. 11, e1004969 (2015)](https://doi.org/10.1371/journal.pgen.1004969).
 
-- Da, Y. Multi-allelic haplotype model based on genetic partition for genomic prediction and variance component estimation using SNP markers. BMC Genet. 16, 144 (2015).
+- Da, Y. Multi-allelic haplotype model based on genetic partition for genomic prediction and variance component estimation using SNP markers. [BMC Genet. 16, 144 (2015)](https://doi.org/10.1186/s12863-015-0301-1).
 
 ---
 
 ## Development Team
 
 **Lead Developer:** Agus Wibowo  
-M.Sc Candidate, James Cook University  
-Aquaculture
+James Cook University
 
 **Supervisors:**  
 - Prof. Kyall Zenger
 - Dr. Cecile Massault
+
+## Citation
+
+If you use `masbayes` in your research, please cite:
+```bibtex
+@software{masbayes2025,
+  author = {Agus Wibowo},
+  title = {masbayes: Rust-Accelerated Bayesian Genomic Prediction for Multi-Allelic Markers},
+  year = {2025},
+  url = {https://github.com/bowo1698/masbayes},
+  note = {R package version 1.1.0}
+}
+```
 
 ---
 
