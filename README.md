@@ -34,6 +34,7 @@ cargo --version
 3. Ensure MSVC toolchain: `rustup default stable-msvc`
 
 **Why Rust?**
+
 Rust is a low-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, provides simpler and more readable syntax than C++.
 
 ---
