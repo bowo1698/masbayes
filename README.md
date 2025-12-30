@@ -379,7 +379,11 @@ $$
 P(\gamma_j = k \mid \cdot) \propto \pi_k \cdot \frac{1}{\sqrt{1 + \lambda_j \sigma^2_k / \sigma^2_e}} \exp\left(\frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}\right)
 $$
 
-where $\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ and $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})$.
+where:
+
+$$
+\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j, \quad r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})
+$$
 
 Then sample $\beta_j$ conditional on $\gamma_j$:
 
