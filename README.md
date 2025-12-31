@@ -206,7 +206,7 @@ $$
 with
 
 $$
-\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j \text{and} r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})
+\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j \text{ and } r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})
 $$
 
 **Step 2: Sample Marker-Specific Variances**
