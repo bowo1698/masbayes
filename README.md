@@ -65,6 +65,177 @@ ls("package:masbayes")
 
 ---
 
+## Theoretical Background
+
+### W_αh Matrix Coding
+
+For allele *k* with frequency *p_k* in individual *i*:
+
+$$
+W_{i,k} = \begin{cases}
+  -2(1-p_k) & \text{if genotype } k/k \text{ (homozygous)} \\
+  -(1-2p_k) & \text{if genotype } k/\text{other} \text{ (heterozygous)} \\
+  2p_k & \text{if genotype other/other}
+\end{cases}
+$$
+
+This ensures:
+- $\mathbb{E}[W_k] = 0$ (centered)
+- $\text{Var}(W_k) \propto 2p_k(1-p_k)$ (standardized)
+
+---
+
+### BayesR Mixture Model
+
+**Hierarchical Model:**
+
+$$
+\begin{align}
+y \mid \boldsymbol{\beta}, \sigma^2_e &\sim N(\mathbf{W}\boldsymbol{\beta}, \sigma^2_e \mathbf{I}) \\
+\beta_j \mid \gamma_j, \sigma^2_{\gamma_j} &\sim N(0, \sigma^2_{\gamma_j}) \\
+\gamma_j &\sim \text{Categorical}(\boldsymbol{\pi}) \\
+\boldsymbol{\pi} &= (\pi_0, \pi_{\text{small}}, \pi_{\text{medium}}, \pi_{\text{large}}) \\
+\boldsymbol{\sigma}^2_{\gamma} &= (10^{-8}, \sigma^2_{\text{small}}, \sigma^2_{\text{medium}}, \sigma^2_{\text{large}})
+\end{align}
+$$
+
+**Hyperpriors:**
+
+$$
+\begin{align}
+\sigma^2_e &\sim \text{InvGamma}(a_e, b_e) \\
+\sigma^2_k &\sim \text{InvGamma}(a_k, b_k) \quad \text{for } k \in \{\text{small, medium, large}\} \\
+\boldsymbol{\pi} &\sim \text{Dirichlet}(\boldsymbol{\alpha})
+\end{align}
+$$
+
+**Marginalized Gibbs Sampling (Rust Implementation):**
+
+Traditional Gibbs sampling alternates between:
+1. Sample $\beta_j$ given $\gamma_j$ 
+2. Sample $\gamma_j$ given $\beta_j$
+
+This can lead to slow mixing when $\beta_j$ and $\gamma_j$ are highly correlated. Instead, we use **marginalized Gibbs sampling** where we integrate out $\beta_j$ and sample $\gamma_j$ directly from its marginal distribution:
+
+$$
+p(\gamma_j = k \mid y, \boldsymbol{\beta}_{-j}, \sigma^2_e, \sigma^2_k) = \int p(\gamma_j = k, \beta_j \mid y, \boldsymbol{\beta}_{-j}, \sigma^2_e, \sigma^2_k) \, d\beta_j
+$$
+
+**Step 1: Marginal Distribution for Component Assignment**
+
+By completing the square in the joint distribution, we obtain:
+
+$$
+p(\gamma_j = k \mid \cdot) \propto \pi_k \cdot \left(1 + \lambda_j \rho_{jk}\right)^{-1/2} \cdot \exp\left(\frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}\right)
+$$
+
+where:
+
+$$
+\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j, \quad r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j}), \quad \rho_{jk} = \frac{\sigma^2_k}{\sigma^2_e}
+$$
+
+**Numerical Stability (Log-Sum-Exp Trick):**
+
+For numerical stability, we compute log-probabilities:
+
+$$
+\log p(\gamma_j = k \mid \cdot) = \log \pi_k - \frac{1}{2}\log(1 + \lambda_j \rho_{jk}) + \frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}
+$$
+
+Then normalize using the log-sum-exp trick to prevent underflow:
+
+$$
+p(\gamma_j = k) = \frac{\exp(\log p_k - \max_k \log p_k)}{\sum_{k'} \exp(\log p_{k'} - \max_k \log p_k)}
+$$
+
+**Step 2: Conditional Sampling of Effects**
+
+After sampling $\gamma_j$, we sample $\beta_j$ from its conditional distribution:
+
+$$
+\beta_j \mid \gamma_j = k, \cdot \sim N\left(\mu_j, v_j\right)
+$$
+
+where:
+
+$$
+v_j = \frac{\sigma^2_e \sigma^2_k}{\sigma^2_e + \lambda_j \sigma^2_k}, \quad \mu_j = \frac{r_j \sigma^2_k}{\sigma^2_e + \lambda_j \sigma^2_k}
+$$
+
+By using marginalized Gibbs sampling, it can improve mixing as we break the correlation between $\beta_j$ and $\gamma_j$.
+
+---
+
+### BayesA Model
+
+**Hierarchical Model:**
+
+$$
+\begin{align}
+y \mid \boldsymbol{\beta}, \sigma^2_e &\sim N(\mathbf{W}\boldsymbol{\beta}, \sigma^2_e \mathbf{I}) \\
+\beta_j \mid \sigma^2_j &\sim N(0, \sigma^2_j) \\
+\sigma^2_j &\sim \text{ScaledInvChiSq}(\nu, S^2)
+\end{align}
+$$
+
+**Hyperprior:**
+
+$$
+\sigma^2_e \sim \text{InvGamma}(a_e, b_e)
+$$
+
+**Marginalized Gibbs Sampling:**
+
+BayesA also benefits from marginalized Gibbs sampling, though the marginalization is over the marker-specific variance rather than the component assignment.
+
+**Step 1: Sample Marker Effects**
+
+The conditional posterior for $\beta_j$ is:
+
+$$
+\beta_j \mid \sigma^2_j, \cdot \sim N\left(\mu_j, v_j\right)
+$$
+
+where:
+
+$$
+v_j = \frac{\sigma^2_e \sigma^2_j}{\sigma^2_e + \lambda_j \sigma^2_j}, \quad \mu_j = \frac{r_j \sigma^2_j}{\sigma^2_e + \lambda_j \sigma^2_j}
+$$
+
+with 
+$$
+\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ and $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})
+$$.
+
+**Step 2: Sample Marker-Specific Variances**
+
+The marker-specific variance is updated from its full conditional:
+
+$$
+\sigma^2_j \mid \beta_j, \cdot \sim \text{InvGamma}\left(\frac{\nu + 1}{2}, \frac{\nu S^2 + \beta_j^2}{2}\right)
+$$
+
+**Interpretation:**
+
+- The scaled inverse chi-squared prior provides a natural conjugate structure
+- Each marker "learns" its own variance from the data
+- Markers with large effects get assigned large variances
+- Markers with small effects get shrunk toward zero
+- The hyperparameter $\nu$ controls the degrees of freedom: smaller values allow more variance heterogeneity
+
+**Incremental Updates:**
+
+To avoid recomputing $\mathbf{W}\boldsymbol{\beta}$ from scratch at each iteration, we use incremental updates:
+
+$$
+\mathbf{W}\boldsymbol{\beta}^{(t)} = \mathbf{W}\boldsymbol{\beta}^{(t-1)} + \mathbf{w}_j(\beta_j^{(t)} - \beta_j^{(t-1)})
+$$
+
+This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
+
+---
+
 ## Quick Start
 
 ### W_αh matrix construction
@@ -326,174 +497,6 @@ BayesA with marker-specific variance (scaled inverse chi-squared prior).
 - `sigma2_e_samples`: Residual variance samples (n_save)
 
 **See:** `?run_bayesa_mcmc`
-
----
-
-## Theoretical Background
-
-### W_αh Matrix Coding
-
-For allele *k* with frequency *p_k* in individual *i*:
-
-$$
-W_{i,k} = \begin{cases}
-  -2(1-p_k) & \text{if genotype } k/k \text{ (homozygous)} \\
-  -(1-2p_k) & \text{if genotype } k/\text{other} \text{ (heterozygous)} \\
-  2p_k & \text{if genotype other/other}
-\end{cases}
-$$
-
-This ensures:
-- $\mathbb{E}[W_k] = 0$ (centered)
-- $\text{Var}(W_k) \propto 2p_k(1-p_k)$ (standardized)
-
----
-
-### BayesR Mixture Model
-
-**Hierarchical Model:**
-
-$$
-\begin{align}
-y \mid \boldsymbol{\beta}, \sigma^2_e &\sim N(\mathbf{W}\boldsymbol{\beta}, \sigma^2_e \mathbf{I}) \\
-\beta_j \mid \gamma_j, \sigma^2_{\gamma_j} &\sim N(0, \sigma^2_{\gamma_j}) \\
-\gamma_j &\sim \text{Categorical}(\boldsymbol{\pi}) \\
-\boldsymbol{\pi} &= (\pi_0, \pi_{\text{small}}, \pi_{\text{medium}}, \pi_{\text{large}}) \\
-\boldsymbol{\sigma}^2_{\gamma} &= (10^{-8}, \sigma^2_{\text{small}}, \sigma^2_{\text{medium}}, \sigma^2_{\text{large}})
-\end{align}
-$$
-
-**Hyperpriors:**
-
-$$
-\begin{align}
-\sigma^2_e &\sim \text{InvGamma}(a_e, b_e) \\
-\sigma^2_k &\sim \text{InvGamma}(a_k, b_k) \quad \text{for } k \in \{\text{small, medium, large}\} \\
-\boldsymbol{\pi} &\sim \text{Dirichlet}(\boldsymbol{\alpha})
-\end{align}
-$$
-
-**Marginalized Gibbs Sampling (Rust Implementation):**
-
-Traditional Gibbs sampling alternates between:
-1. Sample $\beta_j$ given $\gamma_j$ 
-2. Sample $\gamma_j$ given $\beta_j$
-
-This can lead to slow mixing when $\beta_j$ and $\gamma_j$ are highly correlated. Instead, we use **marginalized Gibbs sampling** where we integrate out $\beta_j$ and sample $\gamma_j$ directly from its marginal distribution:
-
-$$
-p(\gamma_j = k \mid y, \boldsymbol{\beta}_{-j}, \sigma^2_e, \sigma^2_k) = \int p(\gamma_j = k, \beta_j \mid y, \boldsymbol{\beta}_{-j}, \sigma^2_e, \sigma^2_k) \, d\beta_j
-$$
-
-**Step 1: Marginal Distribution for Component Assignment**
-
-By completing the square in the joint distribution, we obtain:
-
-$$
-p(\gamma_j = k \mid \cdot) \propto \pi_k \cdot \left(1 + \lambda_j \rho_{jk}\right)^{-1/2} \cdot \exp\left(\frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}\right)
-$$
-
-where:
-
-$$
-\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j, \quad r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j}), \quad \rho_{jk} = \frac{\sigma^2_k}{\sigma^2_e}
-$$
-
-**Numerical Stability (Log-Sum-Exp Trick):**
-
-For numerical stability, we compute log-probabilities:
-
-$$
-\log p(\gamma_j = k \mid \cdot) = \log \pi_k - \frac{1}{2}\log(1 + \lambda_j \rho_{jk}) + \frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}
-$$
-
-Then normalize using the log-sum-exp trick to prevent underflow:
-
-$$
-p(\gamma_j = k) = \frac{\exp(\log p_k - \max_k \log p_k)}{\sum_{k'} \exp(\log p_{k'} - \max_k \log p_k)}
-$$
-
-**Step 2: Conditional Sampling of Effects**
-
-After sampling $\gamma_j$, we sample $\beta_j$ from its conditional distribution:
-
-$$
-\beta_j \mid \gamma_j = k, \cdot \sim N\left(\mu_j, v_j\right)
-$$
-
-where:
-
-$$
-v_j = \frac{\sigma^2_e \sigma^2_k}{\sigma^2_e + \lambda_j \sigma^2_k}, \quad \mu_j = \frac{r_j \sigma^2_k}{\sigma^2_e + \lambda_j \sigma^2_k}
-$$
-
-By using marginalized Gibbs sampling, it can improve mixing as we break the correlation between $\beta_j$ and $\gamma_j$.
-
----
-
-### BayesA Model
-
-**Hierarchical Model:**
-
-$$
-\begin{align}
-y \mid \boldsymbol{\beta}, \sigma^2_e &\sim N(\mathbf{W}\boldsymbol{\beta}, \sigma^2_e \mathbf{I}) \\
-\beta_j \mid \sigma^2_j &\sim N(0, \sigma^2_j) \\
-\sigma^2_j &\sim \text{ScaledInvChiSq}(\nu, S^2)
-\end{align}
-$$
-
-**Hyperprior:**
-
-$$
-\sigma^2_e \sim \text{InvGamma}(a_e, b_e)
-$$
-
-**Marginalized Gibbs Sampling:**
-
-BayesA also benefits from marginalized Gibbs sampling, though the marginalization is over the marker-specific variance rather than the component assignment.
-
-**Step 1: Sample Marker Effects**
-
-The conditional posterior for $\beta_j$ is:
-
-$$
-\beta_j \mid \sigma^2_j, \cdot \sim N\left(\mu_j, v_j\right)
-$$
-
-where:
-
-$$
-v_j = \frac{\sigma^2_e \sigma^2_j}{\sigma^2_e + \lambda_j \sigma^2_j}, \quad \mu_j = \frac{r_j \sigma^2_j}{\sigma^2_e + \lambda_j \sigma^2_j}
-$$
-
-with $\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ and $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})$.
-
-**Step 2: Sample Marker-Specific Variances**
-
-The marker-specific variance is updated from its full conditional:
-
-$$
-\sigma^2_j \mid \beta_j, \cdot \sim \text{InvGamma}\left(\frac{\nu + 1}{2}, \frac{\nu S^2 + \beta_j^2}{2}\right)
-$$
-
-**Interpretation:**
-
-- The scaled inverse chi-squared prior provides a natural conjugate structure
-- Each marker "learns" its own variance from the data
-- Markers with large effects get assigned large variances
-- Markers with small effects get shrunk toward zero
-- The hyperparameter $\nu$ controls the degrees of freedom: smaller values allow more variance heterogeneity
-
-**Incremental Updates:**
-
-To avoid recomputing $\mathbf{W}\boldsymbol{\beta}$ from scratch at each iteration, we use incremental updates:
-
-$$
-\mathbf{W}\boldsymbol{\beta}^{(t)} = \mathbf{W}\boldsymbol{\beta}^{(t-1)} + \mathbf{w}_j(\beta_j^{(t)} - \beta_j^{(t-1)})
-$$
-
-This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
 
 ---
 
