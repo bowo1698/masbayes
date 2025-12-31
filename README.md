@@ -203,10 +203,11 @@ $$
 v_j = \frac{\sigma^2_e \sigma^2_j}{\sigma^2_e + \lambda_j \sigma^2_j}, \quad \mu_j = \frac{r_j \sigma^2_j}{\sigma^2_e + \lambda_j \sigma^2_j}
 $$
 
-with 
+with
+
 $$
 \lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ and $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})
-$$.
+$$
 
 **Step 2: Sample Marker-Specific Variances**
 
