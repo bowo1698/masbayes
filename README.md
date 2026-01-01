@@ -89,13 +89,13 @@ This standardization ensures the matrix is mean-centered with $\mathbb{E}[W_k] =
 
 Consider 4 individuals genotyped at haplotype *block 1_1* with 4 alleles. Allele 2 is the most frequent (baseline, dropped). The remaining alleles have frequencies: allele 1 ($p_1 = 0.375$), allele 3 ($p_3 = 0.025$), and allele 4 ($p_4 = 0.10$).
 
-**Phased Genotypes:**
+Phased Genotypes:
 - ID1: 1/3 (heterozygous for alleles 1 and 3)
 - ID2: 1/2 (heterozygous for alleles 1 and baseline)
 - ID3: 2/2 (homozygous for baseline allele)
 - ID4: 3/3 (homozygous for allele 3)
 
-**Resulting $W_αh$ values:**
+Resulting $W_αh$ values:
 
 |     | hap_1_1_allele1 | hap_1_1_allele3 | hap_1_1_allele4 |
 |-----|-----------------|-----------------|-----------------|
