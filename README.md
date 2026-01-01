@@ -87,7 +87,7 @@ where $k \neq \ell \neq m$ are distinct alleles.
 
 #### Allele frequency calculation
 
-Allele frequencies are calculated from phased haplotypes, so tools like Beagle and FImpute are crucial. For each haplotype block, frequencies are computed by counting allele occurrences across both haplotypes (maternal and paternal) and dividing by the total number of haplotypes (2n for n individuals).
+Allele frequencies are calculated from phased haplotypes, so tools like [Beagle](https://faculty.washington.edu/browning/beagle/beagle.html) (population-based phasing) and [FImpute](https://animalbiosciences.uoguelph.ca/~msargol/fimpute/) (pedigree-based phasing) are crucial. For each haplotype block, frequencies are computed by counting allele occurrences across both haplotypes (maternal and paternal) and dividing by the total number of haplotypes (2n for n individuals).
 
 #### Properties and interpretation
 
