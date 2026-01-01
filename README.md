@@ -87,7 +87,7 @@ where $k \neq \ell \neq m$ are distinct alleles.
 
 #### Properties and Interpretation
 
-This standardization ensures the matrix is mean-centered ($\mathbb{E}[W_k] = 0$) and variance-scaled proportional to Hardy-Weinberg expectation ($\text{Var}(W_k) \propto 2p_k(1-p_k)$). The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$ normalizes the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes, enabling direct application of genomic prediction methods like GBLUP and BayesR.
+This standardization ensures the matrix is mean-centered with $\mathbb{E}[W_k] = 0$ and variance-scaled proportional to Hardy-Weinberg expectation with $\text{Var}(W_k) \propto 2p_k(1-p_k)$. The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$ normalizes the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes, enabling direct application of genomic prediction methods like GBLUP and BayesR.
 
 #### Example Matrix
 
