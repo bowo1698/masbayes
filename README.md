@@ -69,7 +69,7 @@ ls("package:masbayes")
 
 ### W_αh matrix construction
 
-The W_αh matrix is an incidence matrix with allele frequency standardization for multi-allelic microhaplotype markers. Each column represents a specific allele from a haplotype block, with the most frequent allele (baseline) dropped from each block following the h-1 principle.
+The W_αh matrix is an incidence matrix with allele frequency standardization for multi-allelic markers. Each column represents a specific allele from a haplotype block, with the most frequent allele (baseline) dropped from each block following the h-1 principle.
 
 #### Coding rule
 
@@ -87,15 +87,15 @@ where $k \neq \ell \neq m$ are distinct alleles.
 
 #### Allele frequency calculation
 
-Allele frequencies are calculated from phased haplotypes. For each haplotype block, frequencies are computed by counting allele occurrences across both haplotypes (maternal and paternal) and dividing by the total number of haplotypes (2n for n individuals).
+Allele frequencies are calculated from phased haplotypes, sho tools like Beagle and FImpute are crucial. For each haplotype block, frequencies are computed by counting allele occurrences across both haplotypes (maternal and paternal) and dividing by the total number of haplotypes (2n for n individuals).
 
 #### Properties and interpretation
 
-This standardization ensures the matrix is mean-centered with $\mathbb{E}[W_k] = 0$ and variance-scaled proportional to Hardy-Weinberg expectation with $\text{Var}(W_k) \propto 2p_k(1-p_k)$. The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$ normalizes the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes, enabling direct application of genomic prediction methods like GBLUP and BayesR.
+This standardization ensures the matrix is mean-centered with $\mathbb{E}[W_k] = 0$ and variance-scaled proportional to Hardy-Weinberg expectation with $\text{Var}(W_k) \propto 2p_k(1-p_k)$. The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$ normalizes the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes, enabling direct application of genomic prediction methods like GBLUP and Bayesian alphabets.
 
 #### Example matrix
 
-Consider 4 individuals genotyped at haplotype block 1_1 with 4 alleles. Allele 2 is the most frequent (baseline, dropped). The remaining alleles have frequencies: allele 1 ($p_1 = 0.375$), allele 3 ($p_3 = 0.025$), and allele 4 ($p_4 = 0.10$).
+Consider 4 individuals genotyped at haplotype *block 1_1* with 4 alleles. Allele 2 is the most frequent (baseline, dropped). The remaining alleles have frequencies: allele 1 ($p_1 = 0.375$), allele 3 ($p_3 = 0.025$), and allele 4 ($p_4 = 0.10$).
 
 **Phased Genotypes:**
 - ID1: 1/3 (heterozygous for alleles 1 and 3)
