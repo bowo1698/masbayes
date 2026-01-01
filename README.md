@@ -103,7 +103,7 @@ Consider 4 individuals genotyped at haplotype *block 1_1* with 4 alleles. Allele
 - ID3: 2/2 (homozygous for baseline allele)
 - ID4: 3/3 (homozygous for allele 3)
 
-**Resulting W_αh values:**
+**Resulting $W_αh$ values:**
 
 |     | hap_1_1_allele1 | hap_1_1_allele3 | hap_1_1_allele4 |
 |-----|-----------------|-----------------|-----------------|
@@ -113,6 +113,7 @@ Consider 4 individuals genotyped at haplotype *block 1_1* with 4 alleles. Allele
 | ID4 | 2×0.375 = **0.75** | -2(1-0.025) = **-1.95** | 2×0.10 = **0.20** |
 
 For allele 3 (rare, $p_3 = 0.025$): ID1 is heterozygous (-0.95), ID4 is homozygous (-1.95), while ID2 and ID3 are non-carriers (0.05). For allele 1 (common, $p_1 = 0.375$): ID1 and ID2 are heterozygous (0.25), while ID3 and ID4 are non-carriers (0.75). Notice how rare alleles produce larger absolute deviations for carriers, while common alleles show more moderate values.
+
 ---
 
 ### BayesR Mixture Model
