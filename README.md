@@ -95,7 +95,7 @@ Phased Genotypes:
 - ID3: 2/2 (homozygous for baseline allele)
 - ID4: 3/3 (homozygous for allele 3)
 
-Resulting $W_αh$ values:
+Resulting the $W_αh$ matrix values:
 
 |     | hap_1_1_allele1 | hap_1_1_allele3 | hap_1_1_allele4 |
 |-----|-----------------|-----------------|-----------------|
