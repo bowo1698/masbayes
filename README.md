@@ -67,9 +67,9 @@ ls("package:masbayes")
 
 ## Theoretical Background
 
-### W_αh matrix construction
+### $W_αh$ matrix construction
 
-The W_αh matrix is an incidence matrix with allele frequency standardization for multi-allelic markers. Each column represents a specific allele from a haplotype block, with the most frequent allele (baseline) dropped from each block following the h-1 principle.
+The $W_αh$ matrix is an incidence matrix with allele frequency standardization for multi-allelic markers. Each column represents a specific allele from a haplotype block, with the most frequent allele (baseline) dropped from each block following the h-1 principle.
 
 #### Coding rule
 
