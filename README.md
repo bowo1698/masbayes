@@ -67,21 +67,40 @@ ls("package:masbayes")
 
 ## Theoretical Background
 
-### W_αh Matrix Coding
+### W_αh Matrix Construction
 
-For allele *k* with frequency *p_k* in individual *i*:
+The W_αh matrix is an incidence matrix with allele frequency standardization for multi-allelic microhaplotype markers. Each column represents a specific allele from a haplotype block, with the most frequent allele (baseline) dropped from each block following the h-1 principle.
+
+#### Coding Rule
+
+For allele *k* with population frequency *p_k*, individual *i* is coded as:
 
 $$
 W_{i,k} = \begin{cases}
-  -2(1-p_k) & \text{if genotype } k/k \text{ (homozygous)} \\
-  -(1-2p_k) & \text{if genotype } k/\text{other} \text{ (heterozygous)} \\
-  2p_k & \text{if genotype other/other}
+  -2(1-p_k) & \text{if genotype } k/k \text{ (homozygous for allele } k\text{)} \\
+  -(1-2p_k) & \text{if genotype } k/\ell \text{ (heterozygous, one copy of } k\text{)} \\
+  2p_k & \text{if genotype } \ell/m \text{ (no copies of } k\text{)}
 \end{cases}
 $$
 
-This ensures:
-- $\mathbb{E}[W_k] = 0$ (centered)
-- $\text{Var}(W_k) \propto 2p_k(1-p_k)$ (standardized)
+where $k \neq \ell \neq m$ are distinct alleles.
+
+#### Properties and Interpretation
+
+This standardization ensures the matrix is mean-centered ($\mathbb{E}[W_k] = 0$) and variance-scaled proportional to Hardy-Weinberg expectation ($\text{Var}(W_k) \propto 2p_k(1-p_k)$). The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$ normalizes the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes, enabling direct application of genomic prediction methods like GBLUP and BayesR.
+
+#### Example Matrix
+
+Consider a dataset with 4 haplotype blocks, each containing 3-4 alleles (after dropping the baseline):
+
+|     | hap_1_1_allele1 | hap_1_1_allele3 | hap_1_1_allele4 | hap_1_2_allele1 | hap_1_2_allele3 | ... |
+|-----|-----------------|-----------------|-----------------|-----------------|-----------------|-----|
+| ID1 | 0.75            | -0.949          | 0.049           | 0.75            | 0.051           | ... |
+| ID2 | 0.75            | -0.949          | 0.049           | 0.75            | 0.051           | ... |
+| ID3 | -0.25           | 0.051           | 0.049           | -0.25           | 0.051           | ... |
+| ID4 | 0.75            | -0.949          | 0.049           | 0.75            | 0.051           | ... |
+
+For example, allele 3 in block 1_1 has frequency $p_k \approx 0.025$ (rare allele). Individuals homozygous for this allele (ID1, ID2) receive large negative values (-0.949), while non-carriers (ID3) receive small positive values (0.051). In contrast, allele 1 with frequency $p_k \approx 0.375$ shows heterozygotes at 0.75 and non-carriers at -0.25, reflecting its higher population frequency.
 
 ---
 
