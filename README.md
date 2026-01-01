@@ -71,8 +71,6 @@ ls("package:masbayes")
 
 The $W_αh$ matrix is an incidence matrix with allele frequency standardization for multi-allelic markers. Each column represents a specific allele from a haplotype block, with the most frequent allele (baseline) dropped from each block following the h-1 principle.
 
-#### Coding rule
-
 For allele *k* with population frequency *p_k*, individual *i* is coded as:
 
 $$
@@ -85,15 +83,9 @@ $$
 
 where $k \neq \ell \neq m$ are distinct alleles.
 
-#### Allele frequency calculation
-
 Allele frequencies are calculated from phased haplotypes, so tools like [Beagle](https://faculty.washington.edu/browning/beagle/beagle.html) (population-based phasing/imputation) and [FImpute](https://animalbiosciences.uoguelph.ca/~msargol/fimpute/) (pedigree-based phasing/imputation) are crucial. For each haplotype block, frequencies are computed by counting allele occurrences across both haplotypes (maternal and paternal) and dividing by the total number of haplotypes (2n for n individuals).
 
-#### Properties and interpretation
-
 This standardization ensures the matrix is mean-centered with $\mathbb{E}[W_k] = 0$ and variance-scaled proportional to Hardy-Weinberg expectation with $\text{Var}(W_k) \propto 2p_k(1-p_k)$. The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$ is to normalize the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes for direct application of genomic prediction methods like GBLUP and Bayesian alphabets.
-
-#### Example matrix
 
 Consider 4 individuals genotyped at haplotype *block 1_1* with 4 alleles. Allele 2 is the most frequent (baseline, dropped). The remaining alleles have frequencies: allele 1 ($p_1 = 0.375$), allele 3 ($p_3 = 0.025$), and allele 4 ($p_4 = 0.10$).
 
