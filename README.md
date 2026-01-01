@@ -67,11 +67,11 @@ ls("package:masbayes")
 
 ## Theoretical Background
 
-### W_αh Matrix Construction
+### W_αh matrix construction
 
 The W_αh matrix is an incidence matrix with allele frequency standardization for multi-allelic microhaplotype markers. Each column represents a specific allele from a haplotype block, with the most frequent allele (baseline) dropped from each block following the h-1 principle.
 
-#### Coding Rule
+#### Coding rule
 
 For allele *k* with population frequency *p_k*, individual *i* is coded as:
 
@@ -85,23 +85,34 @@ $$
 
 where $k \neq \ell \neq m$ are distinct alleles.
 
-#### Properties and Interpretation
+#### Allele frequency calculation
 
-This standardization ensures the matrix is mean-centered with $\mathbb{E}[W_k] = 0$ and variance-scaled proportional to Hardy-Weinberg expectation with $\text{Var}(W_k) \propto 2p_k(1-p_k)$. The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top/k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G})/n$ normalizes the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes, enabling direct application of genomic prediction methods like GBLUP and BayesR.
+Allele frequencies are calculated from phased haplotypes. For each haplotype block, frequencies are computed by counting allele occurrences across both haplotypes (maternal and paternal) and dividing by the total number of haplotypes (2n for n individuals).
 
-#### Example Matrix
+#### Properties and interpretation
 
-Consider a dataset with 4 haplotype blocks, each containing 3-4 alleles (after dropping the baseline):
+This standardization ensures the matrix is mean-centered with $\mathbb{E}[W_k] = 0$ and variance-scaled proportional to Hardy-Weinberg expectation with $\text{Var}(W_k) \propto 2p_k(1-p_k)$. The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$ normalizes the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes, enabling direct application of genomic prediction methods like GBLUP and BayesR.
 
-|     | hap_1_1_allele1 | hap_1_1_allele3 | hap_1_1_allele4 | hap_1_2_allele1 | hap_1_2_allele3 | ... |
-|-----|-----------------|-----------------|-----------------|-----------------|-----------------|-----|
-| ID1 | 0.75            | -0.949          | 0.049           | 0.75            | 0.051           | ... |
-| ID2 | 0.75            | -0.949          | 0.049           | 0.75            | 0.051           | ... |
-| ID3 | -0.25           | 0.051           | 0.049           | -0.25           | 0.051           | ... |
-| ID4 | 0.75            | -0.949          | 0.049           | 0.75            | 0.051           | ... |
+#### Example matrix
 
-For example, allele 3 in block 1_1 has frequency $p_k \approx 0.025$ (rare allele). Individuals homozygous for this allele (ID1, ID2) receive large negative values (-0.949), while non-carriers (ID3) receive small positive values (0.051). In contrast, allele 1 with frequency $p_k \approx 0.375$ shows heterozygotes at 0.75 and non-carriers at -0.25, reflecting its higher population frequency.
+Consider 4 individuals genotyped at haplotype block 1_1 with 4 alleles. Allele 2 is the most frequent (baseline, dropped). The remaining alleles have frequencies: allele 1 ($p_1 = 0.375$), allele 3 ($p_3 = 0.025$), and allele 4 ($p_4 = 0.10$).
 
+**Phased Genotypes:**
+- ID1: 1/3 (heterozygous for alleles 1 and 3)
+- ID2: 1/2 (heterozygous for alleles 1 and baseline)
+- ID3: 2/2 (homozygous for baseline allele)
+- ID4: 3/3 (homozygous for allele 3)
+
+**Resulting W_αh values:**
+
+|     | hap_1_1_allele1 | hap_1_1_allele3 | hap_1_1_allele4 |
+|-----|-----------------|-----------------|-----------------|
+| ID1 | -(1-2×0.375) = **0.25** | -(1-2×0.025) = **-0.95** | 2×0.10 = **0.20** |
+| ID2 | -(1-2×0.375) = **0.25** | 2×0.025 = **0.05** | 2×0.10 = **0.20** |
+| ID3 | 2×0.375 = **0.75** | 2×0.025 = **0.05** | 2×0.10 = **0.20** |
+| ID4 | 2×0.375 = **0.75** | -2(1-0.025) = **-1.95** | 2×0.10 = **0.20** |
+
+For allele 3 (rare, $p_3 = 0.025$): ID1 is heterozygous (-0.95), ID4 is homozygous (-1.95), while ID2 and ID3 are non-carriers (0.05). For allele 1 (common, $p_1 = 0.375$): ID1 and ID2 are heterozygous (0.25), while ID3 and ID4 are non-carriers (0.75). Notice how rare alleles produce larger absolute deviations for carriers, while common alleles show more moderate values.
 ---
 
 ### BayesR Mixture Model
