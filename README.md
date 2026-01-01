@@ -87,11 +87,11 @@ where $k \neq \ell \neq m$ are distinct alleles.
 
 #### Allele frequency calculation
 
-Allele frequencies are calculated from phased haplotypes, so tools like [Beagle](https://faculty.washington.edu/browning/beagle/beagle.html) (population-based phasing) and [FImpute](https://animalbiosciences.uoguelph.ca/~msargol/fimpute/) (pedigree-based phasing) are crucial. For each haplotype block, frequencies are computed by counting allele occurrences across both haplotypes (maternal and paternal) and dividing by the total number of haplotypes (2n for n individuals).
+Allele frequencies are calculated from phased haplotypes, so tools like [Beagle](https://faculty.washington.edu/browning/beagle/beagle.html) (population-based phasing/imputation) and [FImpute](https://animalbiosciences.uoguelph.ca/~msargol/fimpute/) (pedigree-based phasing/imputation) are crucial. For each haplotype block, frequencies are computed by counting allele occurrences across both haplotypes (maternal and paternal) and dividing by the total number of haplotypes (2n for n individuals).
 
 #### Properties and interpretation
 
-This standardization ensures the matrix is mean-centered with $\mathbb{E}[W_k] = 0$ and variance-scaled proportional to Hardy-Weinberg expectation with $\text{Var}(W_k) \propto 2p_k(1-p_k)$. The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$ normalizes the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes, enabling direct application of genomic prediction methods like GBLUP and Bayesian alphabets.
+This standardization ensures the matrix is mean-centered with $\mathbb{E}[W_k] = 0$ and variance-scaled proportional to Hardy-Weinberg expectation with $\text{Var}(W_k) \propto 2p_k(1-p_k)$. The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$ is to normalize the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes for direct application of genomic prediction methods like GBLUP and Bayesian alphabets.
 
 #### Example matrix
 
