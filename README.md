@@ -143,9 +143,9 @@ So here, we extend Bayesian models for multiallelic markers, that may offer supe
 
 ---
 
-### BayesR mixture model
+## BayesR mixture model
 
-**Hierarchical Model:**
+### Hierarchical Model
 
 $$
 \begin{align}
@@ -157,7 +157,7 @@ y \mid \boldsymbol{\beta}, \sigma^2_e &\sim N(\mathbf{W}\boldsymbol{\beta}, \sig
 \end{align}
 $$
 
-**Hyperpriors:**
+### Hyperpriors
 
 $$
 \begin{align}
@@ -167,7 +167,7 @@ $$
 \end{align}
 $$
 
-**Marginalized Gibbs Sampling (Rust Implementation):**
+### Marginalized Gibbs sampling (Rust implementation)
 
 Traditional Gibbs sampling alternates between:
 1. Sample $\beta_j$ given $\gamma_j$ 
@@ -179,7 +179,7 @@ $$
 p(\gamma_j = k \mid y, \boldsymbol{\beta}_{-j}, \sigma^2_e, \sigma^2_k) = \int p(\gamma_j = k, \beta_j \mid y, \boldsymbol{\beta}_{-j}, \sigma^2_e, \sigma^2_k) \, d\beta_j
 $$
 
-**Step 1: Marginal Distribution for Component Assignment**
+**Step 1: Marginal distribution for component assignment**
 
 By completing the square in the joint distribution, we obtain:
 
@@ -193,7 +193,7 @@ $$
 \lambda_j = \mathbf{w}_j^\top \mathbf{w}_j, \quad r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j}), \quad \rho_{jk} = \frac{\sigma^2_k}{\sigma^2_e}
 $$
 
-**Numerical Stability (Log-Sum-Exp Trick):**
+**Numerical stability using log-sum-exp Trick:**
 
 For numerical stability, we compute log-probabilities:
 
@@ -207,7 +207,7 @@ $$
 p(\gamma_j = k) = \frac{\exp(\log p_k - \max_k \log p_k)}{\sum_{k'} \exp(\log p_{k'} - \max_k \log p_k)}
 $$
 
-**Step 2: Conditional Sampling of Effects**
+**Step 2: Conditional sampling of effects**
 
 After sampling $\gamma_j$, we sample $\beta_j$ from its conditional distribution:
 
@@ -225,9 +225,9 @@ By using marginalized Gibbs sampling, it can improve mixing as we break the corr
 
 ---
 
-### BayesA Model
+## BayesA Model
 
-**Hierarchical Model:**
+### Hierarchical Model
 
 $$
 \begin{align}
@@ -237,17 +237,17 @@ y \mid \boldsymbol{\beta}, \sigma^2_e &\sim N(\mathbf{W}\boldsymbol{\beta}, \sig
 \end{align}
 $$
 
-**Hyperprior:**
+### Hyperprior
 
 $$
 \sigma^2_e \sim \text{InvGamma}(a_e, b_e)
 $$
 
-**Marginalized Gibbs Sampling:**
+### Marginalized Gibbs sampling
 
 BayesA also benefits from marginalized Gibbs sampling, though the marginalization is over the marker-specific variance rather than the component assignment.
 
-**Step 1: Sample Marker Effects**
+**Step 1: Sample marker effects**
 
 The conditional posterior for $\beta_j$ is:
 
@@ -267,7 +267,7 @@ $$
 \lambda_j = \mathbf{w}_j^\top \mathbf{w}_j \text{ and } r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})
 $$
 
-**Step 2: Sample Marker-Specific Variances**
+**Step 2: Sample marker-specific variances**
 
 The marker-specific variance is updated from its full conditional:
 
@@ -275,7 +275,7 @@ $$
 \sigma^2_j \mid \beta_j, \cdot \sim \text{InvGamma}\left(\frac{\nu + 1}{2}, \frac{\nu S^2 + \beta_j^2}{2}\right)
 $$
 
-**Interpretation:**
+### Interpretation
 
 - The scaled inverse chi-squared prior provides a natural conjugate structure
 - Each marker "learns" its own variance from the data
@@ -283,7 +283,7 @@ $$
 - Markers with small effects get shrunk toward zero
 - The hyperparameter $\nu$ controls the degrees of freedom: smaller values allow more variance heterogeneity
 
-**Incremental Updates:**
+### Incremental Updates
 
 To avoid recomputing $\mathbf{W}\boldsymbol{\beta}$ from scratch at each iteration, we use incremental updates:
 
@@ -295,7 +295,7 @@ This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
 
 ---
 
-## Quick Start
+## Quick start
 
 ### W_αh matrix construction
 ```r
