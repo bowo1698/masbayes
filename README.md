@@ -73,7 +73,7 @@ The most important thing in genomic prediction is telling the computer which gen
 
 #### The Basic Idea
 
-Imagine you have a population where most individuals carry allele A, but a few carry rare allele B. When we see someone with allele B, this is more "informative" about their genetics than seeing allele A (which everyone has). A specialized coding system by [Da. Y., (2015)](https://link.springer.com/article/10.1186/s12863-015-0301-1) gives larger deviation values to rare alleles and smaller values to common ones, making rare variants more influential in predictions while keeping the math balanced.
+Imagine you have a population where most individuals carry allele A, but a few carry rare allele B. When we see someone with allele B, this is more "informative" about their genetics than seeing allele A (which everyone has). A specialized coding system by [Da. Y. (2015)](https://link.springer.com/article/10.1186/s12863-015-0301-1) gives larger deviation values to rare alleles and smaller values to common ones, making rare variants more influential in predictions while keeping the math balanced.
 
 #### Coding Rule
 
@@ -95,7 +95,7 @@ Allele frequencies are calculated from phased haplotypes (the two DNA copies eac
 
 #### Why this coding works
 
-This standardization ensures three critical properties. First, the matrix is mean-centered with $\mathbb{E}[W_k] = 0$, meaning positive and negative deviations balance out across the population. Second, variance scales with $\text{Var}(W_k) \propto 2p_k(1-p_k)$, matching Hardy-Weinberg genetic expectations where intermediate-frequency alleles contribute most variance. Third, the genomic relationship matrix $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$ (where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$) becomes comparable to SNP-based GRM by [VanRaden., (2008)](https://www.journalofdairyscience.org/article/S0022-0302(08)70990-1/fulltext), enabling proven statistical methods like GBLUP and Bayesian alphabets to work directly with multi-allelic markers.
+This standardization ensures three critical properties. First, the matrix is mean-centered with $\mathbb{E}[W_k] = 0$, meaning positive and negative deviations balance out across the population. Second, variance scales with $\text{Var}(W_k) \propto 2p_k(1-p_k)$, matching Hardy-Weinberg genetic expectations where intermediate-frequency alleles contribute most variance. Third, the genomic relationship matrix $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$ (where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$) becomes comparable to SNP-based GRM by [VanRaden. (2008)](https://www.journalofdairyscience.org/article/S0022-0302(08)70990-1/fulltext), enabling proven statistical methods like GBLUP and Bayesian alphabets to work directly with multi-allelic markers.
 
 #### Example matrix
 
