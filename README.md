@@ -159,11 +159,11 @@ $$
 p(\gamma_j = k \mid \cdot) \propto \pi_k \cdot \left(1 + \lambda_j \rho_{jk}\right)^{-1/2} \cdot \exp\left(\frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}\right)
 $$
 
-where:
+where, $\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ measures how much information allele $j$ carries (its "signal strength"). $\rho_{jk} = \sigma^2_k/\sigma^2_e$ is the signal-to-noise ratio for category $k$, and $r_j$ is the residual correlation between the allele and unexplained phenotype with:
 
-- $\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ measures how much information allele $j$ carries (its "signal strength")
-- $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})$ is the residual correlation between the allele and unexplained phenotype
-- $\rho_{jk} = \sigma^2_k/\sigma^2_e$ is the signal-to-noise ratio for category $k$
+$$
+r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})
+$$
 
 If we break down this formula, we know that
 - $\pi_k$: Prior belief about how common this category is
