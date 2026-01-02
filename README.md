@@ -101,13 +101,13 @@ This standardization ensures three critical properties. First, the matrix is mea
 
 Consider 4 individuals genotyped at haplotype *block 1_1* containing 4 alleles. Allele 2 is most frequent (60%, baseline allele, dropped). The remaining alleles have frequencies: allele 1 at 37.5%, allele 3 at 2.5% (rare), and allele 4 at 0% in this sample.
 
-**Phased Genotypes (maternal/paternal):**
+Phased genotypes (maternal/paternal):
 - ID1: 1/3 → carries alleles 1 and 3
 - ID2: 1/2 → carries allele 1 and baseline
 - ID3: 2/2 → only baseline (homozygous)
 - ID4: 3/3 → only allele 3 (homozygous)
 
-**Applying the Coding Rule:**
+Applying the coding rule:
 
 |     | Genotype | allele1 calculation | allele1 value | allele3 calculation | allele3 value |
 |-----|----------|---------------------|---------------|---------------------|---------------|
@@ -115,8 +115,6 @@ Consider 4 individuals genotyped at haplotype *block 1_1* containing 4 alleles. 
 | ID2 | 1/2      | -(1-2×0.375) = -(0.25) | **0.25** | 2×0.025 | **0.05** |
 | ID3 | 2/2      | 2×0.375 | **0.75** | 2×0.025 | **0.05** |
 | ID4 | 3/3      | 2×0.375 | **0.75** | -2(1-0.025) = -2(0.975) | **-1.95** |
-
-**What These Numbers Mean:**
 
 For rare allele 3 (2.5% frequency): Individuals carrying it get large negative values (ID1: -0.95, ID4: -1.95), making them stand out strongly from the population. Non-carriers get small positive values (0.05), barely different from average. 
 
