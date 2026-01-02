@@ -4,9 +4,13 @@
 [![Rust](https://img.shields.io/badge/Rust-1.78+-orange.svg)](https://www.rust-lang.org/)
 [![R](https://img.shields.io/badge/R-4.0+-blue.svg)](https://www.r-project.org/)
 
-**Rust-based Bayesian genomic prediction package for multi-allelic markers**
+## Rust-based Bayesian genomic prediction package for multi-allelic markers
 
 MasBayes supports multi-allelic-based markers for genomic prediction, where markers such as haplotypes or microhaplotypes can be used as predictors directly feeding into prediction models without being decomposed into biallelic markers. We implemented the `W_αh` matrix as described by Da, Y. (2015) and developed BayesA and BayesR models specifically for multiallelic markers. Both matrix constructions and Bayesian models were built on Rust programming to optimise computational efficiency rather than purely using the R implementation. In addition, we also implemented marginalized Gibbs sampling for Bayesian models to reduce correlation between parameters within the MCMC chain and hasten convergence, while baseline allele dropping was also implemented to only estimate informative alleles per haplotype block.
+
+**Why Rust?**
+
+Rust is a low-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, has a strict ownership model and memory safety guarantees to eliminate common bugs like memory leaks and segmentation faults without the need for a garbage collector. Rust also has simpler and more readable syntax than C++.
 
 ---
 
@@ -311,10 +315,6 @@ cargo --version
 1. Download and install [Rustup for Windows](https://rustup.rs/)
 2. Install [Rtools](https://cran.r-project.org/bin/windows/Rtools/) (if not already installed)
 3. Ensure MSVC toolchain: `rustup default stable-msvc`
-
-**Why Rust?**
-
-Rust is a low-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, provides a strict ownership model and memory safety guarantees to eliminate common bugs like memory leaks and segmentation faults without the need for a garbage collector. Rust also has simpler and more readable syntax than C++.
 
 ---
 
