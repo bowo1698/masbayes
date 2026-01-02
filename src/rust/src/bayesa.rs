@@ -19,6 +19,7 @@ pub struct BayesARunner {
     // Hyperparameters
     nu: f64,
     s_squared: f64,
+    freq_weights: Array1<f64>,
     
     // Prior parameters
     a0_e: f64,
@@ -48,6 +49,7 @@ impl BayesARunner {
         nu: f64,
         s_squared: f64,
         sigma2_e_init: f64,
+        allele_freqs: Vec<f64>,
         a0_e: f64,
         b0_e: f64,
         n_iter: usize,
@@ -60,6 +62,12 @@ impl BayesARunner {
         let n_alleles = w.ncols();
         
         let rng = Pcg64::seed_from_u64(seed);
+
+        let mut freq_weights = Array1::<f64>::ones(n_alleles);
+        for j in 0..n_alleles {
+            let p = allele_freqs[j];
+            freq_weights[j] = (2.0 * p * (1.0 - p)).sqrt();
+        }
         
         Self {
             w,
@@ -70,6 +78,7 @@ impl BayesARunner {
             n_alleles,
             nu,
             s_squared,
+            freq_weights,
             a0_e,
             b0_e,
             n_iter,
@@ -115,7 +124,8 @@ impl BayesARunner {
                 let rhs = residuals_prod + l_j * self.beta_a[j];
                 
                 // Posterior distribution
-                let inv_var_post = l_j * inv_sigma2_e + 1.0 / self.sigma2_j[j];
+                let sigma2_j_adjusted = self.sigma2_j[j] * self.freq_weights[j];
+                let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_j_adjusted;
                 let var_post = 1.0 / inv_var_post;
                 let mu_post = rhs * inv_sigma2_e * var_post;
                 

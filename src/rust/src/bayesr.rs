@@ -20,6 +20,8 @@ pub struct BayesRRunner {
     // Hyperparameters
     pi_vec: Array1<f64>,
     sigma2_vec: Array1<f64>,
+    freq_weights: Array1<f64>,
+    active_components: [bool; 4],
     
     // Prior parameters
     a0_e: f64,
@@ -56,6 +58,8 @@ impl BayesRRunner {
         sigma2_vec: Vec<f64>,
         sigma2_e_init: f64,
         sigma2_ah: f64,
+        allele_freqs: Vec<f64>, 
+        use_adaptive_grid: bool,
         a0_e: f64, b0_e: f64,
         a0_small: f64, b0_small: f64,
         a0_medium: f64, b0_medium: f64,
@@ -70,7 +74,47 @@ impl BayesRRunner {
         let n_alleles = w.ncols();
         
         let rng = Pcg64::seed_from_u64(seed);
-        
+
+        // Compute frequency-based shrinkage weights
+        let mut freq_weights = Array1::<f64>::ones(n_alleles);
+        for j in 0..n_alleles {
+            let p = allele_freqs[j];
+            // sqrt(2pq) shrinkage
+            freq_weights[j] = (2.0 * p * (1.0 - p)).sqrt();
+
+            // inverse frequency
+            // freq_weights[j] = (p * (1.0 - p)).sqrt();
+        }
+
+        // Adaptive variance grid
+        let mut sigma2_vec_array = Array1::from_vec(sigma2_vec);
+        if use_adaptive_grid {
+            use crate::variance_tuning::{estimate_genetic_variance, 
+                                         estimate_architecture_type,
+                                         adaptive_variance_grid,
+                                         adaptive_variance_grid_sparse};
+            
+            let y_array = Array1::from_vec(y.clone());
+            let sigma2_g = estimate_genetic_variance(&w, &y_array);
+            
+            let is_sparse = estimate_architecture_type(&w, &y_array);
+            
+            let variance_grid = if is_sparse {
+                eprintln!("[Fold {}] Detected SPARSE architecture → using aggressive grid", fold_id);
+                adaptive_variance_grid_sparse(sigma2_g)
+            } else {
+                eprintln!("[Fold {}] Detected POLYGENIC architecture → using standard grid", fold_id);
+                adaptive_variance_grid(sigma2_g)
+            };
+            
+            sigma2_vec_array = Array1::from_vec(variance_grid.to_vec());
+            
+            eprintln!("[Fold {}] Adaptive variance grid: σ²_g = {:.6}", fold_id, sigma2_g);
+            eprintln!("[Fold {}]   [0={:.2e}, small={:.2e}, med={:.2e}, large={:.2e}]",
+                     fold_id, variance_grid[0], variance_grid[1], 
+                     variance_grid[2], variance_grid[3]);
+        }
+
         // Initialize beta with small random values
         let init_sd = (sigma2_ah / n_alleles as f64).sqrt();
         let mut beta = Array1::<f64>::zeros(n_alleles);
@@ -87,7 +131,9 @@ impl BayesRRunner {
             n,
             n_alleles,
             pi_vec: Array1::from_vec(pi_vec),
-            sigma2_vec: Array1::from_vec(sigma2_vec),
+            sigma2_vec: sigma2_vec_array,
+            freq_weights,
+            active_components: [true; 4],
             a0_e, b0_e,
             a0_small, b0_small,
             a0_medium, b0_medium,
@@ -169,7 +215,11 @@ impl BayesRRunner {
                 let mut sum_probs = 0.0;
                 
                 for k in 0..4 {
-                    probs[k] = (log_probs[k] - max_log).exp();
+                    if !self.active_components[k] {
+                        probs[k] = 0.0;
+                    } else {
+                        probs[k] = (log_probs[k] - max_log).exp();
+                    }
                     sum_probs += probs[k];
                 }
                 
@@ -198,7 +248,8 @@ impl BayesRRunner {
                 if sigma2_k_chosen < 1e-10 {
                     self.beta[j] = 0.0;
                 } else {
-                    let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k_chosen;
+                    let sigma2_j_adjusted = sigma2_k_chosen * self.freq_weights[j];
+                    let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_j_adjusted;
                     let var_post = 1.0 / inv_var_post;
                     let mu_post = rhs * inv_sigma2_e * var_post;
                     
@@ -250,6 +301,32 @@ impl BayesRRunner {
                 alpha_post[k] += n_counts[k] as f64;
             }
             self.pi_vec = rdirichlet(&mut self.rng, &alpha_post);
+
+            // Check if any component has negligible π (< 0.01) for sustained period
+            if iter > self.n_burn && iter % 100 == 0 {
+                for k in 1..4 {  // Don't prune zero component
+                    if self.pi_vec[k] < 0.01 && self.active_components[k] {
+                        eprintln!(
+                            "[Fold {}] Iter {}: Component {} pruned (Ï€={:.4})", 
+                            self.fold_id, iter, k, self.pi_vec[k]
+                        );
+                        self.active_components[k] = false;
+                        
+                        // Redistribute its probability
+                        let to_redistribute = self.pi_vec[k];
+                        self.pi_vec[k] = 0.0;
+                        
+                        // Give to zero component
+                        self.pi_vec[0] += to_redistribute;
+                    }
+                }
+                
+                // Renormalize
+                let sum_pi = self.pi_vec.sum();
+                for k in 0..4 {
+                    self.pi_vec[k] /= sum_pi;
+                }
+            }
             
             // 4. Store samples
             if iter >= self.n_burn && (iter - self.n_burn) % self.n_thin == 0 {

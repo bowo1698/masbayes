@@ -7,6 +7,7 @@ mod bayesr_em;
 mod bayesa_em;
 mod utils;
 mod types;
+mod variance_tuning;
 
 use bayesr::BayesRRunner;
 use bayesa::BayesARunner;
@@ -247,6 +248,8 @@ fn run_bayesr_mcmc(
     sigma2_vec: Vec<f64>,
     sigma2_e_init: f64,
     sigma2_ah: f64,
+    allele_freqs: Vec<f64>,
+    use_adaptive_grid: bool,
     prior_params: List,
     mcmc_params: List,
     fold_id: i32,
@@ -281,6 +284,8 @@ fn run_bayesr_mcmc(
         sigma2_vec,
         sigma2_e_init,
         sigma2_ah,
+        allele_freqs,
+        use_adaptive_grid,
         a0_e, b0_e,
         a0_small, b0_small,
         a0_medium, b0_medium,
@@ -328,6 +333,7 @@ fn run_bayesa_mcmc(
     nu: f64,
     s_squared: f64,
     sigma2_e_init: f64,
+    allele_freqs: Vec<f64>, 
     prior_params: List,
     mcmc_params: List,
     fold_id: i32,
@@ -354,6 +360,7 @@ fn run_bayesa_mcmc(
         nu,
         s_squared,
         sigma2_e_init,
+        allele_freqs, 
         a0_e,
         b0_e,
         n_iter,
@@ -383,6 +390,8 @@ fn run_bayesr_em(
     pi_vec: Vec<f64>,
     sigma2_vec: Vec<f64>,
     sigma2_e_init: f64,
+    allele_freqs: Vec<f64>,
+    use_adaptive_grid: bool,
     em_params: List,
     fold_id: i32,
 ) -> List {
@@ -398,7 +407,8 @@ fn run_bayesr_em(
     let mut runner = BayesREM::new(
         w_array, y, wtw_diag, wty,
         pi_vec, sigma2_vec, sigma2_e_init,
-        max_iter, tol, seed, fold_id,
+        allele_freqs, use_adaptive_grid, max_iter, tol,
+        seed, fold_id,
     );
     
     let results = runner.run();
@@ -423,6 +433,7 @@ fn run_bayesa_em(
     nu: f64,
     s_squared: f64,
     sigma2_e_init: f64,
+    allele_freqs: Vec<f64>,
     em_params: List,
     fold_id: i32,
 ) -> List {
@@ -434,6 +445,7 @@ fn run_bayesa_em(
     let mut runner = BayesAEM::new(
         w_array, y, wtw_diag, wty,
         nu, s_squared, sigma2_e_init,
+        allele_freqs, 
         max_iter, tol, fold_id,
     );
     

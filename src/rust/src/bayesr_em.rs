@@ -17,6 +17,7 @@ pub struct BayesREM {
     
     pi_vec: Array1<f64>,
     sigma2_vec: Array1<f64>,
+    freq_weights: Array1<f64>, 
     
     max_iter: usize,
     tol: f64,
@@ -38,6 +39,8 @@ impl BayesREM {
         pi_vec: Vec<f64>,
         sigma2_vec: Vec<f64>,
         sigma2_e_init: f64,
+        allele_freqs: Vec<f64>,
+        use_adaptive_grid: bool, 
         max_iter: usize,
         tol: f64,
         seed: u64,
@@ -45,6 +48,40 @@ impl BayesREM {
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
+        let mut freq_weights = Array1::<f64>::ones(n_alleles);
+        for j in 0..n_alleles {
+            let p = allele_freqs[j];
+            freq_weights[j] = (2.0 * p * (1.0 - p)).sqrt();
+        }
+
+        // Adaptive variance grid
+        let mut sigma2_vec_array = Array1::from_vec(sigma2_vec);
+        if use_adaptive_grid {
+            use crate::variance_tuning::{estimate_genetic_variance, 
+                                         estimate_architecture_type,
+                                         adaptive_variance_grid,
+                                         adaptive_variance_grid_sparse};
+            
+            let y_array = Array1::from_vec(y.clone());
+            let sigma2_g = estimate_genetic_variance(&w, &y_array);
+            
+            let is_sparse = estimate_architecture_type(&w, &y_array);
+            
+            let variance_grid = if is_sparse {
+                eprintln!("[Fold {}] EM: Detected SPARSE architecture → using aggressive grid", fold_id);
+                adaptive_variance_grid_sparse(sigma2_g)
+            } else {
+                eprintln!("[Fold {}] EM: Detected POLYGENIC architecture → using standard grid", fold_id);
+                adaptive_variance_grid(sigma2_g)
+            };
+            
+            sigma2_vec_array = Array1::from_vec(variance_grid.to_vec());
+            
+            eprintln!("[Fold {}] EM: Adaptive variance grid: σ²_g = {:.6}", fold_id, sigma2_g);
+            eprintln!("[Fold {}] EM:   [0={:.2e}, small={:.2e}, med={:.2e}, large={:.2e}]",
+                     fold_id, variance_grid[0], variance_grid[1], 
+                     variance_grid[2], variance_grid[3]);
+        }
         
         Self {
             w,
@@ -54,7 +91,8 @@ impl BayesREM {
             n,
             n_alleles,
             pi_vec: Array1::from_vec(pi_vec),
-            sigma2_vec: Array1::from_vec(sigma2_vec),
+            sigma2_vec: sigma2_vec_array,
+            freq_weights,
             max_iter,
             tol,
             beta: Array1::<f64>::zeros(n_alleles),
@@ -147,7 +185,8 @@ impl BayesREM {
                     continue;
                 }
                 
-                let ratio_var = sigma2_k * inv_sigma2_e;
+                let sigma2_j_adjusted = sigma2_k * self.freq_weights[j];
+                let ratio_var = sigma2_j_adjusted * inv_sigma2_e;
                 let log_det = (1.0 + l_j * ratio_var).ln();
                 let quad_term = (rhs.powi(2) * sigma2_k) / 
                                (self.sigma2_e * (self.sigma2_e + l_j * sigma2_k));
@@ -210,7 +249,8 @@ impl BayesREM {
             let inv_var_post = if k == 0 || sigma2_k < 1e-10 {
                 l_j * inv_sigma2_e + 1e10
             } else {
-                l_j * inv_sigma2_e + 1.0 / sigma2_k
+                let sigma2_j_adjusted = sigma2_k * self.freq_weights[j];
+                l_j * inv_sigma2_e + 1.0 / sigma2_j_adjusted
             };
             
             let var_post = 1.0 / inv_var_post;

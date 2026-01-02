@@ -14,6 +14,7 @@ pub struct BayesAEM {
     
     nu: f64,
     s_squared: f64,
+    freq_weights: Array1<f64>,
     
     max_iter: usize,
     tol: f64,
@@ -33,12 +34,19 @@ impl BayesAEM {
         nu: f64,
         s_squared: f64,
         sigma2_e_init: f64,
+        allele_freqs: Vec<f64>,
         max_iter: usize,
         tol: f64,
         fold_id: i32,
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
+
+        let mut freq_weights = Array1::<f64>::ones(n_alleles);
+        for j in 0..n_alleles {
+            let p = allele_freqs[j];
+            freq_weights[j] = (2.0 * p * (1.0 - p)).sqrt();
+        }
         
         Self {
             w,
@@ -49,6 +57,7 @@ impl BayesAEM {
             n_alleles,
             nu,
             s_squared,
+            freq_weights,
             max_iter,
             tol,
             beta: Array1::<f64>::zeros(n_alleles),
@@ -112,7 +121,7 @@ impl BayesAEM {
         for j in 0..self.n_alleles {
             let a = (self.nu + 1.0) / 2.0;
             let b = (self.nu * self.s_squared + self.beta[j].powi(2)) / 2.0;
-            expected_inv[j] = a / b;
+            expected_inv[j] = (a / b) / self.freq_weights[j];
         }
         
         expected_inv
