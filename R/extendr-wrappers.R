@@ -19,6 +19,18 @@ run_bayesa_mcmc <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, p
     .Call(wrap__run_bayesa_mcmc, w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id)
 }
 
+#' Run BayesR EM
+#' @export
+run_bayesr_em <- function(w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, em_params, fold_id = 0L) {
+    .Call(wrap__run_bayesr_em, w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, em_params, fold_id)
+}
+
+#' Run BayesA EM
+#' @export
+run_bayesa_em <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, em_params, fold_id = 0L) {
+    .Call(wrap__run_bayesa_em, w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, em_params, fold_id)
+}
+
 #' Construct W Matrix (Rust)
 #' @export
 construct_wah_matrix <- function(hap_matrix, colnames, allele_freq_filtered, reference_structure, drop_baseline) {
