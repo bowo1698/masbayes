@@ -1,14 +1,18 @@
 Package: masbayes
-Title: Rust-Accelerated MCMC Backend for Genomic Prediction
-Version: 1.1.0
+Title: Rust-Accelerated Backend for Bayesian-based Genomic Prediction
+Version: 1.2.0
 Authors@R: c(
     person("Wibowo", "Agus", 
            email = "aguswibowo1698@gmail.com", 
            role = c("aut", "cre"))
     )
-Description: MCMC sampling engines for BayesR and BayesA 
-    genomic prediction methods disigned for multi-allelic markers.
-License: MIT + file LICENSE
+Description: Rust-accelerated Bayesian genomic prediction methods (BayesR and BayesA) 
+    for multi-allelic markers. Implements both Markov Chain Monte Carlo 
+    (MCMC) sampling for full posterior inference and stochastic Expectation-Maximization 
+    (EM) algorithms for efficient maximum likelihood estimation. Supports mixture-based 
+    variable selection (BayesR) and marker-specific variance modeling (BayesA). Designed 
+    for genomic selection in breeding programs.
+License: MIT
 URL: https://github.com/bowo1698/masbayes
 BugReports: https://github.com/bowo1698/masbayes/issues
 Encoding: UTF-8

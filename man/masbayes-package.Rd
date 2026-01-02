@@ -32,7 +32,7 @@ for multi-allelic microhaplotype data.
     \item Handles microhaplotypes and phased SNP blocks
   }
 
-  \item \code{\link{run_bayesr_mcmc}}: BayesR with 4-component mixture prior
+  \item \code{\link{run_bayesr}}: BayesR with 4-component mixture prior
   \itemize{
     \item Zero effect component (markers with no effect)
     \item Small, medium, and large effect variance components
@@ -40,7 +40,8 @@ for multi-allelic microhaplotype data.
     \item Mixture proportions estimated from data
   }
   
-  \item \code{\link{run_bayesa_mcmc}}: BayesA with marker-specific variance
+  \item \code{\link{run_bayesa
+}}: BayesA with marker-specific variance
   \itemize{
     \item Independent variance for each marker
     \item Scaled inverse chi-squared prior
@@ -63,7 +64,7 @@ for multi-allelic microhaplotype data.
 
 2. Calculate summary statistics: WtW diagonal and Wty
 
-3. Run MCMC sampling via \code{run_bayesr_mcmc()} or \code{run_bayesa_mcmc()}
+3. Run MCMC sampling via \code{run_bayesr()} or \code{run_bayesa()}
 
 4. Extract posterior means for genomic prediction
 
@@ -110,7 +111,7 @@ prediction and variance component estimation using SNP markers. \emph{BMC Geneti
 16(144).
 }
 \seealso{
-\code{\link{run_bayesr_mcmc}}, \code{\link{run_bayesa_mcmc}}
+\code{\link{run_bayesr}}, \code{\link{run_bayesa}}
 
 Useful links:
 \itemize{
@@ -121,8 +122,8 @@ Useful links:
 \examples{
 # See function documentation for detailed examples
 ?construct_wah_matrix
-?run_bayesr_mcmc
-?run_bayesa_mcmc
+?run_bayesr
+?run_bayesa
 }
 \keyword{package}
 \keyword{models}

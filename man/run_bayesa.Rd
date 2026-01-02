@@ -1,22 +1,25 @@
-\name{run_bayesa_mcmc}
-\alias{run_bayesa_mcmc}
-\title{BayesA with MCMC Sampling for Multi-allelic Genomic Prediction}
+\name{run_bayesa}
+\alias{run_bayesa}
+\title{BayesA for Multi-allelic Genomic Prediction}
 \description{
-Implements BayesA for multi-allelic genomic prediction with marker-specific variance 
-using Rust-accelerated marginalized Gibbs sampling. Each marker is assigned an independent variance 
-component with a scaled inverse chi-squared prior.
+BayesA implements marker-specific variance modeling for multi-allelic based genomic prediction,
+where each marker has its own variance component with a scaled inverse chi-squared prior.
+Suitable for traits controlled by many small-to-moderate effects. Supports both MCMC
+for full posterior inference and EM for fast point estimation.
 }
 \usage{
-run_bayesa_mcmc(
-  w, 
-  y, 
-  wtw_diag, 
-  wty, 
-  nu, 
-  s_squared, 
-  sigma2_e_init, 
-  prior_params, 
-  mcmc_params,
+run_bayesa(
+  w,
+  y,
+  wtw_diag,
+  wty,
+  nu,
+  s_squared,
+  sigma2_e_init,
+  prior_params = NULL,
+  mcmc_params = NULL,
+  em_params = NULL,
+  method = c("mcmc", "em"),
   fold_id = 0L
 )
 }
@@ -41,20 +44,28 @@ run_bayesa_mcmc(
     Can be set as \code{var(y) * 0.5} (assuming h² ≈ 0.5) or obtained 
     from GBLUP variance component estimation for data-driven initialization.}
   
-  \item{prior_params}{List with components:
+  \item{prior_params}{List with components (required for MCMC only):
     \describe{
       \item{a0_e}{Shape parameter for residual variance inverse-gamma prior}
       \item{b0_e}{Scale parameter for residual variance inverse-gamma prior}
     }}
   
-  \item{mcmc_params}{List with components:
+  \item{mcmc_params}{List with components (required for method="mcmc"):
     \describe{
       \item{n_iter}{Total MCMC iterations (integer)}
       \item{n_burn}{Burn-in period (integer)}
       \item{n_thin}{Thinning interval (integer)}
       \item{seed}{Random seed (integer)}
     }}
+
+  \item{em_params}{List of EM parameters (required for method="em"):
+  \itemize{
+    \item max_iter: Maximum iterations (default 500)
+    \item tol: Convergence tolerance (default 1e-6)
+  }}
   
+  \item{method}{Algorithm choice: "mcmc" for full Bayesian inference or "em" for fast EM}
+
   \item{fold_id}{Integer. Fold identifier for cross-validation (default: 0L).}
 }
 \details{
@@ -82,7 +93,7 @@ in R to minimize overhead in the sampling loop.
 }
 \value{
 A list with three components:
-  \item{beta_samples}{Numeric matrix (n_save × p). Posterior samples of marker 
+  \item{beta_samples}{Numeric matrix (n_save × p for MCMC, 1 x p for EM). Posterior samples of marker 
     effect sizes, where n_save = (n_iter - n_burn) / n_thin.}
   
   \item{sigma2_j_samples}{Numeric matrix (n_save × p). Posterior samples of 
@@ -116,16 +127,14 @@ prior_params <- list(
   b0_e = var(y) * 0.5 * 2
 )
 
-# MCMC parameters
-mcmc_params <- list(
-  n_iter = as.integer(100),
-  n_burn = as.integer(20),
-  n_thin = as.integer(2),
-  seed = as.integer(42)
-)
+n_iter = as.integer(100)
+n_burn = as.integer(20)
+n_thin = as.integer(2)
+seed = as.integer(42)
+tol = 1e-6
 
-# Run BayesA
-res <- run_bayesa_mcmc(
+# Run BayesA with mcmc
+res_mcmc <- run_bayesa(
   w = W,
   y = y,
   wtw_diag = wtw_diag,
@@ -134,27 +143,53 @@ res <- run_bayesa_mcmc(
   s_squared = var(y) / ncol(W),
   sigma2_e_init = var(y) * 0.5,
   prior_params = prior_params,
-  mcmc_params = mcmc_params
+  mcmc_params = list(
+    n_iter = n_iter,
+    n_burn = n_burn,
+    n_thin = n_thin,
+    seed = seed,
+  ),
+  method = "mcmc"
 )
 
-# Posterior inference
-beta_hat <- colMeans(res$beta_samples)
-gebv <- W \%*\% beta_hat
+# Run BayesA with em
+res_em <- run_bayesa(
+  w = W,
+  y = y,
+  wtw_diag = wtw_diag,
+  wty = wty,
+  nu = 4.5,
+  s_squared = var(y) / ncol(W),
+  sigma2_e_init = var(y) * 0.5,
+  em_params = list(
+    max_iter = n_iter,
+    tol = tol
+  ),
+  method = "em"
+)
+
+# Posterior inference (MCMC)
+beta_hat_mcmc <- colMeans(res_mcmc$beta_samples)
+gebv <- W \%*\% beta_hat_mcmc
+
+# Point estimates (EM)
+beta_hat_em <- res_em$beta_samples[1,]
+gebv_em <- W \%*\% beta_hat_em
 
 # Prediction accuracy
 cor(gebv, y)
 
 # Identify markers with large variances
-sigma2_j_mean <- colMeans(res$sigma2_j_samples)
+sigma2_j_mean <- colMeans(res_mcmc$sigma2_j_samples)
 top_markers <- order(sigma2_j_mean, decreasing = TRUE)[1:10]
 
 # Convergence diagnostics
-plot(res$sigma2_e_samples, type = "l", main = "Residual Variance Trace")
+plot(res_mcmc$sigma2_e_samples, type = "l", main = "Residual Variance Trace")
 hist(beta_hat, breaks = 50, main = "Posterior Mean Effects")
 }
 }
 \seealso{
-\code{\link{run_bayesr_mcmc}}, \code{\link{construct_wah_matrix}}
+\code{\link{run_bayesr}}, \code{\link{construct_wah_matrix}}
 }
 \author{
 Agus Wibowo
