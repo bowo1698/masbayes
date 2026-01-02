@@ -143,11 +143,7 @@ So here, we extend Bayesian models for multiallelic markers, that may offer supe
 
 ---
 
-### BayesR Mixture Model
-
----
-
-### BayesR Mixture Model
+### BayesR mixture model
 
 **Hierarchical Model:**
 
