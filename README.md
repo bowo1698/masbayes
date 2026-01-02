@@ -102,7 +102,7 @@ $$
 y \mid \boldsymbol{\beta}, \sigma^2_e \sim N(\mathbf{W}\boldsymbol{\beta}, \sigma^2_e \mathbf{I})
 $$
 
-Your observed phenotype $y$ is simply the sum of all allele effects $\mathbf{W}\boldsymbol{\beta}$ plus some random environmental noise $\sigma^2_e$.
+Our observed phenotype $y$ is simply the sum of all allele effects $\mathbf{W}\boldsymbol{\beta}$ plus some random environmental noise $\sigma^2_e$.
 
 **Level 2: Each allele effect comes from one of four categories**
 
@@ -134,20 +134,18 @@ $$
 \end{align}
 $$
 
-Even the category variances and mixing proportions aren't fixed—they have their own prior distributions. This means the model adapts to your specific data, learning both which alleles belong to which categories and what those categories actually mean in terms of effect sizes.
+Even the category variances and mixing proportions aren't fixed, they have their own prior distributions. This means the model adapts to our specific data, learning both which alleles belong to which categories and what those categories actually mean in terms of effect sizes.
 
 ### Why marginalized Gibbs sampling?
 
-Traditional MCMC for mixture models faces a chicken-and-egg problem: to sample the effect size $\beta_j$, you need to know which category $\gamma_j$ it belongs to. But to assign the category $\gamma_j$, you need to know the effect size $\beta_j$. This creates strong correlation between these two parameters, causing the MCMC chain to explore the parameter space very slowly—a problem called "poor mixing."
+Traditional MCMC for mixture models faces a chicken-and-egg problem: to sample the effect size $\beta_j$, we need to know which category $\gamma_j$ it belongs to. But to assign the category $\gamma_j$, we need to know the effect size $\beta_j$. This creates strong correlation between these two parameters, causing the MCMC chain to explore the parameter space extremely slowly, we call this as "poor mixing."
 
-**Standard Gibbs sampling (slow):**
-1. Sample $\beta_j$ assuming you know $\gamma_j$ 
-2. Sample $\gamma_j$ assuming you know $\beta_j$
+**Standard Gibbs sampling:**
+1. Sample $\beta_j$ assuming we know $\gamma_j$ 
+2. Sample $\gamma_j$ assuming we know $\beta_j$
 3. Repeat, hoping the chain eventually explores all possibilities
 
 The issue is that if $\beta_j$ is currently large, the sampler is reluctant to switch $\gamma_j$ to a small-effect category, and vice versa. The parameters get "stuck" together.
-
-**Marginalized Gibbs sampling (fast):**
 
 Instead of this back-and-forth, we use a mathematical trick called marginalization. We integrate out $\beta_j$ completely and ask: "What is the probability that allele $j$ belongs to category $k$, considering all possible values $\beta_j$ could have taken?" This gives us:
 
@@ -167,7 +165,7 @@ where:
 - $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})$ is the residual correlation between the allele and unexplained phenotype
 - $\rho_{jk} = \sigma^2_k/\sigma^2_e$ is the signal-to-noise ratio for category $k$
 
-**Breaking down the formula:**
+If we break down this formula, we know that
 - $\pi_k$: Prior belief about how common this category is
 - $\left(1 + \lambda_j \rho_{jk}\right)^{-1/2}$: Penalty term that prevents overfitting (accounts for model complexity)
 - $\exp(\cdots)$: Reward term that increases when allele $j$ explains a lot of residual variance
@@ -176,7 +174,7 @@ The model essentially compares four hypotheses for each allele: "Does this allel
 
 ### Computational implementation
 
-**Numerical stability:** Computing these probabilities directly can cause numerical underflow (numbers too small to represent). We therefore work in log-space:
+However, computing these probabilities directly can cause numerical underflow (numbers too small to represent). We therefore work in log-space:
 
 $$
 \log p(\gamma_j = k \mid \cdot) = \log \pi_k - \frac{1}{2}\log(1 + \lambda_j \rho_{jk}) + \frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}
@@ -188,7 +186,7 @@ $$
 p(\gamma_j = k) = \frac{\exp(\log p_k - \max_k \log p_k)}{\sum_{k'} \exp(\log p_{k'} - \max_k \log p_k)}
 $$
 
-Subtracting the maximum log-probability before exponentiating prevents overflow/underflow, ensuring numerical stability even with extreme values.
+So by subtracting the maximum log-probability before exponentiating, we can prevent overflow/underflow and ensure numerical stability even with extreme values.
 
 **Sampling procedure:**
 
