@@ -67,44 +67,62 @@ ls("package:masbayes")
 
 ## Theoretical Background
 
-### $W_αh$ matrix construction
+### W_αh Matrix Construction
 
-The $W_αh$ matrix is an incidence matrix with allele frequency standardization for multi-allelic markers. Each column represents a specific allele from a haplotype block, with the most frequent allele (baseline) dropped from each block following the h-1 principle.
+The most important thing in genomic prediction is telling the computer which genetic variations in a population are most significant. We need numerical values that clearly represent how different each individual is from the population average. The W_αh matrix does exactly this by converting DNA sequences (genotypes) into standardized numbers that capture both the presence/absence of specific alleles and how rare or common those alleles are in the population.
+
+#### The Basic Idea
+
+Imagine you have a population where most individuals carry allele A, but a few carry rare allele B. When we see someone with allele B, this is more "informative" about their genetics than seeing allele A (which everyone has). A specialized coding system by [Da. Y., (2015)](https://link.springer.com/article/10.1186/s12863-015-0301-1) gives larger deviation values to rare alleles and smaller values to common ones, making rare variants more influential in predictions while keeping the math balanced.
+
+#### Coding Rule
 
 For allele *k* with population frequency *p_k*, individual *i* is coded as:
 
 $$
 W_{i,k} = \begin{cases}
-  -2(1-p_k) & \text{if genotype } k/k \text{ (homozygous for allele } k\text{)} \\
-  -(1-2p_k) & \text{if genotype } k/\ell \text{ (heterozygous, one copy of } k\text{)} \\
-  2p_k & \text{if genotype } \ell/m \text{ (no copies of } k\text{)}
+  -2(1-p_k) & \text{if genotype } k/k \text{ (homozygous: both copies are } k\text{)} \\
+  -(1-2p_k) & \text{if genotype } k/\ell \text{ (heterozygous: one copy of } k\text{)} \\
+  2p_k & \text{if genotype } \ell/m \text{ (non-carrier: zero copies of } k\text{)}
 \end{cases}
 $$
 
-where $k \neq \ell \neq m$ are distinct alleles.
+where $k \neq \ell \neq m$ are distinct alleles. Note that we drop the most frequent allele (baseline) from each block, keeping only h-1 informative alleles.
 
-Allele frequencies are calculated from phased haplotypes, so tools like [Beagle](https://faculty.washington.edu/browning/beagle/beagle.html) (population-based phasing/imputation) and [FImpute](https://animalbiosciences.uoguelph.ca/~msargol/fimpute/) (pedigree-based phasing/imputation) are crucial. For each haplotype block, frequencies are computed by counting allele occurrences across both haplotypes (maternal and paternal) and dividing by the total number of haplotypes (2n for n individuals).
+#### Allele frequency calculation
 
-This standardization ensures the matrix is mean-centered with $\mathbb{E}[W_k] = 0$ and variance-scaled proportional to Hardy-Weinberg expectation with $\text{Var}(W_k) \propto 2p_k(1-p_k)$. The genomic relationship matrix is then computed as $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$, where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$ is to normalize the kinship coefficients. This approach extends the Allele Frequency Deviation (AFD) coding from bi-allelic SNPs to multi-allelic microhaplotypes for direct application of genomic prediction methods like GBLUP and Bayesian alphabets.
+Allele frequencies are calculated from phased haplotypes (the two DNA copies each individual inherited from their parents), so tools like [Beagle](https://faculty.washington.edu/browning/beagle/beagle.html) (population-based phasing/imputation) and [FImpute](https://animalbiosciences.uoguelph.ca/~msargol/fimpute/) (pedigree-based phasing/imputation) are crucial. For each haplotype block, we count how many times each allele appears across all individuals and divide by total haplotypes (2n for n individuals). For example, if allele 3 appears in 5 out of 200 haplotypes (100 individuals), its frequency is $p_k = 5/200 = 0.025$ (2.5%).
 
-Consider 4 individuals genotyped at haplotype *block 1_1* with 4 alleles. Allele 2 is the most frequent (baseline, dropped). The remaining alleles have frequencies: allele 1 ($p_1 = 0.375$), allele 3 ($p_3 = 0.025$), and allele 4 ($p_4 = 0.10$).
+#### Why this coding works
 
-Phased Genotypes:
-- ID1: 1/3 (heterozygous for alleles 1 and 3)
-- ID2: 1/2 (heterozygous for alleles 1 and baseline)
-- ID3: 2/2 (homozygous for baseline allele)
-- ID4: 3/3 (homozygous for allele 3)
+This standardization ensures three critical properties. First, the matrix is mean-centered with $\mathbb{E}[W_k] = 0$, meaning positive and negative deviations balance out across the population. Second, variance scales with $\text{Var}(W_k) \propto 2p_k(1-p_k)$, matching Hardy-Weinberg genetic expectations where intermediate-frequency alleles contribute most variance. Third, the genomic relationship matrix $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$ (where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$) becomes comparable to SNP-based GRM by [VanRaden., (2008)](https://www.journalofdairyscience.org/article/S0022-0302(08)70990-1/fulltext), enabling proven statistical methods like GBLUP and Bayesian alphabets to work directly with multi-allelic markers.
 
-Resulting the $W_αh$ matrix values:
+#### Example matrix
 
-|     | hap_1_1_allele1 | hap_1_1_allele3 | hap_1_1_allele4 |
-|-----|-----------------|-----------------|-----------------|
-| ID1 | -(1-2×0.375) = **0.25** | -(1-2×0.025) = **-0.95** | 2×0.10 = **0.20** |
-| ID2 | -(1-2×0.375) = **0.25** | 2×0.025 = **0.05** | 2×0.10 = **0.20** |
-| ID3 | 2×0.375 = **0.75** | 2×0.025 = **0.05** | 2×0.10 = **0.20** |
-| ID4 | 2×0.375 = **0.75** | -2(1-0.025) = **-1.95** | 2×0.10 = **0.20** |
+Consider 4 individuals genotyped at haplotype *block 1_1* containing 4 alleles. Allele 2 is most frequent (60%, baseline allele, dropped). The remaining alleles have frequencies: allele 1 at 37.5%, allele 3 at 2.5% (rare), and allele 4 at 0% in this sample.
 
-For allele 3 (rare, $p_3 = 0.025$): ID1 is heterozygous (-0.95), ID4 is homozygous (-1.95), while ID2 and ID3 are non-carriers (0.05). For allele 1 (common, $p_1 = 0.375$): ID1 and ID2 are heterozygous (0.25), while ID3 and ID4 are non-carriers (0.75). Notice how rare alleles produce larger absolute deviations for carriers, while common alleles show more moderate values.
+**Phased Genotypes (maternal/paternal):**
+- ID1: 1/3 → carries alleles 1 and 3
+- ID2: 1/2 → carries allele 1 and baseline
+- ID3: 2/2 → only baseline (homozygous)
+- ID4: 3/3 → only allele 3 (homozygous)
+
+**Applying the Coding Rule:**
+
+|     | Genotype | allele1 calculation | allele1 value | allele3 calculation | allele3 value |
+|-----|----------|---------------------|---------------|---------------------|---------------|
+| ID1 | 1/3      | -(1-2×0.375) = -(0.25) | **0.25** | -(1-2×0.025) = -(0.95) | **-0.95** |
+| ID2 | 1/2      | -(1-2×0.375) = -(0.25) | **0.25** | 2×0.025 | **0.05** |
+| ID3 | 2/2      | 2×0.375 | **0.75** | 2×0.025 | **0.05** |
+| ID4 | 3/3      | 2×0.375 | **0.75** | -2(1-0.025) = -2(0.975) | **-1.95** |
+
+**What These Numbers Mean:**
+
+For rare allele 3 (2.5% frequency): Individuals carrying it get large negative values (ID1: -0.95, ID4: -1.95), making them stand out strongly from the population. Non-carriers get small positive values (0.05), barely different from average. 
+
+For common allele 1 (37.5% frequency): Carriers get moderate negative values (0.25), while non-carriers get moderate positive values (0.75). The deviations are smaller because this allele is common and less "informative."
+
+This weighting ensures rare, potentially high-impact genetic variants contribute more to genomic predictions than common background variation.
 
 ---
 
