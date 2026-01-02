@@ -88,9 +88,9 @@ So here, we extend Bayesian models for multiallelic markers, that may offer supe
 
 ---
 
-## BayesR Mixture Model
+## BayesR mixture model
 
-### The Core Idea: Categorizing Allele Effects
+### The core idea: Categorizing allele effects
 
 BayesR recognizes that in real biological systems, genetic variants don't all behave the same way. Some alleles have essentially zero effect on the trait, others have small effects, some have medium effects, and a rare few have large effects. Rather than forcing all alleles to follow the same statistical distribution, BayesR lets each allele belong to one of four categories, each with its own variance.
 
@@ -136,7 +136,7 @@ $$
 
 Even the category variances and mixing proportions aren't fixed—they have their own prior distributions. This means the model adapts to your specific data, learning both which alleles belong to which categories and what those categories actually mean in terms of effect sizes.
 
-### Why Marginalized Gibbs Sampling?
+### Why marginalized Gibbs sampling?
 
 Traditional MCMC for mixture models faces a chicken-and-egg problem: to sample the effect size $\beta_j$, you need to know which category $\gamma_j$ it belongs to. But to assign the category $\gamma_j$, you need to know the effect size $\beta_j$. This creates strong correlation between these two parameters, causing the MCMC chain to explore the parameter space very slowly—a problem called "poor mixing."
 
