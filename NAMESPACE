@@ -2,5 +2,9 @@
 
 export(run_bayesr_mcmc)
 export(run_bayesa_mcmc)
+export(run_bayesr_em)
+export(run_bayesa_em)
+export(run_bayesr)
+export(run_bayesa)
 export(construct_wah_matrix)
 useDynLib(masbayes, .registration = TRUE)
