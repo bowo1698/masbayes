@@ -68,6 +68,8 @@ impl BayesREM {
     
     pub fn run(&mut self) -> BayesRResults {
         eprintln!("[Fold {}] BayesR EM started: max {} iterations", self.fold_id, self.max_iter);
+
+        let print_interval = (self.max_iter / 50).max(1);
         
         let mut loglik_old = f64::NEG_INFINITY;
         
@@ -96,7 +98,7 @@ impl BayesREM {
             
             loglik_old = loglik;
             
-            if iter % 10 == 0 {
+            if iter % print_interval == 0 {
                 let non_zero = self.gamma.iter().filter(|&&g| g != 0).count();
                 eprintln!("[Fold {}] Iter {} | LogLik={:.2} | σ²e={:.4} | Non-zero={}", 
                          self.fold_id, iter, loglik, self.sigma2_e, non_zero);

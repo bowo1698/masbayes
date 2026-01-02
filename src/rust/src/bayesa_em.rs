@@ -60,6 +60,8 @@ impl BayesAEM {
     
     pub fn run(&mut self) -> BayesAResults {
         eprintln!("[Fold {}] BayesA EM started: max {} iterations", self.fold_id, self.max_iter);
+
+        let print_interval = (self.max_iter / 50).max(1);
         
         let mut loglik_old = f64::NEG_INFINITY;
         
@@ -85,7 +87,7 @@ impl BayesAEM {
             
             loglik_old = loglik;
             
-            if iter % 10 == 0 {
+            if iter % print_interval == 0 {
                 let mean_beta = self.beta.iter().map(|b| b.abs()).sum::<f64>() / (self.n_alleles as f64);
                 eprintln!("[Fold {}] Iter {} | LogLik={:.2} | σ²e={:.4} | Mean|β|={:.4}", 
                          self.fold_id, iter, loglik, self.sigma2_e, mean_beta);
