@@ -10,61 +10,6 @@ MasBayes supports multi-allelic-based markers for genomic prediction, where mark
 
 ---
 
-## Installation
-
-### Prerequisites
-
-#### 1. Rust Toolchain (Required)
-**macOS & Linux**:
-```bash
-# Install Rust using rustup (one-time, ~5 minutes)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Activate in current session
-source $HOME/.cargo/env
-
-# Verify
-rustc --version  # Should show: rustc 1.78.0 or higher
-cargo --version
-```
-
-**Windows**:
-1. Download and install [Rustup for Windows](https://rustup.rs/)
-2. Install [Rtools](https://cran.r-project.org/bin/windows/Rtools/) (if not already installed)
-3. Ensure MSVC toolchain: `rustup default stable-msvc`
-
-**Why Rust?**
-
-Rust is a low-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, provides a strict ownership model and memory safety guarantees to eliminate common bugs like memory leaks and segmentation faults without the need for a garbage collector. Rust also has simpler and more readable syntax than C++.
-
----
-
-#### 2. R dependencies
-```r
-# Required R packages
-install.packages(c("devtools", "Rcpp"))
-
-# Recommended (for pipeline integration)
-install.packages(c("tidyverse", "sommer", "coda"))
-```
-
----
-
-### Install masbayes
-```r
-# Install from GitHub
-devtools::install_github("bowo1698/masbayes")
-
-# Load and verify
-library(masbayes)
-
-# Check available functions
-ls("package:masbayes")
-# [1] "construct_wah_matrix"  "run_bayesa_mcmc"  "run_bayesr_mcmc"
-```
-
----
-
 ## Theoretical background
 
 ### $W_αh$ matrix construction
@@ -292,6 +237,61 @@ $$
 $$
 
 This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
+
+---
+
+## Installation
+
+### Prerequisites
+
+#### 1. Rust Toolchain (Required)
+**macOS & Linux**:
+```bash
+# Install Rust using rustup (one-time, ~5 minutes)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Activate in current session
+source $HOME/.cargo/env
+
+# Verify
+rustc --version  # Should show: rustc 1.78.0 or higher
+cargo --version
+```
+
+**Windows**:
+1. Download and install [Rustup for Windows](https://rustup.rs/)
+2. Install [Rtools](https://cran.r-project.org/bin/windows/Rtools/) (if not already installed)
+3. Ensure MSVC toolchain: `rustup default stable-msvc`
+
+**Why Rust?**
+
+Rust is a low-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, provides a strict ownership model and memory safety guarantees to eliminate common bugs like memory leaks and segmentation faults without the need for a garbage collector. Rust also has simpler and more readable syntax than C++.
+
+---
+
+#### 2. R dependencies
+```r
+# Required R packages
+install.packages(c("devtools", "Rcpp"))
+
+# Recommended (for pipeline integration)
+install.packages(c("tidyverse", "sommer", "coda"))
+```
+
+---
+
+### Install masbayes
+```r
+# Install from GitHub
+devtools::install_github("bowo1698/masbayes")
+
+# Load and verify
+library(masbayes)
+
+# Check available functions
+ls("package:masbayes")
+# [1] "construct_wah_matrix"  "run_bayesa_mcmc"  "run_bayesr_mcmc"
+```
 
 ---
 
