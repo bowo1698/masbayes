@@ -389,7 +389,7 @@ fn run_bayesr_em(
     let max_iter = em_params.dollar("max_iter").unwrap().as_integer().unwrap() as usize;
     let tol = em_params.dollar("tol").unwrap().as_real().unwrap();
     let seed = em_params.dollar("seed")
-        .and_then(|s| s.as_integer().ok())
+        .and_then(|s| s.as_integer())
         .unwrap_or(123) as u64;
     
     let w_array = utils::rmatrix_to_array2(&w);
