@@ -388,13 +388,16 @@ fn run_bayesr_em(
 ) -> List {
     let max_iter = em_params.dollar("max_iter").unwrap().as_integer().unwrap() as usize;
     let tol = em_params.dollar("tol").unwrap().as_real().unwrap();
+    let seed = em_params.dollar("seed")
+        .and_then(|s| s.as_integer().ok())
+        .unwrap_or(123) as u64;
     
     let w_array = utils::rmatrix_to_array2(&w);
     
     let mut runner = BayesREM::new(
         w_array, y, wtw_diag, wty,
         pi_vec, sigma2_vec, sigma2_e_init,
-        max_iter, tol, fold_id,
+        max_iter, tol, seed, fold_id,
     );
     
     let results = runner.run();
