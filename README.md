@@ -161,7 +161,11 @@ $$
 p(\gamma_j = k \mid \cdot) \propto \pi_k \cdot \left(1 + \lambda_j \rho_{jk}\right)^{-1/2} \cdot \exp\left(\frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}\right)
 $$
 
-where $\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ measures how much information allele $j$ carries (its "signal strength"), $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})$ is the residual correlation between the allele and unexplained phenotype, and $\rho_{jk} = \sigma^2_k/\sigma^2_e$ is the signal-to-noise ratio for category $k$.
+where:
+
+- $\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ measures how much information allele $j$ carries (its "signal strength")
+- $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})$ is the residual correlation between the allele and unexplained phenotype
+- $\rho_{jk} = \sigma^2_k/\sigma^2_e$ is the signal-to-noise ratio for category $k$
 
 **Breaking down the formula:**
 - $\pi_k$: Prior belief about how common this category is
@@ -170,7 +174,7 @@ where $\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ measures how much information
 
 The model essentially compares four hypotheses for each allele: "Does this allele fit better as zero-effect, small-effect, medium-effect, or large-effect?" The category that best balances explanatory power with parsimony wins.
 
-### Computational Implementation
+### Computational implementation
 
 **Numerical stability:** Computing these probabilities directly can cause numerical underflow (numbers too small to represent). We therefore work in log-space:
 
