@@ -129,7 +129,7 @@ $$
 \mathbf{y} = \mathbf{W}_{\alpha h}\boldsymbol{\beta}_{\alpha h} + \mathbf{e}
 $$
 
-where $\mathbf{y}$ is the phenotype vector, $\mathbf{W_ah}$ is our multi-allelic matrix, $\boldsymbol{\beta}$ contains all allele effects, and $\mathbf{e}$ is residual error—the key difference is that $\boldsymbol{\beta}$ now has thousands or tens of thousands of parameters instead of hundreds of thousands of SNPs, but each parameter carries more biological information.
+where $\mathbf{y}$ is the phenotype vector, $\mathbf{W_⍺h}$ is our multi-allelic matrix, $\boldsymbol{\beta_ah}$ contains all allele effects, and $\mathbf{e}$ is residual error—the key difference is that $\boldsymbol{\beta}$ now has thousands or tens of thousands of parameters instead of hundreds of thousands of SNPs, but each parameter carries more biological information.
 
 The challenge with many alleles per block is that we need smarter statistical models that can automatically identify which alleles truly affect the trait versus those that are just noise. Moreover, these models should be able to share information across alleles, since if one allele in a block has a large effect, nearby alleles might too. Most importantly, they must handle sparsity effectively, recognizing that most alleles probably have zero or tiny effects while a few might be critically important.
 
