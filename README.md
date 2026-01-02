@@ -88,21 +88,43 @@ So here, we extend Bayesian models for multiallelic markers, that may offer supe
 
 ---
 
-## BayesR mixture model
+## BayesR Mixture Model
 
-### Hierarchical Model
+### The Core Idea: Categorizing Allele Effects
+
+BayesR recognizes that in real biological systems, genetic variants don't all behave the same way. Some alleles have essentially zero effect on the trait, others have small effects, some have medium effects, and a rare few have large effects. Rather than forcing all alleles to follow the same statistical distribution, BayesR lets each allele belong to one of four categories, each with its own variance.
+
+The model works hierarchically, building from simple to complex:
+
+**Level 1: Phenotype depends on allele effects**
+
+$$
+y \mid \boldsymbol{\beta}, \sigma^2_e \sim N(\mathbf{W}\boldsymbol{\beta}, \sigma^2_e \mathbf{I})
+$$
+
+Your observed phenotype $y$ is simply the sum of all allele effects $\mathbf{W}\boldsymbol{\beta}$ plus some random environmental noise $\sigma^2_e$.
+
+**Level 2: Each allele effect comes from one of four categories**
+
+$$
+\beta_j \mid \gamma_j, \sigma^2_{\gamma_j} \sim N(0, \sigma^2_{\gamma_j})
+$$
+
+Each allele effect $\beta_j$ is drawn from a normal distribution, but which normal distribution? That's determined by $\gamma_j$, a categorical label that says "this allele belongs to category 0, 1, 2, or 3."
+
+**Level 3: Categories have different variances**
 
 $$
 \begin{align}
-y \mid \boldsymbol{\beta}, \sigma^2_e &\sim N(\mathbf{W}\boldsymbol{\beta}, \sigma^2_e \mathbf{I}) \\
-\beta_j \mid \gamma_j, \sigma^2_{\gamma_j} &\sim N(0, \sigma^2_{\gamma_j}) \\
 \gamma_j &\sim \text{Categorical}(\boldsymbol{\pi}) \\
 \boldsymbol{\pi} &= (\pi_0, \pi_{\text{small}}, \pi_{\text{medium}}, \pi_{\text{large}}) \\
 \boldsymbol{\sigma}^2_{\gamma} &= (10^{-8}, \sigma^2_{\text{small}}, \sigma^2_{\text{medium}}, \sigma^2_{\text{large}})
 \end{align}
 $$
 
-### Hyperpriors
+The category assignment $\gamma_j$ is random with probabilities $\boldsymbol{\pi}$. Category 0 gets variance $10^{-8}$ (essentially zero), while categories 1, 2, and 3 get increasingly larger variances. The model learns these variances from the data.
+
+**Level 4: Learn the category properties from data**
 
 $$
 \begin{align}
@@ -112,49 +134,62 @@ $$
 \end{align}
 $$
 
-### Marginalized Gibbs sampling (Rust implementation)
+Even the category variances and mixing proportions aren't fixed—they have their own prior distributions. This means the model adapts to your specific data, learning both which alleles belong to which categories and what those categories actually mean in terms of effect sizes.
 
-Traditional Gibbs sampling alternates between:
-1. Sample $\beta_j$ given $\gamma_j$ 
-2. Sample $\gamma_j$ given $\beta_j$
+### Why Marginalized Gibbs Sampling?
 
-This can lead to slow mixing when $\beta_j$ and $\gamma_j$ are highly correlated. Instead, we use **marginalized Gibbs sampling** where we integrate out $\beta_j$ and sample $\gamma_j$ directly from its marginal distribution:
+Traditional MCMC for mixture models faces a chicken-and-egg problem: to sample the effect size $\beta_j$, you need to know which category $\gamma_j$ it belongs to. But to assign the category $\gamma_j$, you need to know the effect size $\beta_j$. This creates strong correlation between these two parameters, causing the MCMC chain to explore the parameter space very slowly—a problem called "poor mixing."
+
+**Standard Gibbs sampling (slow):**
+1. Sample $\beta_j$ assuming you know $\gamma_j$ 
+2. Sample $\gamma_j$ assuming you know $\beta_j$
+3. Repeat, hoping the chain eventually explores all possibilities
+
+The issue is that if $\beta_j$ is currently large, the sampler is reluctant to switch $\gamma_j$ to a small-effect category, and vice versa. The parameters get "stuck" together.
+
+**Marginalized Gibbs sampling (fast):**
+
+Instead of this back-and-forth, we use a mathematical trick called marginalization. We integrate out $\beta_j$ completely and ask: "What is the probability that allele $j$ belongs to category $k$, considering all possible values $\beta_j$ could have taken?" This gives us:
 
 $$
-p(\gamma_j = k \mid y, \boldsymbol{\beta}_{-j}, \sigma^2_e, \sigma^2_k) = \int p(\gamma_j = k, \beta_j \mid y, \boldsymbol{\beta}_{-j}, \sigma^2_e, \sigma^2_k) \, d\beta_j
+p(\gamma_j = k \mid \cdot) = \int p(\gamma_j = k, \beta_j \mid \cdot) \, d\beta_j
 $$
 
-**Step 1: Marginal distribution for component assignment**
-
-By completing the square in the joint distribution, we obtain:
+The beauty is that this integral has a closed-form solution. After completing the square in the joint distribution, we get:
 
 $$
 p(\gamma_j = k \mid \cdot) \propto \pi_k \cdot \left(1 + \lambda_j \rho_{jk}\right)^{-1/2} \cdot \exp\left(\frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}\right)
 $$
 
-where:
+where $\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j$ measures how much information allele $j$ carries (its "signal strength"), $r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j})$ is the residual correlation between the allele and unexplained phenotype, and $\rho_{jk} = \sigma^2_k/\sigma^2_e$ is the signal-to-noise ratio for category $k$.
 
-$$
-\lambda_j = \mathbf{w}_j^\top \mathbf{w}_j, \quad r_j = \mathbf{w}_j^\top (\mathbf{y} - \mathbf{W}_{-j}\boldsymbol{\beta}_{-j}), \quad \rho_{jk} = \frac{\sigma^2_k}{\sigma^2_e}
-$$
+**Breaking down the formula:**
+- $\pi_k$: Prior belief about how common this category is
+- $\left(1 + \lambda_j \rho_{jk}\right)^{-1/2}$: Penalty term that prevents overfitting (accounts for model complexity)
+- $\exp(\cdots)$: Reward term that increases when allele $j$ explains a lot of residual variance
 
-**Numerical stability using log-sum-exp Trick:**
+The model essentially compares four hypotheses for each allele: "Does this allele fit better as zero-effect, small-effect, medium-effect, or large-effect?" The category that best balances explanatory power with parsimony wins.
 
-For numerical stability, we compute log-probabilities:
+### Computational Implementation
+
+**Numerical stability:** Computing these probabilities directly can cause numerical underflow (numbers too small to represent). We therefore work in log-space:
 
 $$
 \log p(\gamma_j = k \mid \cdot) = \log \pi_k - \frac{1}{2}\log(1 + \lambda_j \rho_{jk}) + \frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}
 $$
 
-Then normalize using the log-sum-exp trick to prevent underflow:
+Then use the log-sum-exp trick for normalization:
 
 $$
 p(\gamma_j = k) = \frac{\exp(\log p_k - \max_k \log p_k)}{\sum_{k'} \exp(\log p_{k'} - \max_k \log p_k)}
 $$
 
-**Step 2: Conditional sampling of effects**
+Subtracting the maximum log-probability before exponentiating prevents overflow/underflow, ensuring numerical stability even with extreme values.
 
-After sampling $\gamma_j$, we sample $\beta_j$ from its conditional distribution:
+**Sampling procedure:**
+
+1. **Sample category** $\gamma_j$ from the marginalized probabilities above
+2. **Sample effect** $\beta_j$ conditional on the chosen category:
 
 $$
 \beta_j \mid \gamma_j = k, \cdot \sim N\left(\mu_j, v_j\right)
@@ -166,7 +201,7 @@ $$
 v_j = \frac{\sigma^2_e \sigma^2_k}{\sigma^2_e + \lambda_j \sigma^2_k}, \quad \mu_j = \frac{r_j \sigma^2_k}{\sigma^2_e + \lambda_j \sigma^2_k}
 $$
 
-By using marginalized Gibbs sampling, it can improve mixing as we break the correlation between $\beta_j$ and $\gamma_j$.
+This two-step process breaks the correlation between $\beta_j$ and $\gamma_j$, dramatically improving MCMC mixing and convergence speed. Our Rust implementation exploits this efficiency, processing thousands of alleles per second.
 
 ---
 
