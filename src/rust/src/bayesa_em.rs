@@ -120,6 +120,9 @@ impl BayesAEM {
         let mut fitted = self.w.dot(&self.beta);
         let inv_sigma2_e = 1.0 / self.sigma2_e;
         
+        // Storage for posterior variances
+        let mut var_post_vec = Array1::<f64>::zeros(self.n_alleles);
+        
         // Update beta
         for j in 0..self.n_alleles {
             let l_j = self.wtw_diag[j];
@@ -134,6 +137,9 @@ impl BayesAEM {
             let var_post = 1.0 / inv_var_post;
             let mu_post = rhs * inv_sigma2_e * var_post;
             
+            // Store posterior variance
+            var_post_vec[j] = var_post;
+            
             let beta_old = self.beta[j];
             self.beta[j] = mu_post;
             
@@ -145,10 +151,12 @@ impl BayesAEM {
             }
         }
         
-        // Update sigma2_j
+        // Update sigma2_j (include posterior variance)
         for j in 0..self.n_alleles {
             let a = (self.nu + 1.0) / 2.0;
-            let b = (self.nu * self.s_squared + self.beta[j].powi(2)) / 2.0;
+            // E[β²] = μ² + σ²
+            let expected_beta_sq = self.beta[j].powi(2) + var_post_vec[j];
+            let b = (self.nu * self.s_squared + expected_beta_sq) / 2.0;
             self.sigma2_j[j] = b / (a - 1.0);
         }
         

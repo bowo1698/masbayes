@@ -188,6 +188,9 @@ impl BayesREM {
         let mut fitted = self.w.dot(&self.beta);
         let inv_sigma2_e = 1.0 / self.sigma2_e;
         
+        // Storage for posterior variances (needed for variance update)
+        let mut var_post_vec = Array1::<f64>::zeros(self.n_alleles);
+        
         // Update beta
         for j in 0..self.n_alleles {
             let l_j = self.wtw_diag[j];
@@ -203,7 +206,7 @@ impl BayesREM {
             let sigma2_k = self.sigma2_vec[k];
             
             let inv_var_post = if k == 0 || sigma2_k < 1e-10 {
-                l_j * inv_sigma2_e + 1e10  // Large penalty for zero component
+                l_j * inv_sigma2_e + 1e10
             } else {
                 l_j * inv_sigma2_e + 1.0 / sigma2_k
             };
@@ -211,9 +214,12 @@ impl BayesREM {
             let var_post = 1.0 / inv_var_post;
             let mu_post = rhs * inv_sigma2_e * var_post;
             
+            // Store posterior variance
+            var_post_vec[j] = var_post;
+            
             let beta_old = self.beta[j];
             self.beta[j] = if self.gamma[j] == 0 {
-                0.0  // Force zero for null component
+                0.0
             } else {
                 mu_post
             };
@@ -231,13 +237,14 @@ impl BayesREM {
         let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
         self.sigma2_e = sse / (self.n as f64);
         
-        // Update sigma2_k
+        // Update sigma2_k (include posterior variance)
         for k in 1..4 {
             let mut ss = 0.0;
             let mut n_k = 0;
             for j in 0..self.n_alleles {
                 if self.gamma[j] == k {
-                    ss += self.beta[j].powi(2);
+                    // E[β²] = μ² + σ²
+                    ss += self.beta[j].powi(2) + var_post_vec[j];
                     n_k += 1;
                 }
             }
