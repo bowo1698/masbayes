@@ -123,6 +123,26 @@ For common allele 1 (37.5% frequency): Carriers get moderate negative values (-0
 
 This weighting ensures rare, potentially high-impact genetic variants contribute more to genomic predictions than common background variation.
 
+However, compared to biallelic markers (SNPs) that have a simple 0/1/2 coding and only one effect per marker to estimate, multi-allelic markers, such as haplotypes and microhaplotypes, have a more expanded parameter space. Each haplotype block can have multiple alleles (often 10-20 or more), and after dropping the baseline, we must estimate separate effects for each remaining allele. So, while the linear model equation seems similar:
+
+$$
+\mathbf{y} = \mathbf{W}_{\alpha h}\boldsymbol{\beta}_{\alpha h} + \mathbf{e}
+$$
+
+where $\mathbf{y}$ is the phenotype vector, $\mathbf{W}_{\alpha h}$ is our multi-allelic matrix, $\boldsymbol{\beta}_{\alpha h}$ contains all allele effects, and $\mathbf{e}$ is residual error, the key difference is that $\boldsymbol{\beta}_{\alpha h}$ now has thousands or tens of thousands of parameters instead of hundreds of thousands of SNPs, but each parameter carries more biological information.
+
+The challenge with many alleles per block is that we need smarter statistical models that can automatically identify which alleles truly affect the trait versus those that are just noise. Moreover, these models should be able to share information across alleles, since if one allele in a block has a large effect, nearby alleles might too. Most importantly, they must handle sparsity effectively, recognizing that most alleles probably have zero or tiny effects while a few might be critically important.
+
+This is where Bayesian variable selection methods excel. Instead of forcing all allele effects to shrink equally like GBLUP does, or selecting a fixed number like LASSO, Bayesian approaches use mixture models that let the data decide which alleles matter. Think of it this way: in a population, genetic effects follow a pattern where most variants do almost nothing, some have small effects, and a few rare ones have large impacts. Traditional methods struggle because they can't capture this natural diversity.
+
+Bayesian mixture models solve this problem through different strategies. BayesR assigns each allele to one of four "effect size categories": zero, small, medium, or large, with probabilities learned from the data. It's essentially saying "this allele is probably in the large-effect group" or "this one is probably noise," so the model can adapt to the true genetic architecture. In contrast, BayesA gives each allele its own variance parameter, enabling truly flexible shrinkage where alleles with strong evidence get large variances and stay in the model, while weak ones get shrunk to near-zero.
+
+Both methods use Markov Chain Monte Carlo (MCMC) to explore the space of possible effect sizes, gradually learning which alleles belong where through iterative sampling. The beauty of these approaches is that they don't just give point estimates but provide full posterior distributions, quantifying uncertainty in every prediction and offering deeper insights into the genetic architecture underlying complex traits.
+
+---
+
+### BayesR Mixture Model
+
 ---
 
 ### BayesR Mixture Model
