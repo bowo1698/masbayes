@@ -93,31 +93,20 @@ impl BayesREM {
                 50
             };
             
-            // Adaptive threshold (looser for large, strict for small)
-            let threshold = if self.n > 5000 {
-                self.tol * 10.0  // 1e-3 × 10 = 1e-8 for large datasets
-            } else if self.n > 1000 {
-                self.tol * 1.0   // 1e-3 × 1 = 1e-3 for medium
-            } else {
-                self.tol * 0.01  // 1e-3 × 0.01 = 1e-5 for small (strict)
-            };
-            
             // Convergence check
-            if iter > min_iter && rel_beta_change < threshold {
-                eprintln!("[Fold {}] Converged at iteration {} (β_change={:.2e} < {:.2e})", 
-                        self.fold_id, iter, rel_beta_change, threshold);
+            if iter > min_iter && rel_beta_change < self.tol {
+                eprintln!("[Fold {}] Converged at iteration {} (β_change={:.2e} < tol={:.2e})", 
+                        self.fold_id, iter, rel_beta_change, self.tol);
                 break;
             }
             
-            // Monitoring output
             if iter % print_interval == 0 {
                 let non_zero_beta = self.beta.iter().filter(|&&b| b.abs() > 1e-6).count();
                 eprintln!("[Fold {}] Iter {} | β_change={:.2e} (tgt={:.2e}) | σ²e={:.4} | |β|>0: {}", 
-                        self.fold_id, iter, rel_beta_change, threshold, 
+                        self.fold_id, iter, rel_beta_change, self.tol, 
                         self.sigma2_e, non_zero_beta);
             }
             
-            // Store for next iteration
             beta_old = self.beta.clone();
         }
         
