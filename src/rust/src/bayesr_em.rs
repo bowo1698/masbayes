@@ -88,8 +88,13 @@ impl BayesREM {
             loglik_old = loglik;
             
             if iter % print_interval == 0 {
-                // Compute non-zero from gamma_prob MAP
-                let non_zero = (0..self.n_alleles)
+                // Count 1: Non-zero beta
+                let non_zero_beta = self.beta.iter()
+                    .filter(|&&b| b.abs() > 1e-6)
+                    .count();
+                
+                // Count 2: MAP assignments
+                let non_zero_map = (0..self.n_alleles)
                     .filter(|&j| {
                         let mut max_k = 0;
                         let mut max_prob = self.gamma_prob[[j, 0]];
@@ -103,8 +108,8 @@ impl BayesREM {
                     })
                     .count();
                 
-                eprintln!("[Fold {}] Iter {} | LogLik={:.2} | σ²e={:.4} | Non-zero={}", 
-                        self.fold_id, iter, loglik, self.sigma2_e, non_zero);
+                eprintln!("[Fold {}] Iter {} | LogLik={:.2} | σ²e={:.4} | |β|>0: {} | MAP≠0: {}", 
+                        self.fold_id, iter, loglik, self.sigma2_e, non_zero_beta, non_zero_map);
             }
         }
         
