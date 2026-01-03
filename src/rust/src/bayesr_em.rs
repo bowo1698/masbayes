@@ -1,9 +1,6 @@
 // src/rust/src/bayesr_em.rs
 
 use ndarray::{Array1, Array2};
-use rand::SeedableRng;
-use rand::Rng;
-use rand_pcg::Pcg64;
 use crate::types::BayesRResults;
 
 pub struct BayesREM {
@@ -26,7 +23,6 @@ pub struct BayesREM {
     gamma_prob: Array2<f64>,
     gamma: Array1<usize>, 
     sigma2_e: f64,
-    rng: Pcg64,  
     fold_id: i32,
 }
 
@@ -43,7 +39,6 @@ impl BayesREM {
         use_adaptive_grid: bool, 
         max_iter: usize,
         tol: f64,
-        seed: u64,
         fold_id: i32,
     ) -> Self {
         let n = w.nrows();
@@ -101,7 +96,6 @@ impl BayesREM {
             gamma_prob: Array2::<f64>::zeros((n_alleles, 4)),
             gamma: Array1::<usize>::zeros(n_alleles),
             sigma2_e: sigma2_e_init,
-            rng: Pcg64::seed_from_u64(seed),
             fold_id,
         }
     }

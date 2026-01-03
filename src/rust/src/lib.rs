@@ -407,8 +407,8 @@ fn run_bayesr_em(
     let mut runner = BayesREM::new(
         w_array, y, wtw_diag, wty,
         pi_vec, sigma2_vec, sigma2_e_init,
-        allele_freqs, use_adaptive_grid, max_iter, tol,
-        seed, fold_id,
+        allele_freqs, use_adaptive_grid, max_iter, 
+        tol, fold_id,
     );
     
     let results = runner.run();
