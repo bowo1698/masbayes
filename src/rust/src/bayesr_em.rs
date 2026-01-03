@@ -101,7 +101,6 @@ impl BayesREM {
                 if abs_change < abs_thresh {
                     eprintln!("[Fold {}] Converged at iteration {} (Δ={:.2e} < tol×{:.1}={:.2e})", 
                             self.fold_id, iter, abs_change, scale_factor, abs_thresh);
-                    //                                                   ^^^^^ FIXED: .0f → .1
                     break;
                 }
                 
