@@ -51,7 +51,9 @@ impl BayesREM {
         let mut freq_weights = Array1::<f64>::ones(n_alleles);
         for j in 0..n_alleles {
             let p = allele_freqs[j];
-            freq_weights[j] = (2.0 * p * (1.0 - p)).sqrt();
+            let weight = (2.0 * p * (1.0 - p)).sqrt();
+            // Clip minimum to avoid extreme shrinkage
+            freq_weights[j] = weight.max(0.3);  // minimum 30% weight
         }
 
         // Adaptive variance grid
@@ -114,9 +116,6 @@ impl BayesREM {
         for iter in 0..self.max_iter {
             // E-step
             self.e_step();
-
-            // Stochastic step: sample hard assignments
-            self.sample_components();
             
             // M-step
             self.m_step();
@@ -141,6 +140,20 @@ impl BayesREM {
                 eprintln!("[Fold {}] Iter {} | LogLik={:.2} | σ²e={:.4} | Non-zero={}", 
                          self.fold_id, iter, loglik, self.sigma2_e, non_zero);
             }
+        }
+
+        // Update gamma using MAP estimate
+        for j in 0..self.n_alleles {
+            let mut max_prob = 0.0;
+            let mut max_k = 0;
+            
+            for k in 0..4 {
+                if self.gamma_prob[[j, k]] > max_prob {
+                    max_prob = self.gamma_prob[[j, k]];
+                    max_k = k;
+                }
+            }
+            self.gamma[j] = max_k;
         }
         
         // Convert point estimates to "samples" format for compatibility
@@ -208,22 +221,6 @@ impl BayesREM {
             }
         }
     }
-
-    fn sample_components(&mut self) {
-        // Stochastic step: sample discrete component assignments
-        for j in 0..self.n_alleles {
-            let u: f64 = self.rng.gen();
-            let mut cumsum = 0.0;
-            
-            for k in 0..4 {
-                cumsum += self.gamma_prob[[j, k]];
-                if u < cumsum {
-                    self.gamma[j] = k;
-                    break;
-                }
-            }
-        }
-    }
     
     fn m_step(&mut self) {
         let mut fitted = self.w.dot(&self.beta);
@@ -242,29 +239,33 @@ impl BayesREM {
             }
             let rhs = residuals_prod + l_j * self.beta[j];
             
-            // Use hard assignment from stochastic sampling
-            let k = self.gamma[j];
-            let sigma2_k = self.sigma2_vec[k];
+            // ← SOFT ASSIGNMENT: weighted average over components
+            let mut weighted_mu = 0.0;
+            let mut weighted_var = 0.0;
             
-            let inv_var_post = if k == 0 || sigma2_k < 1e-10 {
-                l_j * inv_sigma2_e + 1e10
-            } else {
+            for k in 0..4 {
+                let prob_k = self.gamma_prob[[j, k]];
+                let sigma2_k = self.sigma2_vec[k];
+                
+                if k == 0 || sigma2_k < 1e-10 {
+                    // Component 0: no contribution to beta
+                    continue;
+                }
+                
                 let sigma2_j_adjusted = sigma2_k * self.freq_weights[j];
-                l_j * inv_sigma2_e + 1.0 / sigma2_j_adjusted
-            };
+                let inv_var_post_k = l_j * inv_sigma2_e + 1.0 / sigma2_j_adjusted;
+                let var_post_k = 1.0 / inv_var_post_k;
+                let mu_post_k = rhs * inv_sigma2_e * var_post_k;
+                
+                weighted_mu += prob_k * mu_post_k;
+                weighted_var += prob_k * (var_post_k + mu_post_k.powi(2));
+            }
             
-            let var_post = 1.0 / inv_var_post;
-            let mu_post = rhs * inv_sigma2_e * var_post;
-            
-            // Store posterior variance
-            var_post_vec[j] = var_post;
-            
+            // Posterior variance: Var[β] = E[β²] - E[β]²
+            var_post_vec[j] = weighted_var - weighted_mu.powi(2);
+
             let beta_old = self.beta[j];
-            self.beta[j] = if self.gamma[j] == 0 {
-                0.0
-            } else {
-                mu_post
-            };
+            self.beta[j] = weighted_mu;
             
             if self.beta[j] != beta_old {
                 let delta = self.beta[j] - beta_old;
@@ -279,26 +280,25 @@ impl BayesREM {
         let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
         self.sigma2_e = sse / (self.n as f64);
         
-        // Update sigma2_k (include posterior variance)
+        // Update sigma2_k using soft assignments
         for k in 1..4 {
             let mut ss = 0.0;
-            let mut n_k = 0;
+            let mut total_prob = 0.0;
+            
             for j in 0..self.n_alleles {
-                if self.gamma[j] == k {
-                    // E[β²] = μ² + σ²
-                    ss += self.beta[j].powi(2) + var_post_vec[j];
-                    n_k += 1;
-                }
+                let prob_k = self.gamma_prob[[j, k]];
+                ss += prob_k * (self.beta[j].powi(2) + var_post_vec[j]);
+                total_prob += prob_k;
             }
-            if n_k > 0 {
-                self.sigma2_vec[k] = ss / (n_k as f64);
+            
+            if total_prob > 1e-6 {
+                self.sigma2_vec[k] = ss / total_prob;
             }
         }
-        
-        // Update pi
+
+        // Update pi using soft assignments
         for k in 0..4 {
-            let count = self.gamma.iter().filter(|&&g| g == k).count();
-            self.pi_vec[k] = (count as f64) / (self.n_alleles as f64);
+            self.pi_vec[k] = self.gamma_prob.column(k).sum() / (self.n_alleles as f64);
         }
     }
 }
