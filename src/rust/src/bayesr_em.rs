@@ -35,7 +35,6 @@ impl BayesREM {
         sigma2_e_init: f64,
         max_iter: usize,
         tol: f64,
-        seed: u64,
         fold_id: i32,
     ) -> Self {
         let n = w.nrows();
