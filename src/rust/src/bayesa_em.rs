@@ -62,8 +62,7 @@ impl BayesAEM {
         eprintln!("[Fold {}] BayesA EM started: max {} iterations", self.fold_id, self.max_iter);
 
         let print_interval = (self.max_iter / 50).max(1);
-        
-        let mut loglik_old = f64::NEG_INFINITY;
+        let mut beta_old = Array1::<f64>::zeros(self.n_alleles);
         
         for iter in 0..self.max_iter {
             // E-step
@@ -72,26 +71,42 @@ impl BayesAEM {
             // M-step
             self.m_step(&expected_inv_sigma2);
             
-            // Compute log-likelihood
-            let fitted = self.w.dot(&self.beta);
-            let residuals = &self.y - &fitted;
-            let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
-            let loglik = -0.5 * (self.n as f64) * (2.0 * std::f64::consts::PI * self.sigma2_e).ln() 
-                         - 0.5 * sse / self.sigma2_e;
+            // Compute beta change (Paper's method)
+            let diff = &self.beta - &beta_old;
+            let change_sq = diff.dot(&diff);
+            let beta_norm_sq = self.beta.dot(&self.beta);
             
-            // Check convergence
-            if iter > 0 && (loglik - loglik_old).abs() < self.tol {
-                eprintln!("[Fold {}] Converged at iteration {}", self.fold_id, iter);
+            let rel_beta_change = if beta_norm_sq > 1e-20 {
+                change_sq / beta_norm_sq
+            } else {
+                f64::INFINITY
+            };
+            
+            // Adaptive min_iter
+            let min_iter = if self.n > 5000 {
+                200
+            } else if self.n > 1000 {
+                100
+            } else {
+                50
+            };
+            
+            // Convergence check
+            if iter > min_iter && rel_beta_change < self.tol {
+                eprintln!("[Fold {}] Converged at iteration {} (β_change={:.2e})", 
+                        self.fold_id, iter, rel_beta_change);
                 break;
             }
             
-            loglik_old = loglik;
-            
             if iter % print_interval == 0 {
                 let mean_beta = self.beta.iter().map(|b| b.abs()).sum::<f64>() / (self.n_alleles as f64);
-                eprintln!("[Fold {}] Iter {} | LogLik={:.2} | σ²e={:.4} | Mean|β|={:.4}", 
-                         self.fold_id, iter, loglik, self.sigma2_e, mean_beta);
+                let mean_sigma2_j = self.sigma2_j.iter().sum::<f64>() / (self.n_alleles as f64);
+                eprintln!("[Fold {}] Iter {} | β_change={:.2e} | σ²e={:.4} | Mean|β|={:.4} | Mean σ²_j={:.4}", 
+                        self.fold_id, iter, rel_beta_change, 
+                        self.sigma2_e, mean_beta, mean_sigma2_j);
             }
+            
+            beta_old = self.beta.clone();
         }
         
         let beta_samples = Array2::from_shape_fn((1, self.n_alleles), |(_, j)| self.beta[j]);
