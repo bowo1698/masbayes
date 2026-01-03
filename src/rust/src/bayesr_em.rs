@@ -99,8 +99,9 @@ impl BayesREM {
             if iter > min_iter {
                 // Criterion 1: Absolute change below adaptive threshold
                 if abs_change < abs_thresh {
-                    eprintln!("[Fold {}] Converged at iteration {} (Δ={:.2e} < tol×{:.0f}={:.2e})", 
+                    eprintln!("[Fold {}] Converged at iteration {} (Δ={:.2e} < tol×{:.1}={:.2e})", 
                             self.fold_id, iter, abs_change, scale_factor, abs_thresh);
+                    //                                                   ^^^^^ FIXED: .0f → .1
                     break;
                 }
                 
