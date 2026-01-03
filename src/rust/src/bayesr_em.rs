@@ -79,38 +79,29 @@ impl BayesREM {
             let loglik = -0.5 * (self.n as f64) * (2.0 * std::f64::consts::PI * self.sigma2_e).ln() 
                          - 0.5 * sse / self.sigma2_e;
             
+            let abs_change = (loglik - loglik_old).abs();
+            let rel_change = if loglik_old.is_finite() && loglik_old.abs() > 1e-10 {
+                abs_change / loglik_old.abs()
+            } else {
+                f64::INFINITY
+            };
+            
             // Check convergence
-            if iter > 0 && (loglik - loglik_old).abs() < self.tol {
-                eprintln!("[Fold {}] Converged at iteration {}", self.fold_id, iter);
+            if iter > 10 && (abs_change < self.tol || rel_change < 1e-5) {
+                eprintln!("[Fold {}] Converged at iteration {} (Δ={:.2e}, rel={:.2e})", 
+                        self.fold_id, iter, abs_change, rel_change);
                 break;
             }
             
-            loglik_old = loglik;
-            
             if iter % print_interval == 0 {
-                // Count 1: Non-zero beta
-                let non_zero_beta = self.beta.iter()
-                    .filter(|&&b| b.abs() > 1e-6)
-                    .count();
+                let non_zero_beta = self.beta.iter().filter(|&&b| b.abs() > 1e-6).count();
                 
-                // Count 2: MAP assignments
-                let non_zero_map = (0..self.n_alleles)
-                    .filter(|&j| {
-                        let mut max_k = 0;
-                        let mut max_prob = self.gamma_prob[[j, 0]];
-                        for k in 1..4 {
-                            if self.gamma_prob[[j, k]] > max_prob {
-                                max_prob = self.gamma_prob[[j, k]];
-                                max_k = k;
-                            }
-                        }
-                        max_k != 0
-                    })
-                    .count();
-                
-                eprintln!("[Fold {}] Iter {} | LogLik={:.2} | σ²e={:.4} | |β|>0: {} | MAP≠0: {}", 
-                        self.fold_id, iter, loglik, self.sigma2_e, non_zero_beta, non_zero_map);
+                eprintln!("[Fold {}] Iter {} | LogLik={:.2} (Δ={:.2e}) | σ²e={:.4} | |β|>0: {}", 
+                        self.fold_id, iter, loglik, abs_change, self.sigma2_e, non_zero_beta);
             }
+            
+            // Update for next iteration
+            loglik_old = loglik;
         }
         
         // Convert soft probabilities to "samples" format
