@@ -87,24 +87,26 @@ impl BayesREM {
                 f64::INFINITY
             };
             
+            // Adaptive threshold based on dataset size
+            let min_iterations = if self.n > 5000 { 200 } else { 100 };
+            let abs_threshold = if self.n > 5000 { 0.05 } else { 0.01 };
+            let consec_threshold = if self.n > 5000 { 0.1 } else { 0.01 };
+            
             // Multi-criteria convergence check
-            if iter > 10 {
-                // Criterion 1: Both absolute AND relative change small
-                let criterion1 = abs_change < self.tol && rel_change < 1e-5;
+            if iter > min_iterations {
+                // Criterion 1: Absolute change truly small (strict)
+                let criterion1 = abs_change < abs_threshold;
                 
-                // Criterion 2: Absolute change very small (regardless of relative)
-                let criterion2 = abs_change < 1e-3;
-                
-                // Criterion 3: Consecutive small changes (5 iterations)
-                if abs_change < 0.01 {
+                // Criterion 2: Consecutive small changes (looser threshold)
+                if abs_change < consec_threshold {
                     converged_count += 1;
                 } else {
                     converged_count = 0;
                 }
-                let criterion3 = converged_count >= 5;
+                let criterion2 = converged_count >= 10;  // 10 consecutive for large data
                 
-                // Converge only if multiple criteria met
-                if (criterion1 || criterion2 || criterion3) && iter > 100 {
+                // Converge if EITHER criterion met
+                if criterion1 || criterion2 {
                     eprintln!("[Fold {}] Converged at iteration {} (Δ={:.2e}, rel={:.2e}, consec={})", 
                             self.fold_id, iter, abs_change, rel_change, converged_count);
                     break;
