@@ -64,6 +64,7 @@ impl BayesREM {
         let print_interval = (self.max_iter / 50).max(1);
         
         let mut loglik_old = f64::NEG_INFINITY;
+        let mut converged_count = 0;
         
         for iter in 0..self.max_iter {
             // E-step
@@ -86,11 +87,28 @@ impl BayesREM {
                 f64::INFINITY
             };
             
-            // Check convergence
-            if iter > 10 && (abs_change < self.tol || rel_change < 1e-5) {
-                eprintln!("[Fold {}] Converged at iteration {} (Δ={:.2e}, rel={:.2e})", 
-                        self.fold_id, iter, abs_change, rel_change);
-                break;
+            // Multi-criteria convergence check
+            if iter > 10 {
+                // Criterion 1: Both absolute AND relative change small
+                let criterion1 = abs_change < self.tol && rel_change < 1e-5;
+                
+                // Criterion 2: Absolute change very small (regardless of relative)
+                let criterion2 = abs_change < 1e-3;
+                
+                // Criterion 3: Consecutive small changes (5 iterations)
+                if abs_change < 0.01 {
+                    converged_count += 1;
+                } else {
+                    converged_count = 0;
+                }
+                let criterion3 = converged_count >= 5;
+                
+                // Converge only if multiple criteria met
+                if (criterion1 || criterion2 || criterion3) && iter > 100 {
+                    eprintln!("[Fold {}] Converged at iteration {} (Δ={:.2e}, rel={:.2e}, consec={})", 
+                            self.fold_id, iter, abs_change, rel_change, converged_count);
+                    break;
+                }
             }
             
             if iter % print_interval == 0 {
@@ -100,7 +118,6 @@ impl BayesREM {
                         self.fold_id, iter, loglik, abs_change, self.sigma2_e, non_zero_beta);
             }
             
-            // Update for next iteration
             loglik_old = loglik;
         }
         
