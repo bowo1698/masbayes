@@ -79,6 +79,61 @@ impl BayesREM {
                      fold_id, variance_grid[0], variance_grid[1], 
                      variance_grid[2], variance_grid[3]);
         }
+
+        let wtw_diag_arr = Array1::from_vec(wtw_diag.clone());
+        let wty_arr = Array1::from_vec(wty.clone());
+        
+        // Ridge regression initialization
+        let mean_wtw = wtw_diag_arr.iter().filter(|&&x| x > 1e-10).sum::<f64>() 
+                       / wtw_diag_arr.iter().filter(|&&x| x > 1e-10).count().max(1) as f64;
+        let lambda = 0.01 * mean_wtw;
+        
+        let mut beta_init = Array1::<f64>::zeros(n_alleles);
+        for j in 0..n_alleles {
+            if wtw_diag_arr[j] > 1e-10 {
+                beta_init[j] = wty_arr[j] / (wtw_diag_arr[j] + lambda);
+            }
+        }
+        
+        // Compute percentile thresholds
+        let mut beta_abs: Vec<f64> = beta_init.iter().map(|&b| b.abs()).collect();
+        beta_abs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        
+        let threshold_small = beta_abs[beta_abs.len() / 2];
+        let threshold_medium = beta_abs[(beta_abs.len() * 3) / 4];
+        let threshold_large = beta_abs[(beta_abs.len() * 9) / 10];
+        
+        // Smart gamma_prob initialization
+        let mut gamma_prob_init = Array2::<f64>::zeros((n_alleles, 4));
+        for j in 0..n_alleles {
+            let beta_abs_j = beta_init[j].abs();
+            
+            if beta_abs_j < threshold_small {
+                gamma_prob_init[[j, 0]] = 0.70;
+                gamma_prob_init[[j, 1]] = 0.20;
+                gamma_prob_init[[j, 2]] = 0.08;
+                gamma_prob_init[[j, 3]] = 0.02;
+            } else if beta_abs_j < threshold_medium {
+                gamma_prob_init[[j, 0]] = 0.20;
+                gamma_prob_init[[j, 1]] = 0.50;
+                gamma_prob_init[[j, 2]] = 0.25;
+                gamma_prob_init[[j, 3]] = 0.05;
+            } else if beta_abs_j < threshold_large {
+                gamma_prob_init[[j, 0]] = 0.10;
+                gamma_prob_init[[j, 1]] = 0.30;
+                gamma_prob_init[[j, 2]] = 0.50;
+                gamma_prob_init[[j, 3]] = 0.10;
+            } else {
+                gamma_prob_init[[j, 0]] = 0.05;
+                gamma_prob_init[[j, 1]] = 0.15;
+                gamma_prob_init[[j, 2]] = 0.30;
+                gamma_prob_init[[j, 3]] = 0.50;
+            }
+        }
+        
+        let n_nonzero_init = beta_init.iter().filter(|&&b| b.abs() > 1e-6).count();
+        eprintln!("[Fold {}] EM: Ridge init (λ={:.2e}): {}/{} non-zero", 
+                 fold_id, lambda, n_nonzero_init, n_alleles);
         
         Self {
             w,
@@ -92,8 +147,8 @@ impl BayesREM {
             freq_weights,
             max_iter,
             tol,
-            beta: Array1::<f64>::zeros(n_alleles),
-            gamma_prob: Array2::<f64>::zeros((n_alleles, 4)),
+            beta: beta_init,
+            gamma_prob: gamma_prob_init,
             gamma: Array1::<usize>::zeros(n_alleles),
             sigma2_e: sigma2_e_init,
             fold_id,
@@ -102,6 +157,9 @@ impl BayesREM {
     
     pub fn run(&mut self) -> BayesRResults {
         eprintln!("[Fold {}] BayesR EM started: max {} iterations", self.fold_id, self.max_iter);
+
+        // Warm-up E-step
+        self.e_step();
 
         let print_interval = (self.max_iter / 50).max(1);
         
@@ -130,7 +188,7 @@ impl BayesREM {
             loglik_old = loglik;
             
             if iter % print_interval == 0 {
-                let non_zero = self.gamma.iter().filter(|&&g| g != 0).count();
+                let non_zero = self.beta.iter().filter(|&&b| b.abs() > 1e-6).count();
                 eprintln!("[Fold {}] Iter {} | LogLik={:.2} | σ²e={:.4} | Non-zero={}", 
                          self.fold_id, iter, loglik, self.sigma2_e, non_zero);
             }
