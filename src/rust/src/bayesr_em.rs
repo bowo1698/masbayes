@@ -63,8 +63,7 @@ impl BayesREM {
 
         let print_interval = (self.max_iter / 50).max(1);
         
-        let mut loglik_old = f64::NEG_INFINITY;
-        let mut converged_count = 0;
+        let mut beta_old = Array1::<f64>::zeros(self.n_alleles);
         
         for iter in 0..self.max_iter {
             // E-step
@@ -73,59 +72,53 @@ impl BayesREM {
             // M-step
             self.m_step();
             
-            // Compute log-likelihood
-            let fitted = self.w.dot(&self.beta);
-            let residuals = &self.y - &fitted;
-            let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
-            let loglik = -0.5 * (self.n as f64) * (2.0 * std::f64::consts::PI * self.sigma2_e).ln() 
-                         - 0.5 * sse / self.sigma2_e;
+            // Compute beta change
+            let diff = &self.beta - &beta_old;
+            let change_sq = diff.dot(&diff);
+            let beta_norm_sq = self.beta.dot(&self.beta);
             
-            let abs_change = (loglik - loglik_old).abs();
-    
-            // Adaptive parameters based on dataset size
-            let (min_iter, scale_factor, consec_needed) = if self.n > 5000 {
-                (200, 50.0, 10)  // Large dataset: n > 5000
-            } else if self.n > 1000 {
-                (100, 10.0, 5)   // Medium dataset: 1000 < n <= 5000
+            // Avoid division by zero
+            let rel_beta_change = if beta_norm_sq > 1e-20 {
+                change_sq / beta_norm_sq
             } else {
-                (50, 1.0, 5)     // Small dataset: n <= 1000
+                f64::INFINITY
             };
             
-            // Scale tol based on dataset size
-            let abs_thresh = self.tol * scale_factor;
-            let consec_thresh = abs_thresh * 2.0;
+            // Adaptive parameters based on dataset size
+            let min_iter = if self.n > 5000 {
+                200
+            } else if self.n > 1000 {
+                100
+            } else {
+                50
+            };
+            
+            // Adaptive threshold (looser for large, strict for small)
+            let threshold = if self.n > 5000 {
+                self.tol * 10.0  // 1e-3 × 10 = 1e-8 for large datasets
+            } else if self.n > 1000 {
+                self.tol * 1.0   // 1e-3 × 1 = 1e-3 for medium
+            } else {
+                self.tol * 0.01  // 1e-3 × 0.01 = 1e-5 for small (strict)
+            };
             
             // Convergence check
-            if iter > min_iter {
-                // Criterion 1: Absolute change below adaptive threshold
-                if abs_change < abs_thresh {
-                    eprintln!("[Fold {}] Converged at iteration {} (Δ={:.2e} < tol×{:.1}={:.2e})", 
-                            self.fold_id, iter, abs_change, scale_factor, abs_thresh);
-                    break;
-                }
-                
-                // Criterion 2: Consecutive small changes
-                if abs_change < consec_thresh {
-                    converged_count += 1;
-                } else {
-                    converged_count = 0;
-                }
-                
-                if converged_count >= consec_needed {
-                    eprintln!("[Fold {}] Converged at iteration {} ({} consecutive < {:.2e})", 
-                            self.fold_id, iter, converged_count, consec_thresh);
-                    break;
-                }
+            if iter > min_iter && rel_beta_change < threshold {
+                eprintln!("[Fold {}] Converged at iteration {} (β_change={:.2e} < {:.2e})", 
+                        self.fold_id, iter, rel_beta_change, threshold);
+                break;
             }
             
+            // Monitoring output
             if iter % print_interval == 0 {
                 let non_zero_beta = self.beta.iter().filter(|&&b| b.abs() > 1e-6).count();
-                eprintln!("[Fold {}] Iter {} | LogLik={:.2} (Δ={:.2e}, tgt={:.2e}) | σ²e={:.4} | |β|>0: {}", 
-                        self.fold_id, iter, loglik, abs_change, abs_thresh, 
+                eprintln!("[Fold {}] Iter {} | β_change={:.2e} (tgt={:.2e}) | σ²e={:.4} | |β|>0: {}", 
+                        self.fold_id, iter, rel_beta_change, threshold, 
                         self.sigma2_e, non_zero_beta);
             }
             
-            loglik_old = loglik;
+            // Store for next iteration
+            beta_old = self.beta.clone();
         }
         
         // Convert soft probabilities to "samples" format
