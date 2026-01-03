@@ -81,43 +81,48 @@ impl BayesREM {
                          - 0.5 * sse / self.sigma2_e;
             
             let abs_change = (loglik - loglik_old).abs();
-            let rel_change = if loglik_old.is_finite() && loglik_old.abs() > 1e-10 {
-                abs_change / loglik_old.abs()
+    
+            // Adaptive parameters based on dataset size
+            let (min_iter, scale_factor, consec_needed) = if self.n > 5000 {
+                (200, 50.0, 10)  // Large dataset: n > 5000
+            } else if self.n > 1000 {
+                (100, 10.0, 5)   // Medium dataset: 1000 < n <= 5000
             } else {
-                f64::INFINITY
+                (50, 1.0, 5)     // Small dataset: n <= 1000
             };
             
-            // Adaptive threshold based on dataset size
-            let min_iterations = if self.n > 5000 { 200 } else { 100 };
-            let abs_threshold = if self.n > 5000 { 0.05 } else { 0.01 };
-            let consec_threshold = if self.n > 5000 { 0.1 } else { 0.01 };
+            // Scale tol based on dataset size
+            let abs_thresh = self.tol * scale_factor;
+            let consec_thresh = abs_thresh * 2.0;
             
-            // Multi-criteria convergence check
-            if iter > min_iterations {
-                // Criterion 1: Absolute change truly small (strict)
-                let criterion1 = abs_change < abs_threshold;
+            // Convergence check
+            if iter > min_iter {
+                // Criterion 1: Absolute change below adaptive threshold
+                if abs_change < abs_thresh {
+                    eprintln!("[Fold {}] Converged at iteration {} (Δ={:.2e} < tol×{:.0f}={:.2e})", 
+                            self.fold_id, iter, abs_change, scale_factor, abs_thresh);
+                    break;
+                }
                 
-                // Criterion 2: Consecutive small changes (looser threshold)
-                if abs_change < consec_threshold {
+                // Criterion 2: Consecutive small changes
+                if abs_change < consec_thresh {
                     converged_count += 1;
                 } else {
                     converged_count = 0;
                 }
-                let criterion2 = converged_count >= 10;  // 10 consecutive for large data
                 
-                // Converge if EITHER criterion met
-                if criterion1 || criterion2 {
-                    eprintln!("[Fold {}] Converged at iteration {} (Δ={:.2e}, rel={:.2e}, consec={})", 
-                            self.fold_id, iter, abs_change, rel_change, converged_count);
+                if converged_count >= consec_needed {
+                    eprintln!("[Fold {}] Converged at iteration {} ({} consecutive < {:.2e})", 
+                            self.fold_id, iter, converged_count, consec_thresh);
                     break;
                 }
             }
             
             if iter % print_interval == 0 {
                 let non_zero_beta = self.beta.iter().filter(|&&b| b.abs() > 1e-6).count();
-                
-                eprintln!("[Fold {}] Iter {} | LogLik={:.2} (Δ={:.2e}) | σ²e={:.4} | |β|>0: {}", 
-                        self.fold_id, iter, loglik, abs_change, self.sigma2_e, non_zero_beta);
+                eprintln!("[Fold {}] Iter {} | LogLik={:.2} (Δ={:.2e}, tgt={:.2e}) | σ²e={:.4} | |β|>0: {}", 
+                        self.fold_id, iter, loglik, abs_change, abs_thresh, 
+                        self.sigma2_e, non_zero_beta);
             }
             
             loglik_old = loglik;
