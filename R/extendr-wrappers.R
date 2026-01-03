@@ -9,26 +9,26 @@ NULL
 
 #' Run BayesR MCMC
 #' @export
-run_bayesr_mcmc <- function(w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, sigma2_ah, allele_freqs, use_adaptive_grid = FALSE, prior_params, mcmc_params, fold_id = 0L) {
-    .Call(wrap__run_bayesr_mcmc, w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, sigma2_ah, allele_freqs, use_adaptive_grid, prior_params, mcmc_params, fold_id)
+run_bayesr_mcmc <- function(w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id = 0L) {
+    .Call(wrap__run_bayesr_mcmc, w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id)
 }
 
 #' Run BayesA MCMC
 #' @export
-run_bayesa_mcmc <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, allele_freqs, prior_params, mcmc_params, fold_id = 0L) {
-    .Call(wrap__run_bayesa_mcmc, w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, allele_freqs, prior_params, mcmc_params, fold_id)
+run_bayesa_mcmc <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id = 0L) {
+    .Call(wrap__run_bayesa_mcmc, w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id)
 }
 
 #' Run BayesR EM
 #' @export
-run_bayesr_em <- function(w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, allele_freqs, use_adaptive_grid = FALSE, em_params, fold_id = 0L) {
-    .Call(wrap__run_bayesr_em, w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, allele_freqs, use_adaptive_grid, em_params, fold_id)
+run_bayesr_em <- function(w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, em_params, fold_id = 0L) {
+    .Call(wrap__run_bayesr_em, w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, em_params, fold_id)
 }
 
 #' Run BayesA EM
 #' @export
-run_bayesa_em <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, allele_freqs, em_params, fold_id = 0L) {
-    .Call(wrap__run_bayesa_em, w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, allele_freqs, em_params, fold_id)
+run_bayesa_em <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, em_params, fold_id = 0L) {
+    .Call(wrap__run_bayesa_em, w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, em_params, fold_id)
 }
 
 #' Construct W Matrix (Rust)

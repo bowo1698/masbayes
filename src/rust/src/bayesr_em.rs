@@ -1,6 +1,9 @@
 // src/rust/src/bayesr_em.rs
 
 use ndarray::{Array1, Array2};
+use rand::SeedableRng;
+use rand::Rng;
+use rand_pcg::Pcg64;
 use crate::types::BayesRResults;
 
 pub struct BayesREM {
@@ -14,7 +17,6 @@ pub struct BayesREM {
     
     pi_vec: Array1<f64>,
     sigma2_vec: Array1<f64>,
-    freq_weights: Array1<f64>, 
     
     max_iter: usize,
     tol: f64,
@@ -23,6 +25,7 @@ pub struct BayesREM {
     gamma_prob: Array2<f64>,
     gamma: Array1<usize>, 
     sigma2_e: f64,
+    rng: Pcg64,  
     fold_id: i32,
 }
 
@@ -35,105 +38,13 @@ impl BayesREM {
         pi_vec: Vec<f64>,
         sigma2_vec: Vec<f64>,
         sigma2_e_init: f64,
-        allele_freqs: Vec<f64>,
-        use_adaptive_grid: bool, 
         max_iter: usize,
         tol: f64,
+        seed: u64,
         fold_id: i32,
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
-        let mut freq_weights = Array1::<f64>::ones(n_alleles);
-        for j in 0..n_alleles {
-            let p = allele_freqs[j];
-            let weight = (2.0 * p * (1.0 - p)).sqrt();
-            // Clip minimum to avoid extreme shrinkage
-            freq_weights[j] = weight.max(0.3);  // minimum 30% weight
-        }
-
-        // Adaptive variance grid
-        let mut sigma2_vec_array = Array1::from_vec(sigma2_vec);
-        if use_adaptive_grid {
-            use crate::variance_tuning::{estimate_genetic_variance, 
-                                         estimate_architecture_type,
-                                         adaptive_variance_grid,
-                                         adaptive_variance_grid_sparse};
-            
-            let y_array = Array1::from_vec(y.clone());
-            let sigma2_g = estimate_genetic_variance(&w, &y_array);
-            
-            let is_sparse = estimate_architecture_type(&w, &y_array);
-            
-            let variance_grid = if is_sparse {
-                eprintln!("[Fold {}] EM: Detected SPARSE architecture → using aggressive grid", fold_id);
-                adaptive_variance_grid_sparse(sigma2_g)
-            } else {
-                eprintln!("[Fold {}] EM: Detected POLYGENIC architecture → using standard grid", fold_id);
-                adaptive_variance_grid(sigma2_g)
-            };
-            
-            sigma2_vec_array = Array1::from_vec(variance_grid.to_vec());
-            
-            eprintln!("[Fold {}] EM: Adaptive variance grid: σ²_g = {:.6}", fold_id, sigma2_g);
-            eprintln!("[Fold {}] EM:   [0={:.2e}, small={:.2e}, med={:.2e}, large={:.2e}]",
-                     fold_id, variance_grid[0], variance_grid[1], 
-                     variance_grid[2], variance_grid[3]);
-        }
-
-        let wtw_diag_arr = Array1::from_vec(wtw_diag.clone());
-        let wty_arr = Array1::from_vec(wty.clone());
-        
-        // Ridge regression initialization
-        let mean_wtw = wtw_diag_arr.iter().filter(|&&x| x > 1e-10).sum::<f64>() 
-                       / wtw_diag_arr.iter().filter(|&&x| x > 1e-10).count().max(1) as f64;
-        let lambda = 0.01 * mean_wtw;
-        
-        let mut beta_init = Array1::<f64>::zeros(n_alleles);
-        for j in 0..n_alleles {
-            if wtw_diag_arr[j] > 1e-10 {
-                beta_init[j] = wty_arr[j] / (wtw_diag_arr[j] + lambda);
-            }
-        }
-        
-        // Compute percentile thresholds
-        let mut beta_abs: Vec<f64> = beta_init.iter().map(|&b| b.abs()).collect();
-        beta_abs.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        
-        let threshold_small = beta_abs[beta_abs.len() / 2];
-        let threshold_medium = beta_abs[(beta_abs.len() * 3) / 4];
-        let threshold_large = beta_abs[(beta_abs.len() * 9) / 10];
-        
-        // Smart gamma_prob initialization
-        let mut gamma_prob_init = Array2::<f64>::zeros((n_alleles, 4));
-        for j in 0..n_alleles {
-            let beta_abs_j = beta_init[j].abs();
-            
-            if beta_abs_j < threshold_small {
-                gamma_prob_init[[j, 0]] = 0.70;
-                gamma_prob_init[[j, 1]] = 0.20;
-                gamma_prob_init[[j, 2]] = 0.08;
-                gamma_prob_init[[j, 3]] = 0.02;
-            } else if beta_abs_j < threshold_medium {
-                gamma_prob_init[[j, 0]] = 0.20;
-                gamma_prob_init[[j, 1]] = 0.50;
-                gamma_prob_init[[j, 2]] = 0.25;
-                gamma_prob_init[[j, 3]] = 0.05;
-            } else if beta_abs_j < threshold_large {
-                gamma_prob_init[[j, 0]] = 0.10;
-                gamma_prob_init[[j, 1]] = 0.30;
-                gamma_prob_init[[j, 2]] = 0.50;
-                gamma_prob_init[[j, 3]] = 0.10;
-            } else {
-                gamma_prob_init[[j, 0]] = 0.05;
-                gamma_prob_init[[j, 1]] = 0.15;
-                gamma_prob_init[[j, 2]] = 0.30;
-                gamma_prob_init[[j, 3]] = 0.50;
-            }
-        }
-        
-        let n_nonzero_init = beta_init.iter().filter(|&&b| b.abs() > 1e-6).count();
-        eprintln!("[Fold {}] EM: Ridge init (λ={:.2e}): {}/{} non-zero", 
-                 fold_id, lambda, n_nonzero_init, n_alleles);
         
         Self {
             w,
@@ -143,23 +54,20 @@ impl BayesREM {
             n,
             n_alleles,
             pi_vec: Array1::from_vec(pi_vec),
-            sigma2_vec: sigma2_vec_array,
-            freq_weights,
+            sigma2_vec: Array1::from_vec(sigma2_vec),
             max_iter,
             tol,
-            beta: beta_init,
-            gamma_prob: gamma_prob_init,
+            beta: Array1::<f64>::zeros(n_alleles),
+            gamma_prob: Array2::<f64>::zeros((n_alleles, 4)),
             gamma: Array1::<usize>::zeros(n_alleles),
             sigma2_e: sigma2_e_init,
+            rng: Pcg64::seed_from_u64(seed),
             fold_id,
         }
     }
     
     pub fn run(&mut self) -> BayesRResults {
         eprintln!("[Fold {}] BayesR EM started: max {} iterations", self.fold_id, self.max_iter);
-
-        // Warm-up E-step
-        self.e_step();
 
         let print_interval = (self.max_iter / 50).max(1);
         
@@ -168,6 +76,9 @@ impl BayesREM {
         for iter in 0..self.max_iter {
             // E-step
             self.e_step();
+
+            // Stochastic step: sample hard assignments
+            self.sample_components();
             
             // M-step
             self.m_step();
@@ -188,24 +99,10 @@ impl BayesREM {
             loglik_old = loglik;
             
             if iter % print_interval == 0 {
-                let non_zero = self.beta.iter().filter(|&&b| b.abs() > 1e-6).count();
+                let non_zero = self.gamma.iter().filter(|&&g| g != 0).count();
                 eprintln!("[Fold {}] Iter {} | LogLik={:.2} | σ²e={:.4} | Non-zero={}", 
                          self.fold_id, iter, loglik, self.sigma2_e, non_zero);
             }
-        }
-
-        // Update gamma using MAP estimate
-        for j in 0..self.n_alleles {
-            let mut max_prob = 0.0;
-            let mut max_k = 0;
-            
-            for k in 0..4 {
-                if self.gamma_prob[[j, k]] > max_prob {
-                    max_prob = self.gamma_prob[[j, k]];
-                    max_k = k;
-                }
-            }
-            self.gamma[j] = max_k;
         }
         
         // Convert point estimates to "samples" format for compatibility
@@ -250,8 +147,7 @@ impl BayesREM {
                     continue;
                 }
                 
-                let sigma2_j_adjusted = sigma2_k * self.freq_weights[j];
-                let ratio_var = sigma2_j_adjusted * inv_sigma2_e;
+                let ratio_var = sigma2_k * inv_sigma2_e;
                 let log_det = (1.0 + l_j * ratio_var).ln();
                 let quad_term = (rhs.powi(2) * sigma2_k) / 
                                (self.sigma2_e * (self.sigma2_e + l_j * sigma2_k));
@@ -273,6 +169,22 @@ impl BayesREM {
             }
         }
     }
+
+    fn sample_components(&mut self) {
+        // Stochastic step: sample discrete component assignments
+        for j in 0..self.n_alleles {
+            let u: f64 = self.rng.gen();
+            let mut cumsum = 0.0;
+            
+            for k in 0..4 {
+                cumsum += self.gamma_prob[[j, k]];
+                if u < cumsum {
+                    self.gamma[j] = k;
+                    break;
+                }
+            }
+        }
+    }
     
     fn m_step(&mut self) {
         let mut fitted = self.w.dot(&self.beta);
@@ -291,33 +203,28 @@ impl BayesREM {
             }
             let rhs = residuals_prod + l_j * self.beta[j];
             
-            // ← SOFT ASSIGNMENT: weighted average over components
-            let mut weighted_mu = 0.0;
-            let mut weighted_var = 0.0;
+            // Use hard assignment from stochastic sampling
+            let k = self.gamma[j];
+            let sigma2_k = self.sigma2_vec[k];
             
-            for k in 0..4 {
-                let prob_k = self.gamma_prob[[j, k]];
-                let sigma2_k = self.sigma2_vec[k];
-                
-                if k == 0 || sigma2_k < 1e-10 {
-                    // Component 0: no contribution to beta
-                    continue;
-                }
-                
-                let sigma2_j_adjusted = sigma2_k * self.freq_weights[j];
-                let inv_var_post_k = l_j * inv_sigma2_e + 1.0 / sigma2_j_adjusted;
-                let var_post_k = 1.0 / inv_var_post_k;
-                let mu_post_k = rhs * inv_sigma2_e * var_post_k;
-                
-                weighted_mu += prob_k * mu_post_k;
-                weighted_var += prob_k * (var_post_k + mu_post_k.powi(2));
-            }
+            let inv_var_post = if k == 0 || sigma2_k < 1e-10 {
+                l_j * inv_sigma2_e + 1e10
+            } else {
+                l_j * inv_sigma2_e + 1.0 / sigma2_k
+            };
             
-            // Posterior variance: Var[β] = E[β²] - E[β]²
-            var_post_vec[j] = weighted_var - weighted_mu.powi(2);
-
+            let var_post = 1.0 / inv_var_post;
+            let mu_post = rhs * inv_sigma2_e * var_post;
+            
+            // Store posterior variance
+            var_post_vec[j] = var_post;
+            
             let beta_old = self.beta[j];
-            self.beta[j] = weighted_mu;
+            self.beta[j] = if self.gamma[j] == 0 {
+                0.0
+            } else {
+                mu_post
+            };
             
             if self.beta[j] != beta_old {
                 let delta = self.beta[j] - beta_old;
@@ -332,25 +239,26 @@ impl BayesREM {
         let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
         self.sigma2_e = sse / (self.n as f64);
         
-        // Update sigma2_k using soft assignments
+        // Update sigma2_k (include posterior variance)
         for k in 1..4 {
             let mut ss = 0.0;
-            let mut total_prob = 0.0;
-            
+            let mut n_k = 0;
             for j in 0..self.n_alleles {
-                let prob_k = self.gamma_prob[[j, k]];
-                ss += prob_k * (self.beta[j].powi(2) + var_post_vec[j]);
-                total_prob += prob_k;
+                if self.gamma[j] == k {
+                    // E[β²] = μ² + σ²
+                    ss += self.beta[j].powi(2) + var_post_vec[j];
+                    n_k += 1;
+                }
             }
-            
-            if total_prob > 1e-6 {
-                self.sigma2_vec[k] = ss / total_prob;
+            if n_k > 0 {
+                self.sigma2_vec[k] = ss / (n_k as f64);
             }
         }
-
-        // Update pi using soft assignments
+        
+        // Update pi
         for k in 0..4 {
-            self.pi_vec[k] = self.gamma_prob.column(k).sum() / (self.n_alleles as f64);
+            let count = self.gamma.iter().filter(|&&g| g == k).count();
+            self.pi_vec[k] = (count as f64) / (self.n_alleles as f64);
         }
     }
 }
