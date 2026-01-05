@@ -21,8 +21,8 @@ run_bayesa_mcmc <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, p
 
 #' Run BayesR EM
 #' @export
-run_bayesr_em <- function(w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, tr_pev_u, tr_zizi_pev, em_params, fold_id = 0L) {
-    .Call(wrap__run_bayesr_em, w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, tr_pev_u, tr_zizi_pev, em_params, fold_id)
+run_bayesr_em <- function(w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, em_params, fold_id = 0L) {
+    .Call(wrap__run_bayesr_em, w, y, wtw_diag, wty, pi_vec, sigma2_vec, sigma2_e_init, em_params, fold_id)
 }
 
 #' Run BayesA EM

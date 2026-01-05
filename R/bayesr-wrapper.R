@@ -22,16 +22,10 @@ run_bayesr <- function(w, y, wtw_diag, wty,
                        prior_params = NULL,
                        mcmc_params = NULL,
                        em_params = NULL,
-                       tr_pev_u = 0.0, 
-                       tr_zizi_pev = NULL,
                        method = c("mcmc", "em"),
                        fold_id = 0L) {
   
   method <- match.arg(method)
-
-  if (is.null(tr_zizi_pev)) {
-    tr_zizi_pev <- rep(0.0, ncol(w))
-  }
   
   if (method == "mcmc") {
     if (is.null(sigma2_ah) || is.null(prior_params) || is.null(mcmc_params)) {
@@ -45,7 +39,6 @@ run_bayesr <- function(w, y, wtw_diag, wty,
       em_params <- list(max_iter = 500L, tol = 1e-6)
     }
     run_bayesr_em(w, y, wtw_diag, wty, pi_vec, sigma2_vec, 
-                  sigma2_e_init, tr_pev_u, tr_zizi_pev,
-                  em_params, fold_id)
+                  sigma2_e_init, em_params, fold_id)
   }
 }

@@ -383,8 +383,6 @@ fn run_bayesr_em(
     pi_vec: Vec<f64>,
     sigma2_vec: Vec<f64>,
     sigma2_e_init: f64,
-    tr_pev_u: f64,
-    tr_zizi_pev: Vec<f64>,
     em_params: List,
     fold_id: i32,
 ) -> List {
@@ -396,16 +394,10 @@ fn run_bayesr_em(
     //    .unwrap_or(123) as u64;
     
     let w_array = utils::rmatrix_to_array2(&w);
-
-    let use_pev = tr_pev_u > 1e-6;
-    if use_pev {
-        eprintln!("[Fold {}] Using PEV correction: tr(PEV) = {:.2}", fold_id, tr_pev_u);
-    }
     
     let mut runner = BayesREM::new(
         w_array, y, wtw_diag, wty,
         pi_vec, sigma2_vec, sigma2_e_init,
-        tr_pev_u, tr_zizi_pev,
         max_iter, tol, fold_id, // seed,
     );
     
