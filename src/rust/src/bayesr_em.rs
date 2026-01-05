@@ -155,22 +155,13 @@ impl BayesREM {
         
         for j in 0..self.n_alleles {
             let l_j = self.wtw_diag[j];
-
-            // Conditional PEV adjustment
-            let l_j_adj = if self.use_pev {
-                let pev_j = self.tr_zizi_pev[j];
-                let adjustment = pev_j * inv_sigma2_e;
-                (l_j - adjustment).max(1e-10)  // ensure positive
-            } else {
-                l_j
-            };
             
             // Residual for marker j
             let mut residuals_prod = self.wty[j]; // w_j' y
             for i in 0..self.n {
                 residuals_prod -= self.w[[i, j]] * fitted[i]; // w_j' (y - Ŷ)
             }
-            let rhs = residuals_prod + l_j_adj * self.beta[j];
+            let rhs = residuals_prod + l_j * self.beta[j];
             
             let mut log_probs = [0.0; 4];
             log_probs[0] = self.pi_vec[0].ln();
@@ -181,13 +172,31 @@ impl BayesREM {
                     log_probs[k] = f64::NEG_INFINITY;
                     continue;
                 }
+
+                // S = σ²_k + σ²_e
+                let s = sigma2_k + self.sigma2_e;
                 
+                // Standard log-likelihood terms
+                // -0.5 * [log(S) + (y†'y†/σ²_e - y†'Z_i/(σ_e*σ²_k*S))]
                 let ratio_var = sigma2_k * inv_sigma2_e;
-                let log_det = (1.0 + l_j_adj * ratio_var).ln();  
+                let log_det = (1.0 + l_j * ratio_var).ln();
                 let quad_term = (rhs.powi(2) * sigma2_k) / 
-                               (self.sigma2_e * (self.sigma2_e + l_j_adj * sigma2_k));
+                           (self.sigma2_e * (self.sigma2_e + l_j * sigma2_k));
                 
                 log_probs[k] = self.pi_vec[k].ln() - 0.5 * log_det + 0.5 * quad_term;
+
+                // PEV CORRECTION
+                // Term: -0.5 * tr(Z_i'Z_i * PEV(û)) / (σ_e * σ²_k * S)
+                // Simplified: -0.5 * pev_j / (σ_e * σ²_k * S)
+                if self.use_pev {
+                    let pev_j = self.tr_zizi_pev[j];
+                    
+                    // -0.5 * tr(Z_i'Z_i PEV) / (σ_e * σ²_k * S)
+                    // pev_j = tr(Z_i'Z_i * PEV(û))
+                    let pev_term = -0.5 * pev_j / (self.sigma2_e * sigma2_k * s);
+                    
+                    log_probs[k] += pev_term;
+                }
             }
             
             let max_log = log_probs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
@@ -212,20 +221,12 @@ impl BayesREM {
         // Update beta using mixture of components
         for j in 0..self.n_alleles {
             let l_j = self.wtw_diag[j];
-
-            let l_j_adj = if self.use_pev {
-                let pev_j = self.tr_zizi_pev[j];
-                let adjustment = pev_j * inv_sigma2_e;
-                (l_j - adjustment).max(1e-10)
-            } else {
-                l_j
-            };
             
             let mut residuals_prod = self.wty[j];
             for i in 0..self.n {
                 residuals_prod -= self.w[[i, j]] * fitted[i];
             }
-            let rhs = residuals_prod + l_j_adj * self.beta[j];
+            let rhs = residuals_prod + l_j * self.beta[j];
             
             // Compute mixture posterior: E[β] = Σₖ P(γ=k) E[β|γ=k]
             let mut beta_new = 0.0;
@@ -239,7 +240,7 @@ impl BayesREM {
                 } else {
                     let sigma2_k = self.sigma2_vec[k];
                     if sigma2_k > 1e-10 {
-                        let inv_var_post = l_j_adj * inv_sigma2_e + 1.0 / sigma2_k;
+                        let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k;
                         let var_post = 1.0 / inv_var_post;
                         let mu_post = rhs * inv_sigma2_e * var_post;
                         
@@ -264,7 +265,7 @@ impl BayesREM {
         let residuals = &self.y - &fitted;
         let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
 
-        // Add tr(PEV) if using PEV correction
+        // Add tr(PEV) if using PEV correction: σ²_e = (SSE + tr(PEV(û))) / n
         let sse_corrected = if self.use_pev {
             sse + self.tr_pev_u
         } else {
@@ -283,16 +284,6 @@ impl BayesREM {
                 if prob_k < 1e-8 { continue; }
                 
                 let l_j = self.wtw_diag[j];
-
-                // Apply PEV adjustment
-                let l_j_adj = if self.use_pev {
-                    let pev_j = self.tr_zizi_pev[j];
-                    let adjustment = pev_j / self.sigma2_e;
-                    (l_j - adjustment).max(1e-10)
-                } else {
-                    l_j
-                };
-
                 let sigma2_k = self.sigma2_vec[k];
                 if sigma2_k < 1e-10 { continue; }
                 
@@ -301,9 +292,9 @@ impl BayesREM {
                 for i in 0..self.n {
                     residuals_prod -= self.w[[i, j]] * fitted[i];
                 }
-                let rhs = residuals_prod + l_j_adj * self.beta[j]; 
+                let rhs = residuals_prod + l_j * self.beta[j];
                 
-                let var_post_k = 1.0 / (l_j_adj / self.sigma2_e + 1.0 / sigma2_k);
+                let var_post_k = 1.0 / (l_j / self.sigma2_e + 1.0 / sigma2_k);
                 let mu_post_k = rhs / self.sigma2_e * var_post_k;
                 
                 // E[β²] = μ² + σ²
