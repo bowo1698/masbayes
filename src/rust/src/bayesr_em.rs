@@ -14,6 +14,10 @@ pub struct BayesREM {
     
     pi_vec: Array1<f64>,
     sigma2_vec: Array1<f64>,
+
+    tr_pev_u: f64,             
+    tr_zizi_pev: Array1<f64>,   
+    use_pev: bool,              
     
     max_iter: usize,
     tol: f64,
@@ -33,12 +37,15 @@ impl BayesREM {
         pi_vec: Vec<f64>,
         sigma2_vec: Vec<f64>,
         sigma2_e_init: f64,
+        tr_pev_u: f64, 
+        tr_zizi_pev: Vec<f64>,
         max_iter: usize,
         tol: f64,
         fold_id: i32,
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
+        let use_pev = tr_pev_u > 1e-6;
         
         Self {
             w,
@@ -49,6 +56,9 @@ impl BayesREM {
             n_alleles,
             pi_vec: Array1::from_vec(pi_vec),
             sigma2_vec: Array1::from_vec(sigma2_vec),
+            tr_pev_u,                                    
+            tr_zizi_pev: Array1::from_vec(tr_zizi_pev), 
+            use_pev,                                     
             max_iter,
             tol,
             beta: Array1::<f64>::zeros(n_alleles),
@@ -145,13 +155,22 @@ impl BayesREM {
         
         for j in 0..self.n_alleles {
             let l_j = self.wtw_diag[j];
+
+            // Conditional PEV adjustment
+            let l_j_adj = if self.use_pev {
+                let pev_j = self.tr_zizi_pev[j];
+                let adjustment = pev_j * inv_sigma2_e;
+                (l_j - adjustment).max(1e-10)  // ensure positive
+            } else {
+                l_j
+            };
             
             // Residual for marker j
             let mut residuals_prod = self.wty[j]; // w_j' y
             for i in 0..self.n {
                 residuals_prod -= self.w[[i, j]] * fitted[i]; // w_j' (y - Ŷ)
             }
-            let rhs = residuals_prod + l_j * self.beta[j];
+            let rhs = residuals_prod + l_j_adj * self.beta[j];
             
             let mut log_probs = [0.0; 4];
             log_probs[0] = self.pi_vec[0].ln();
@@ -164,9 +183,9 @@ impl BayesREM {
                 }
                 
                 let ratio_var = sigma2_k * inv_sigma2_e;
-                let log_det = (1.0 + l_j * ratio_var).ln();
+                let log_det = (1.0 + l_j_adj * ratio_var).ln();  
                 let quad_term = (rhs.powi(2) * sigma2_k) / 
-                               (self.sigma2_e * (self.sigma2_e + l_j * sigma2_k));
+                               (self.sigma2_e * (self.sigma2_e + l_j_adj * sigma2_k));
                 
                 log_probs[k] = self.pi_vec[k].ln() - 0.5 * log_det + 0.5 * quad_term;
             }
@@ -236,7 +255,15 @@ impl BayesREM {
         // Update sigma2_e
         let residuals = &self.y - &fitted;
         let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
-        self.sigma2_e = sse / (self.n as f64);
+
+        // Add tr(PEV) if using PEV correction
+        let sse_corrected = if self.use_pev {
+            sse + self.tr_pev_u
+        } else {
+            sse
+        };
+        
+        self.sigma2_e = sse_corrected / (self.n as f64);
         
         // 3. Update sigma2_k
         for k in 1..4 {
