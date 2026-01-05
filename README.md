@@ -339,7 +339,8 @@ library(masbayes)
 
 # Check available functions
 ls("package:masbayes")
-# [1] "construct_wah_matrix"  "run_bayesa_mcmc"  "run_bayesr_mcmc"
+?construct_wah_matrix()
+#[1] "construct_wah_matrix"  "run_bayesa_mcmc"  "run_bayesr_mcmc"
 ```
 
 ---
