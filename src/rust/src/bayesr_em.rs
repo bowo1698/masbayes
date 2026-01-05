@@ -212,12 +212,20 @@ impl BayesREM {
         // Update beta using mixture of components
         for j in 0..self.n_alleles {
             let l_j = self.wtw_diag[j];
+
+            let l_j_adj = if self.use_pev {
+                let pev_j = self.tr_zizi_pev[j];
+                let adjustment = pev_j * inv_sigma2_e;
+                (l_j - adjustment).max(1e-10)
+            } else {
+                l_j
+            };
             
             let mut residuals_prod = self.wty[j];
             for i in 0..self.n {
                 residuals_prod -= self.w[[i, j]] * fitted[i];
             }
-            let rhs = residuals_prod + l_j * self.beta[j];
+            let rhs = residuals_prod + l_j_adj * self.beta[j];
             
             // Compute mixture posterior: E[β] = Σₖ P(γ=k) E[β|γ=k]
             let mut beta_new = 0.0;
@@ -231,7 +239,7 @@ impl BayesREM {
                 } else {
                     let sigma2_k = self.sigma2_vec[k];
                     if sigma2_k > 1e-10 {
-                        let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k;
+                        let inv_var_post = l_j_adj * inv_sigma2_e + 1.0 / sigma2_k;
                         let var_post = 1.0 / inv_var_post;
                         let mu_post = rhs * inv_sigma2_e * var_post;
                         
@@ -275,6 +283,16 @@ impl BayesREM {
                 if prob_k < 1e-8 { continue; }
                 
                 let l_j = self.wtw_diag[j];
+
+                // Apply PEV adjustment
+                let l_j_adj = if self.use_pev {
+                    let pev_j = self.tr_zizi_pev[j];
+                    let adjustment = pev_j / self.sigma2_e;
+                    (l_j - adjustment).max(1e-10)
+                } else {
+                    l_j
+                };
+
                 let sigma2_k = self.sigma2_vec[k];
                 if sigma2_k < 1e-10 { continue; }
                 
@@ -283,9 +301,9 @@ impl BayesREM {
                 for i in 0..self.n {
                     residuals_prod -= self.w[[i, j]] * fitted[i];
                 }
-                let rhs = residuals_prod + l_j * self.beta[j];
+                let rhs = residuals_prod + l_j_adj * self.beta[j]; 
                 
-                let var_post_k = 1.0 / (l_j / self.sigma2_e + 1.0 / sigma2_k);
+                let var_post_k = 1.0 / (l_j_adj / self.sigma2_e + 1.0 / sigma2_k);
                 let mu_post_k = rhs / self.sigma2_e * var_post_k;
                 
                 // E[β²] = μ² + σ²
