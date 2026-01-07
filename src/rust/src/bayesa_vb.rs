@@ -1,6 +1,7 @@
 // bayesa_vb.rs
 use ndarray::{Array1, Array2};
 use crate::types::BayesAResults;
+use crate::utils;
 
 pub struct BayesAVB {
     w: Array2<f64>,
@@ -118,7 +119,7 @@ impl BayesAVB {
         
         while iter < self.max_iter && !converged {
             // Update q(beta_j)
-            let fitted = self.w.dot(&self.mu);
+            let mut fitted = self.w.dot(&self.mu);
             let inv_sigma2_e = 1.0 / self.sigma2_e;
             
             for j in 0..self.n_alleles {
@@ -132,10 +133,10 @@ impl BayesAVB {
                 
                 let e_inv_sigma2_j = self.a_j[j] / self.b_j[j];
                 self.tau[j] = l_j * inv_sigma2_e + e_inv_sigma2_j;
-                self.mu[j] = rhs * inv_sigma2_e / self.tau[j];
                 
                 // Update fitted
                 let mu_old = fitted[0];
+                self.mu[j] = rhs * inv_sigma2_e / self.tau[j];
                 for i in 0..self.n {
                     fitted[i] += self.w[[i, j]] * (self.mu[j] - mu_old);
                 }

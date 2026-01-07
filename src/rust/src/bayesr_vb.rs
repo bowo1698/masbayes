@@ -1,7 +1,6 @@
 // bayesr_vb.rs
 use ndarray::{Array1, Array2};
 use crate::types::BayesRResults;
-use crate::utils;
 
 pub struct BayesRVB {
     // Data
@@ -146,7 +145,7 @@ impl BayesRVB {
             // CAVI updates
             
             // 1. Update q(beta_j, gamma_j)
-            let fitted = self.w.dot(&self.mu);
+            let mut fitted = self.w.dot(&self.mu);
             let inv_sigma2_e = 1.0 / self.sigma2_e;
             
             for j in 0..self.n_alleles {
@@ -157,7 +156,8 @@ impl BayesRVB {
                 for i in 0..self.n {
                     residuals_prod -= self.w[[i, j]] * fitted[i];
                 }
-                let rhs = residuals_prod + l_j * self.mu[j];
+                let mu_old = self.mu[j]; 
+                let rhs = residuals_prod + l_j * mu_old; 
                 
                 // Update omega_jk (variational component probabilities)
                 let mut log_omega = [0.0; 4];
@@ -205,7 +205,6 @@ impl BayesRVB {
                 self.tau[j] = if sum_tau_inv > 1e-10 { 1.0 / sum_tau_inv } else { 1e10 };
                 
                 // Update fitted values
-                let mu_old = fitted[0];
                 for i in 0..self.n {
                     fitted[i] += self.w[[i, j]] * (self.mu[j] - mu_old);
                 }

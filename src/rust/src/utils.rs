@@ -119,7 +119,7 @@ pub fn lgamma(x: f64) -> f64 {
     tmp -= (x + 0.5) * tmp.ln();
     
     let mut ser = 1.000000000190015;
-    for (j, &coeff) in COEFFS.iter().enumerate() {
+    for (_j, &coeff) in COEFFS.iter().enumerate() {
         y += 1.0;
         ser += coeff / y;
     }
