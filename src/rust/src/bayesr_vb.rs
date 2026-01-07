@@ -57,7 +57,6 @@ impl BayesRVB {
             omega[[j, 3]] = 0.005;
         }
         let sigma2_e = sigma2_e_init.max(0.01);
-        }
         
         Self {
             w,
