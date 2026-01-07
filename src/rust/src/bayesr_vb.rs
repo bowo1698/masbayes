@@ -71,7 +71,7 @@ impl BayesRVB {
             omega,
             pi_vec: Array1::from_vec(pi_vec),
             sigma2_vec: Array1::from_vec(sigma2_vec),
-            sigma2_e: sigma2_e_init,
+            sigma2_e,
             max_iter,
             tol,
             fold_id,
@@ -182,10 +182,11 @@ impl BayesRVB {
                         let tau_jk = l_j * inv_sigma2_e + 1.0 / sigma2_k;
                         let mu_jk = rhs * inv_sigma2_e / tau_jk;
                         
-                        log_omega[k] = self.pi_vec[k].ln() 
+                        log_omega[k] = (self.pi_vec[k].ln() 
                             - 0.5 * sigma2_k.ln()
                             + 0.5 * tau_jk.ln()
-                    }       + 0.5 * mu_jk.powi(2) * tau_jk * temperature; 
+                            + 0.5 * mu_jk.powi(2) * tau_jk) * temperature; 
+                    } 
                 }
                 
                 // Normalize using log-sum-exp
