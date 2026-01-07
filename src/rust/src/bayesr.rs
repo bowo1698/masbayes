@@ -39,6 +39,7 @@ pub struct BayesRRunner {
     
     // RNG
     rng: Pcg64,
+    base_seed: u64, 
     
     // Current state
     beta: Array1<f64>,
@@ -107,6 +108,7 @@ impl BayesRRunner {
             n_thin,
             n_threads,
             rng,
+            base_seed: seed,
             beta,
             gamma: Array1::<usize>::zeros(n_alleles),
             sigma2_e: sigma2_e_init,
@@ -147,13 +149,20 @@ impl BayesRRunner {
 
             if self.n_threads > 1 {
                 // PARALLEL 
+                let base_seed = self.base_seed;
                 let beta_gamma_new: Vec<(f64, usize)> = (0..self.n_alleles)
                     .into_par_iter()
                     .map(|j| {
+                        // Deterministic seed: unique per (iteration, marker)
+                        let marker_seed = base_seed
+                            .wrapping_mul(6364136223846793005_u64)  // LCG constant
+                            .wrapping_add(iter as u64)
+                            .wrapping_add((j as u64) << 32);
+                        let mut marker_rng = Pcg64::seed_from_u64(marker_seed);
                         let beta_old = self.beta[j];
                         let l_j = self.wtw_diag[j];
                         
-                        // Compute residual correlation using CURRENT fitted
+                        // Compute residual correlation using current fitted
                         let mut residuals_prod = self.wty[j];
                         for i in 0..self.n {
                             residuals_prod -= self.w[[i, j]] * fitted[i];
@@ -180,7 +189,6 @@ impl BayesRRunner {
                         }
                         
                         // Sample component using thread-local RNG
-                        let mut thread_rng = rand::thread_rng();
                         let max_log = log_probs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
                         let mut probs = [0.0; 4];
                         let mut sum_probs = 0.0;
@@ -193,7 +201,7 @@ impl BayesRRunner {
                             probs[k] /= sum_probs;
                         }
                         
-                        let u: f64 = thread_rng.gen();
+                        let u: f64 = marker_rng.gen();
                         let mut cumsum = 0.0;
                         let mut new_gamma_idx = 0;
                         for k in 0..4 {
@@ -212,7 +220,7 @@ impl BayesRRunner {
                             let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k_chosen;
                             let var_post = 1.0 / inv_var_post;
                             let mu_post = rhs * inv_sigma2_e * var_post;
-                            rnorm(&mut thread_rng, mu_post, var_post.sqrt())
+                            rnorm(&mut marker_rng, mu_post, var_post.sqrt())
                         };
                         
                         (new_beta, new_gamma_idx)

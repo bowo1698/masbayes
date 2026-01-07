@@ -32,6 +32,7 @@ pub struct BayesARunner {
     
     // RNG
     rng: Pcg64,
+    base_seed: u64,
     
     // Current state
     beta_a: Array1<f64>,
@@ -87,6 +88,7 @@ impl BayesARunner {
             n_thin,
             n_threads,
             rng,
+            base_seed: seed,
             beta_a: Array1::<f64>::zeros(n_alleles),
             sigma2_j: Array1::<f64>::from_elem(n_alleles, s_squared),
             sigma2_e_a: sigma2_e_init,
@@ -119,9 +121,16 @@ impl BayesARunner {
 
             if self.n_threads > 1 {
                 // PARALLEL VERSION
+                let base_seed = self.base_seed; 
                 let beta_new: Vec<f64> = (0..self.n_alleles)
                     .into_par_iter()
                     .map(|j| {
+                        // Deterministic seed: unique per (iteration, marker)
+                        let marker_seed = base_seed
+                            .wrapping_mul(6364136223846793005_u64)
+                            .wrapping_add(iter as u64)
+                            .wrapping_add((j as u64) << 32);
+                        let mut marker_rng = Pcg64::seed_from_u64(marker_seed);
                         let l_j = self.wtw_diag[j];
                         
                         let mut residuals_prod = self.wty[j];
@@ -135,8 +144,7 @@ impl BayesARunner {
                         let var_post = 1.0 / inv_var_post;
                         let mu_post = rhs * inv_sigma2_e * var_post;
                         
-                        let mut thread_rng = rand::thread_rng();
-                        rnorm(&mut thread_rng, mu_post, var_post.sqrt())
+                        rnorm(&mut marker_rng, mu_post, var_post.sqrt())
                     })
                     .collect();
                 
