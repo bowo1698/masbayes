@@ -5,7 +5,7 @@ use rand_pcg::Pcg64;
 use crate::utils::{rinvgamma, rdirichlet, rnorm, tabulate};
 use crate::types::BayesRResults;
 use crate::utils;
-
+//
 pub struct BayesRRunner {
     // Data
     w: Array2<f64>,
