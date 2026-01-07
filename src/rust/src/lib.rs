@@ -249,7 +249,6 @@ fn run_bayesr_mcmc(
     sigma2_ah: f64,
     prior_params: List,
     mcmc_params: List,
-    n_threads: Nullable<i32>, 
     fold_id: i32,
 ) -> List {
     
@@ -258,11 +257,6 @@ fn run_bayesr_mcmc(
     let n_burn = mcmc_params.dollar("n_burn").unwrap().as_integer().unwrap() as usize;
     let n_thin = mcmc_params.dollar("n_thin").unwrap().as_integer().unwrap() as usize;
     let seed = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
-
-    let n_threads = match n_threads {
-        NotNull(n) => Some(n as usize),
-        Null => None,
-    };
     
     // Extract prior parameters
     let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
@@ -294,7 +288,6 @@ fn run_bayesr_mcmc(
         n_iter,
         n_burn,
         n_thin,
-        n_threads,
         seed,
         fold_id,
     );
@@ -337,7 +330,6 @@ fn run_bayesa_mcmc(
     sigma2_e_init: f64,
     prior_params: List,
     mcmc_params: List,
-    n_threads: Nullable<i32>, 
     fold_id: i32,
 ) -> List {
     // Extract MCMC parameters
@@ -345,11 +337,6 @@ fn run_bayesa_mcmc(
     let n_burn = mcmc_params.dollar("n_burn").unwrap().as_integer().unwrap() as usize;
     let n_thin = mcmc_params.dollar("n_thin").unwrap().as_integer().unwrap() as usize;
     let seed = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
-
-    let n_threads = match n_threads {
-        NotNull(n) => Some(n as usize),
-        Null => None,
-    };
     
     // Extract prior parameters
     let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
@@ -372,7 +359,6 @@ fn run_bayesa_mcmc(
         n_iter,
         n_burn,
         n_thin,
-        n_threads, 
         seed,
         fold_id,
     );
