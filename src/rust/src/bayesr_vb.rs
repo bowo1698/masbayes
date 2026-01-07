@@ -50,9 +50,13 @@ impl BayesRVB {
         let tau = Array1::<f64>::from_elem(n_alleles, 1.0);
         let mut omega = Array2::<f64>::zeros((n_alleles, 4));
         for j in 0..n_alleles {
-            for k in 0..4 {
-                omega[[j, k]] = pi_vec[k];
-            }
+            // Start with most mass on zero component
+            omega[[j, 0]] = 0.95;
+            omega[[j, 1]] = 0.03;
+            omega[[j, 2]] = 0.015;
+            omega[[j, 3]] = 0.005;
+        }
+        let sigma2_e = sigma2_e_init.max(0.01);
         }
         
         Self {
@@ -142,6 +146,13 @@ impl BayesRVB {
         let mut sigma2_trajectory = Vec::new();
         
         while iter < self.max_iter && !converged {
+            // Add temperature annealing
+            let temperature = if iter < 50 {
+                2.0 - (iter as f64 / 50.0)  // Anneal from 2.0 to 1.0
+            } else {
+                1.0
+            };
+
             // CAVI updates
             
             // 1. Update q(beta_j, gamma_j)
@@ -165,7 +176,7 @@ impl BayesRVB {
                 for k in 0..4 {
                     if k == 0 {
                         // Zero component
-                        log_omega[k] = self.pi_vec[k].ln();
+                        log_omega[k] = self.pi_vec[k].ln() * temperature;
                     } else {
                         let sigma2_k = self.sigma2_vec[k];
                         let tau_jk = l_j * inv_sigma2_e + 1.0 / sigma2_k;
@@ -174,8 +185,7 @@ impl BayesRVB {
                         log_omega[k] = self.pi_vec[k].ln() 
                             - 0.5 * sigma2_k.ln()
                             + 0.5 * tau_jk.ln()
-                            + 0.5 * mu_jk.powi(2) * tau_jk;
-                    }
+                    }       + 0.5 * mu_jk.powi(2) * tau_jk * temperature; 
                 }
                 
                 // Normalize using log-sum-exp
@@ -224,7 +234,13 @@ impl BayesRVB {
             // 3. Update mixture parameters (M-step)
             for k in 0..4 {
                 let n_k: f64 = (0..self.n_alleles).map(|j| self.omega[[j, k]]).sum();
-                self.pi_vec[k] = (n_k + 1.0) / (self.n_alleles as f64 + 4.0);
+                // Add stronger Dirichlet prior (α₀ = 10 instead of 1)
+                let alpha_k = if k == 0 { 
+                    10.0  // Strong prior for zero component
+                } else {
+                    1.0
+                };
+                self.pi_vec[k] = (n_k + alpha_k) / (self.n_alleles as f64 + 13.0);  // sum(α) = 13
             }
             
             // Update variance components for non-zero components
@@ -234,13 +250,18 @@ impl BayesRVB {
                 
                 for j in 0..self.n_alleles {
                     let weight = self.omega[[j, k]];
-                    numerator += weight * (self.mu[j].powi(2) + 1.0 / self.tau[j]);
-                    denominator += weight;
+                    if weight > 1e-6 {  // Only count meaningful weights
+                        numerator += weight * (self.mu[j].powi(2) + 1.0 / self.tau[j]);
+                        denominator += weight;
+                    }
                 }
                 
-                if denominator > 1e-6 {
+                if denominator > 0.1 { 
                     self.sigma2_vec[k] = numerator / denominator;
-                    self.sigma2_vec[k] = self.sigma2_vec[k].max(1e-8);
+                    // Enforce hierarchy with bounds
+                    let min_var = if k == 1 { 1e-6 } else if k == 2 { 1e-5 } else { 1e-4 };
+                    let max_var = if k == 1 { 0.001 } else if k == 2 { 0.01 } else { 0.1 };
+                    self.sigma2_vec[k] = self.sigma2_vec[k].max(min_var).min(max_var);
                 }
             }
             

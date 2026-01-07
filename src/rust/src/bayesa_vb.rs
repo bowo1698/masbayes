@@ -156,7 +156,7 @@ impl BayesAVB {
                 .sum();
             
             self.sigma2_e = (sse + trace_term - 2.0 * self.wty.dot(&self.mu)) / (self.n as f64);
-            self.sigma2_e = self.sigma2_e.max(1e-6);
+            self.sigma2_e = self.sigma2_e.max(0.01).min(100.0);
             
             let elbo = self.compute_elbo();
             let elbo_change = (elbo - elbo_prev).abs() / (elbo_prev.abs() + 1e-6);
