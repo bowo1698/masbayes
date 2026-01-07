@@ -20,7 +20,6 @@ run_bayesa(
   mcmc_params = NULL,
   em_params = NULL,
   method = c("mcmc", "em"),
-  n_threads = NULL,
   fold_id = 0L
 )
 }
@@ -66,9 +65,6 @@ run_bayesa(
   }}
   
   \item{method}{Algorithm choice: "mcmc" for full Bayesian inference or "em" for fast EM}
-
-  \item{n_threads}{Integer. Number of parallel threads for MCMC (default: NULL for sequential). 
-    Ignored for EM method.}
 
   \item{fold_id}{Integer. Fold identifier for cross-validation (default: 0L).}
 }

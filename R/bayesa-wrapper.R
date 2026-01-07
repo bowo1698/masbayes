@@ -21,7 +21,6 @@ run_bayesa <- function(w, y, wtw_diag, wty,
                        mcmc_params = NULL,
                        em_params = NULL,
                        method = c("mcmc", "em"),
-                       n_threads = NULL,
                        fold_id = 0L) {
   
   method <- match.arg(method)
@@ -31,7 +30,7 @@ run_bayesa <- function(w, y, wtw_diag, wty,
       stop("For MCMC: prior_params and mcmc_params required")
     }
     run_bayesa_mcmc(w, y, wtw_diag, wty, nu, s_squared, 
-                    sigma2_e_init, prior_params, mcmc_params, n_threads, fold_id)
+                    sigma2_e_init, prior_params, mcmc_params, fold_id)
   } else {
     if (is.null(em_params)) {
       em_params <- list(max_iter = 500L, tol = 1e-6)

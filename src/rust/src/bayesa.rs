@@ -28,11 +28,9 @@ pub struct BayesARunner {
     n_iter: usize,
     n_burn: usize,
     n_thin: usize,
-    n_threads: usize,
     
     // RNG
     rng: Pcg64,
-    base_seed: u64,
     
     // Current state
     beta_a: Array1<f64>,
@@ -55,7 +53,6 @@ impl BayesARunner {
         n_iter: usize,
         n_burn: usize,
         n_thin: usize,
-        n_threads: Option<usize>,
         seed: u64,
         fold_id: i32,
     ) -> Self {
@@ -63,14 +60,6 @@ impl BayesARunner {
         let n_alleles = w.ncols();
         
         let rng = Pcg64::seed_from_u64(seed);
-
-        let n_threads = n_threads.unwrap_or(1);
-        if n_threads > 1 {
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(n_threads)
-                .build_global()
-                .ok();
-        }
         
         Self {
             w,
@@ -86,9 +75,7 @@ impl BayesARunner {
             n_iter,
             n_burn,
             n_thin,
-            n_threads,
             rng,
-            base_seed: seed,
             beta_a: Array1::<f64>::zeros(n_alleles),
             sigma2_j: Array1::<f64>::from_elem(n_alleles, s_squared),
             sigma2_e_a: sigma2_e_init,
@@ -117,72 +104,29 @@ impl BayesARunner {
             let mut fitted = self.w.dot(&self.beta_a);
             let inv_sigma2_e = 1.0 / self.sigma2_e_a;
             
-            use rayon::prelude::*;
-
-            if self.n_threads > 1 {
-                // PARALLEL VERSION
-                let base_seed = self.base_seed; 
-                let sigma2_e_local = self.sigma2_e_a;  
-                let sigma2_j_local = self.sigma2_j.to_owned();  
-                let beta_a_local = self.beta_a.to_owned();  
-                let fitted_local = fitted.to_owned();
-                let beta_new: Vec<f64> = (0..self.n_alleles)
-                    .into_par_iter()
-                    .map(|j| {
-                        // Deterministic seed: unique per (iteration, marker)
-                        let marker_seed = base_seed
-                            .wrapping_mul(6364136223846793005_u64)
-                            .wrapping_add(iter as u64)
-                            .wrapping_add((j as u64) << 32);
-                        let mut marker_rng = Pcg64::seed_from_u64(marker_seed);
-                        let l_j = self.wtw_diag[j];
-                        
-                        let mut residuals_prod = self.wty[j];
-                        for i in 0..self.n {
-                            residuals_prod -= self.w[[i, j]] * fitted_local[i];
-                        }
-                        let rhs = residuals_prod + l_j * beta_a_local[j];
-                        
-                        // Posterior distribution
-                        let inv_var_post = l_j / sigma2_e_local + 1.0 / sigma2_j_local[j];  
-                        let var_post = 1.0 / inv_var_post;
-                        let mu_post = rhs / sigma2_e_local * var_post;
-                        
-                        rnorm(&mut marker_rng, mu_post, var_post.sqrt())
-                    })
-                    .collect();
+            for j in 0..self.n_alleles {
+                let l_j = self.wtw_diag[j];
                 
-                // Update beta
-                self.beta_a = Array1::from_vec(beta_new);
+                // Compute residual correlation
+                let mut residuals_prod = self.wty[j];
+                for i in 0..self.n {
+                    residuals_prod -= self.w[[i, j]] * fitted[i];
+                }
+                let rhs = residuals_prod + l_j * self.beta_a[j];
                 
-                // Recompute fitted
-                fitted = self.w.dot(&self.beta_a);
-            } else {
-                 // SEQUENTIAL
-                 for j in 0..self.n_alleles {
-                    let l_j = self.wtw_diag[j];
-                    
-                    // Compute residual correlation
-                    let mut residuals_prod = self.wty[j];
+                // Posterior distribution
+                let inv_var_post = l_j * inv_sigma2_e + 1.0 / self.sigma2_j[j];
+                let var_post = 1.0 / inv_var_post;
+                let mu_post = rhs * inv_sigma2_e * var_post;
+                
+                let beta_old = self.beta_a[j];
+                self.beta_a[j] = rnorm(&mut self.rng, mu_post, var_post.sqrt());
+                
+                // Incremental update
+                if self.beta_a[j] != beta_old {
+                    let delta = self.beta_a[j] - beta_old;
                     for i in 0..self.n {
-                        residuals_prod -= self.w[[i, j]] * fitted[i];
-                    }
-                    let rhs = residuals_prod + l_j * self.beta_a[j];
-                    
-                    // Posterior distribution
-                    let inv_var_post = l_j * inv_sigma2_e + 1.0 / self.sigma2_j[j];
-                    let var_post = 1.0 / inv_var_post;
-                    let mu_post = rhs * inv_sigma2_e * var_post;
-                    
-                    let beta_old = self.beta_a[j];
-                    self.beta_a[j] = rnorm(&mut self.rng, mu_post, var_post.sqrt());
-                    
-                    // Incremental update
-                    if self.beta_a[j] != beta_old {
-                        let delta = self.beta_a[j] - beta_old;
-                        for i in 0..self.n {
-                            fitted[i] += self.w[[i, j]] * delta;
-                        }
+                        fitted[i] += self.w[[i, j]] * delta;
                     }
                 }
             }
