@@ -20,6 +20,7 @@ run_bayesa(
   mcmc_params = NULL,
   em_params = NULL,
   method = c("mcmc", "em"),
+  n_threads = NULL,
   fold_id = 0L
 )
 }
