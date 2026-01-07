@@ -147,7 +147,7 @@ impl BayesRRunner {
 
             if self.n_threads > 1 {
                 // PARALLEL 
-                let beta_new: Vec<f64> = (0..self.n_alleles)
+                let beta_gamma_new: Vec<(f64, usize)> = (0..self.n_alleles)
                     .into_par_iter()
                     .map(|j| {
                         let beta_old = self.beta[j];
@@ -221,8 +221,8 @@ impl BayesRRunner {
                 
                 // Update state
                 for j in 0..self.n_alleles {
-                    self.beta[j] = beta_new[j].0;
-                    self.gamma[j] = beta_new[j].1;
+                    self.beta[j] = beta_gamma_new[j].0;
+                    self.gamma[j] = beta_gamma_new[j].1;
                 }
                 
                 // Recompute fitted values (BLAS optimized)
