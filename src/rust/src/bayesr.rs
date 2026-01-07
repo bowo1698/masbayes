@@ -35,6 +35,7 @@ pub struct BayesRRunner {
     n_iter: usize,
     n_burn: usize,
     n_thin: usize,
+    n_threads: usize,
     
     // RNG
     rng: Pcg64,
@@ -63,6 +64,7 @@ impl BayesRRunner {
         n_iter: usize,
         n_burn: usize,
         n_thin: usize,
+        n_threads: Option<usize>,
         seed: u64,
         fold_id: i32,
     ) -> Self {
@@ -77,6 +79,14 @@ impl BayesRRunner {
         let mut init_rng = Pcg64::seed_from_u64(seed);
         for i in 0..n_alleles {
             beta[i] = rnorm(&mut init_rng, 0.0, init_sd);
+        }
+
+        let n_threads = n_threads.unwrap_or(1);
+        if n_threads > 1 {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(n_threads)
+                .build_global()
+                .ok();
         }
         
         Self {
@@ -95,6 +105,7 @@ impl BayesRRunner {
             n_iter,
             n_burn,
             n_thin,
+            n_threads,
             rng,
             beta,
             gamma: Array1::<usize>::zeros(n_alleles),
@@ -132,84 +143,171 @@ impl BayesRRunner {
             let mut fitted = self.w.dot(&self.beta);
             let inv_sigma2_e = 1.0 / self.sigma2_e;
             
-            for j in 0..self.n_alleles {
-                let beta_old = self.beta[j];
-                let l_j = self.wtw_diag[j];
+            use rayon::prelude::*;
+
+            if self.n_threads > 1 {
+                // PARALLEL 
+                let beta_new: Vec<f64> = (0..self.n_alleles)
+                    .into_par_iter()
+                    .map(|j| {
+                        let beta_old = self.beta[j];
+                        let l_j = self.wtw_diag[j];
+                        
+                        // Compute residual correlation using CURRENT fitted
+                        let mut residuals_prod = self.wty[j];
+                        for i in 0..self.n {
+                            residuals_prod -= self.w[[i, j]] * fitted[i];
+                        }
+                        let rhs = residuals_prod + l_j * beta_old;
+                        
+                        // Marginalized log-probabilities
+                        let mut log_probs = [0.0; 4];
+                        log_probs[0] = self.pi_vec[0].ln();
+                        
+                        for k in 1..4 {
+                            let sigma2_k = self.sigma2_vec[k];
+                            if sigma2_k < 1e-10 {
+                                log_probs[k] = f64::NEG_INFINITY;
+                                continue;
+                            }
+                            
+                            let ratio_var = sigma2_k * inv_sigma2_e;
+                            let log_det = (1.0 + l_j * ratio_var).ln();
+                            let quad_term = (rhs.powi(2) * sigma2_k) / 
+                                        (self.sigma2_e * (self.sigma2_e + l_j * sigma2_k));
+                            
+                            log_probs[k] = self.pi_vec[k].ln() - 0.5 * log_det + 0.5 * quad_term;
+                        }
+                        
+                        // Sample component using thread-local RNG
+                        let mut thread_rng = rand::thread_rng();
+                        let max_log = log_probs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                        let mut probs = [0.0; 4];
+                        let mut sum_probs = 0.0;
+                        
+                        for k in 0..4 {
+                            probs[k] = (log_probs[k] - max_log).exp();
+                            sum_probs += probs[k];
+                        }
+                        for k in 0..4 {
+                            probs[k] /= sum_probs;
+                        }
+                        
+                        let u: f64 = thread_rng.gen();
+                        let mut cumsum = 0.0;
+                        let mut new_gamma_idx = 0;
+                        for k in 0..4 {
+                            cumsum += probs[k];
+                            if u < cumsum {
+                                new_gamma_idx = k;
+                                break;
+                            }
+                        }
+                        
+                        // Sample beta
+                        let sigma2_k_chosen = self.sigma2_vec[new_gamma_idx];
+                        let new_beta = if sigma2_k_chosen < 1e-10 {
+                            0.0
+                        } else {
+                            let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k_chosen;
+                            let var_post = 1.0 / inv_var_post;
+                            let mu_post = rhs * inv_sigma2_e * var_post;
+                            rnorm(&mut thread_rng, mu_post, var_post.sqrt())
+                        };
+                        
+                        (new_beta, new_gamma_idx)
+                    })
+                    .collect();
                 
-                // Compute residual correlation
-                let mut residuals_prod = self.wty[j];
-                for i in 0..self.n {
-                    residuals_prod -= self.w[[i, j]] * fitted[i];
+                // Update state
+                for j in 0..self.n_alleles {
+                    self.beta[j] = beta_new[j].0;
+                    self.gamma[j] = beta_new[j].1;
                 }
-                let rhs = residuals_prod + l_j * beta_old;
                 
-                // Marginalized log-probabilities for each component
-                let mut log_probs = [0.0; 4];
-                log_probs[0] = self.pi_vec[0].ln(); // Zero component
-                
-                for k in 1..4 {
-                    let sigma2_k = self.sigma2_vec[k];
+                // Recompute fitted values (BLAS optimized)
+                fitted = self.w.dot(&self.beta);
+            } else {
+                // SEQUENTIAL
+                for j in 0..self.n_alleles {
+                    let beta_old = self.beta[j];
+                    let l_j = self.wtw_diag[j];
                     
-                    if sigma2_k < 1e-10 {
-                        log_probs[k] = f64::NEG_INFINITY;
-                        continue;
-                    }
-                    
-                    let ratio_var = sigma2_k * inv_sigma2_e;
-                    let log_det = (1.0 + l_j * ratio_var).ln();
-                    let quad_term = (rhs.powi(2) * sigma2_k) / 
-                                   (self.sigma2_e * (self.sigma2_e + l_j * sigma2_k));
-                    
-                    log_probs[k] = self.pi_vec[k].ln() - 0.5 * log_det + 0.5 * quad_term;
-                }
-                
-                // Sample component using log-sum-exp trick
-                let max_log = log_probs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-                let mut probs = [0.0; 4];
-                let mut sum_probs = 0.0;
-                
-                for k in 0..4 {
-                    probs[k] = (log_probs[k] - max_log).exp();
-                    sum_probs += probs[k];
-                }
-                
-                for k in 0..4 {
-                    probs[k] /= sum_probs;
-                }
-                
-                // Sample component
-                let u: f64 = self.rng.gen();
-                let mut cumsum = 0.0;
-                let mut new_gamma_idx = 0;
-                
-                for k in 0..4 {
-                    cumsum += probs[k];
-                    if u < cumsum {
-                        new_gamma_idx = k;
-                        break;
-                    }
-                }
-                
-                self.gamma[j] = new_gamma_idx;
-                
-                // Sample beta conditional on component
-                let sigma2_k_chosen = self.sigma2_vec[new_gamma_idx];
-                
-                if sigma2_k_chosen < 1e-10 {
-                    self.beta[j] = 0.0;
-                } else {
-                    let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k_chosen;
-                    let var_post = 1.0 / inv_var_post;
-                    let mu_post = rhs * inv_sigma2_e * var_post;
-                    
-                    self.beta[j] = rnorm(&mut self.rng, mu_post, var_post.sqrt());
-                }
-                
-                // Incremental update of fitted values
-                if self.beta[j] != beta_old {
-                    let delta = self.beta[j] - beta_old;
+                    // Compute residual correlation
+                    let mut residuals_prod = self.wty[j];
                     for i in 0..self.n {
-                        fitted[i] += self.w[[i, j]] * delta;
+                        residuals_prod -= self.w[[i, j]] * fitted[i];
+                    }
+                    let rhs = residuals_prod + l_j * beta_old;
+                    
+                    // Marginalized log-probabilities for each component
+                    let mut log_probs = [0.0; 4];
+                    log_probs[0] = self.pi_vec[0].ln(); // Zero component
+                    
+                    for k in 1..4 {
+                        let sigma2_k = self.sigma2_vec[k];
+                        
+                        if sigma2_k < 1e-10 {
+                            log_probs[k] = f64::NEG_INFINITY;
+                            continue;
+                        }
+                        
+                        let ratio_var = sigma2_k * inv_sigma2_e;
+                        let log_det = (1.0 + l_j * ratio_var).ln();
+                        let quad_term = (rhs.powi(2) * sigma2_k) / 
+                                    (self.sigma2_e * (self.sigma2_e + l_j * sigma2_k));
+                        
+                        log_probs[k] = self.pi_vec[k].ln() - 0.5 * log_det + 0.5 * quad_term;
+                    }
+                    
+                    // Sample component using log-sum-exp trick
+                    let max_log = log_probs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                    let mut probs = [0.0; 4];
+                    let mut sum_probs = 0.0;
+                    
+                    for k in 0..4 {
+                        probs[k] = (log_probs[k] - max_log).exp();
+                        sum_probs += probs[k];
+                    }
+                    
+                    for k in 0..4 {
+                        probs[k] /= sum_probs;
+                    }
+                    
+                    // Sample component
+                    let u: f64 = self.rng.gen();
+                    let mut cumsum = 0.0;
+                    let mut new_gamma_idx = 0;
+                    
+                    for k in 0..4 {
+                        cumsum += probs[k];
+                        if u < cumsum {
+                            new_gamma_idx = k;
+                            break;
+                        }
+                    }
+                    
+                    self.gamma[j] = new_gamma_idx;
+                    
+                    // Sample beta conditional on component
+                    let sigma2_k_chosen = self.sigma2_vec[new_gamma_idx];
+                    
+                    if sigma2_k_chosen < 1e-10 {
+                        self.beta[j] = 0.0;
+                    } else {
+                        let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k_chosen;
+                        let var_post = 1.0 / inv_var_post;
+                        let mu_post = rhs * inv_sigma2_e * var_post;
+                        
+                        self.beta[j] = rnorm(&mut self.rng, mu_post, var_post.sqrt());
+                    }
+                    
+                    // Incremental update of fitted values
+                    if self.beta[j] != beta_old {
+                        let delta = self.beta[j] - beta_old;
+                        for i in 0..self.n {
+                            fitted[i] += self.w[[i, j]] * delta;
+                        }
                     }
                 }
             }

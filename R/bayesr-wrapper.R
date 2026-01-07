@@ -23,6 +23,7 @@ run_bayesr <- function(w, y, wtw_diag, wty,
                        mcmc_params = NULL,
                        em_params = NULL,
                        method = c("mcmc", "em"),
+                       n_threads = NULL,
                        fold_id = 0L) {
   
   method <- match.arg(method)
@@ -33,7 +34,7 @@ run_bayesr <- function(w, y, wtw_diag, wty,
     }
     run_bayesr_mcmc(w, y, wtw_diag, wty, pi_vec, sigma2_vec, 
                     sigma2_e_init, sigma2_ah, prior_params, 
-                    mcmc_params, fold_id)
+                    mcmc_params, n_threads, fold_id)
   } else {
     if (is.null(em_params)) {
       em_params <- list(max_iter = 500L, tol = 1e-6)

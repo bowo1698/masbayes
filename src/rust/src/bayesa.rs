@@ -28,6 +28,7 @@ pub struct BayesARunner {
     n_iter: usize,
     n_burn: usize,
     n_thin: usize,
+    n_threads: usize,
     
     // RNG
     rng: Pcg64,
@@ -53,6 +54,7 @@ impl BayesARunner {
         n_iter: usize,
         n_burn: usize,
         n_thin: usize,
+        n_threads: Option<usize>,
         seed: u64,
         fold_id: i32,
     ) -> Self {
@@ -60,6 +62,14 @@ impl BayesARunner {
         let n_alleles = w.ncols();
         
         let rng = Pcg64::seed_from_u64(seed);
+
+        let n_threads = n_threads.unwrap_or(1);
+        if n_threads > 1 {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(n_threads)
+                .build_global()
+                .ok();
+        }
         
         Self {
             w,
@@ -75,6 +85,7 @@ impl BayesARunner {
             n_iter,
             n_burn,
             n_thin,
+            n_threads,
             rng,
             beta_a: Array1::<f64>::zeros(n_alleles),
             sigma2_j: Array1::<f64>::from_elem(n_alleles, s_squared),
@@ -104,29 +115,62 @@ impl BayesARunner {
             let mut fitted = self.w.dot(&self.beta_a);
             let inv_sigma2_e = 1.0 / self.sigma2_e_a;
             
-            for j in 0..self.n_alleles {
-                let l_j = self.wtw_diag[j];
+            use rayon::prelude::*;
+
+            if self.n_threads > 1 {
+                // PARALLEL VERSION
+                let beta_new: Vec<f64> = (0..self.n_alleles)
+                    .into_par_iter()
+                    .map(|j| {
+                        let l_j = self.wtw_diag[j];
+                        
+                        let mut residuals_prod = self.wty[j];
+                        for i in 0..self.n {
+                            residuals_prod -= self.w[[i, j]] * fitted[i];
+                        }
+                        let rhs = residuals_prod + l_j * self.beta_a[j];
+                        
+                        // Posterior distribution
+                        let inv_var_post = l_j * inv_sigma2_e + 1.0 / self.sigma2_j[j];
+                        let var_post = 1.0 / inv_var_post;
+                        let mu_post = rhs * inv_sigma2_e * var_post;
+                        
+                        let mut thread_rng = rand::thread_rng();
+                        rnorm(&mut thread_rng, mu_post, var_post.sqrt())
+                    })
+                    .collect();
                 
-                // Compute residual correlation
-                let mut residuals_prod = self.wty[j];
-                for i in 0..self.n {
-                    residuals_prod -= self.w[[i, j]] * fitted[i];
-                }
-                let rhs = residuals_prod + l_j * self.beta_a[j];
+                // Update beta
+                self.beta_a = Array1::from_vec(beta_new);
                 
-                // Posterior distribution
-                let inv_var_post = l_j * inv_sigma2_e + 1.0 / self.sigma2_j[j];
-                let var_post = 1.0 / inv_var_post;
-                let mu_post = rhs * inv_sigma2_e * var_post;
-                
-                let beta_old = self.beta_a[j];
-                self.beta_a[j] = rnorm(&mut self.rng, mu_post, var_post.sqrt());
-                
-                // Incremental update
-                if self.beta_a[j] != beta_old {
-                    let delta = self.beta_a[j] - beta_old;
+                // Recompute fitted
+                fitted = self.w.dot(&self.beta_a);
+            } else {
+                 // SEQUENTIAL
+                 for j in 0..self.n_alleles {
+                    let l_j = self.wtw_diag[j];
+                    
+                    // Compute residual correlation
+                    let mut residuals_prod = self.wty[j];
                     for i in 0..self.n {
-                        fitted[i] += self.w[[i, j]] * delta;
+                        residuals_prod -= self.w[[i, j]] * fitted[i];
+                    }
+                    let rhs = residuals_prod + l_j * self.beta_a[j];
+                    
+                    // Posterior distribution
+                    let inv_var_post = l_j * inv_sigma2_e + 1.0 / self.sigma2_j[j];
+                    let var_post = 1.0 / inv_var_post;
+                    let mu_post = rhs * inv_sigma2_e * var_post;
+                    
+                    let beta_old = self.beta_a[j];
+                    self.beta_a[j] = rnorm(&mut self.rng, mu_post, var_post.sqrt());
+                    
+                    // Incremental update
+                    if self.beta_a[j] != beta_old {
+                        let delta = self.beta_a[j] - beta_old;
+                        for i in 0..self.n {
+                            fitted[i] += self.w[[i, j]] * delta;
+                        }
                     }
                 }
             }
