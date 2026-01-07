@@ -20,22 +20,29 @@ run_bayesa <- function(w, y, wtw_diag, wty,
                        prior_params = NULL,
                        mcmc_params = NULL,
                        em_params = NULL,
-                       method = c("mcmc", "em"),
+                       vb_params = NULL,
+                       method = c("mcmc", "em", "vb"),
                        fold_id = 0L) {
   
   method <- match.arg(method)
-  
+
   if (method == "mcmc") {
     if (is.null(prior_params) || is.null(mcmc_params)) {
       stop("For MCMC: prior_params and mcmc_params required")
     }
     run_bayesa_mcmc(w, y, wtw_diag, wty, nu, s_squared, 
                     sigma2_e_init, prior_params, mcmc_params, fold_id)
-  } else {
+  } else if (method == "em") {
     if (is.null(em_params)) {
       em_params <- list(max_iter = 500L, tol = 1e-6)
     }
     run_bayesa_em(w, y, wtw_diag, wty, nu, s_squared, 
                   sigma2_e_init, em_params, fold_id)
+  } else {
+    if (is.null(vb_params)) {
+      vb_params <- list(max_iter = 500L, tol = 1e-6)
+    }
+    run_bayesa_vb(w, y, wtw_diag, wty, nu, s_squared,
+                  sigma2_e_init, vb_params, fold_id)
   }
 }
