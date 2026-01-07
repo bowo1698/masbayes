@@ -122,6 +122,10 @@ impl BayesARunner {
             if self.n_threads > 1 {
                 // PARALLEL VERSION
                 let base_seed = self.base_seed; 
+                let sigma2_e_local = self.sigma2_e_a;  
+                let sigma2_j_local = self.sigma2_j.to_owned();  
+                let beta_a_local = self.beta_a.to_owned();  
+                let fitted_local = fitted.to_owned();
                 let beta_new: Vec<f64> = (0..self.n_alleles)
                     .into_par_iter()
                     .map(|j| {
@@ -135,14 +139,14 @@ impl BayesARunner {
                         
                         let mut residuals_prod = self.wty[j];
                         for i in 0..self.n {
-                            residuals_prod -= self.w[[i, j]] * fitted[i];
+                            residuals_prod -= self.w[[i, j]] * fitted_local[i];
                         }
-                        let rhs = residuals_prod + l_j * self.beta_a[j];
+                        let rhs = residuals_prod + l_j * beta_a_local[j];
                         
                         // Posterior distribution
-                        let inv_var_post = l_j * inv_sigma2_e + 1.0 / self.sigma2_j[j];
+                        let inv_var_post = l_j / sigma2_e_local + 1.0 / sigma2_j_local[j];  
                         let var_post = 1.0 / inv_var_post;
-                        let mu_post = rhs * inv_sigma2_e * var_post;
+                        let mu_post = rhs / sigma2_e_local * var_post;
                         
                         rnorm(&mut marker_rng, mu_post, var_post.sqrt())
                     })

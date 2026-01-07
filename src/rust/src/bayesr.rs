@@ -150,6 +150,11 @@ impl BayesRRunner {
             if self.n_threads > 1 {
                 // PARALLEL 
                 let base_seed = self.base_seed;
+                let sigma2_e_local = self.sigma2_e;  
+                let sigma2_vec_local = self.sigma2_vec.to_owned();  
+                let pi_vec_local = self.pi_vec.to_owned();  
+                let beta_local = self.beta.to_owned();  
+                let fitted_local = fitted.to_owned();  
                 let beta_gamma_new: Vec<(f64, usize)> = (0..self.n_alleles)
                     .into_par_iter()
                     .map(|j| {
@@ -159,33 +164,33 @@ impl BayesRRunner {
                             .wrapping_add(iter as u64)
                             .wrapping_add((j as u64) << 32);
                         let mut marker_rng = Pcg64::seed_from_u64(marker_seed);
-                        let beta_old = self.beta[j];
+                        let beta_old = beta_local[j];
                         let l_j = self.wtw_diag[j];
                         
                         // Compute residual correlation using current fitted
                         let mut residuals_prod = self.wty[j];
                         for i in 0..self.n {
-                            residuals_prod -= self.w[[i, j]] * fitted[i];
+                            residuals_prod -= self.w[[i, j]] * fitted_local[i];
                         }
                         let rhs = residuals_prod + l_j * beta_old;
                         
                         // Marginalized log-probabilities
                         let mut log_probs = [0.0; 4];
-                        log_probs[0] = self.pi_vec[0].ln();
+                        log_probs[0] = pi_vec_local[0].ln();
                         
                         for k in 1..4 {
-                            let sigma2_k = self.sigma2_vec[k];
+                            let sigma2_k = sigma2_vec_local[k]; 
                             if sigma2_k < 1e-10 {
                                 log_probs[k] = f64::NEG_INFINITY;
                                 continue;
                             }
                             
-                            let ratio_var = sigma2_k * inv_sigma2_e;
+                            let ratio_var = sigma2_k / sigma2_e_local;
                             let log_det = (1.0 + l_j * ratio_var).ln();
                             let quad_term = (rhs.powi(2) * sigma2_k) / 
-                                        (self.sigma2_e * (self.sigma2_e + l_j * sigma2_k));
+                                        (sigma2_e_local * (sigma2_e_local + l_j * sigma2_k));
                             
-                            log_probs[k] = self.pi_vec[k].ln() - 0.5 * log_det + 0.5 * quad_term;
+                            log_probs[k] = pi_vec_local[k].ln() - 0.5 * log_det + 0.5 * quad_term;
                         }
                         
                         // Sample component using thread-local RNG
@@ -213,13 +218,13 @@ impl BayesRRunner {
                         }
                         
                         // Sample beta
-                        let sigma2_k_chosen = self.sigma2_vec[new_gamma_idx];
+                        let sigma2_k_chosen = sigma2_vec_local[new_gamma_idx];
                         let new_beta = if sigma2_k_chosen < 1e-10 {
                             0.0
                         } else {
-                            let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k_chosen;
+                            let inv_var_post = l_j / sigma2_e_local + 1.0 / sigma2_k_chosen;
                             let var_post = 1.0 / inv_var_post;
-                            let mu_post = rhs * inv_sigma2_e * var_post;
+                            let mu_post = rhs / sigma2_e_local * var_post;
                             rnorm(&mut marker_rng, mu_post, var_post.sqrt())
                         };
                         
