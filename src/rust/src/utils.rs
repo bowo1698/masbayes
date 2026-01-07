@@ -55,98 +55,9 @@ pub fn rnorm<R: Rng>(rng: &mut R, mean: f64, sd: f64) -> f64 {
     normal.sample(rng)
 }
 
-/// Digamma function (derivative of log-gamma)
-/// 
-/// Uses asymptotic expansion for large x and recurrence relation for small x
-pub fn digamma(x: f64) -> f64 {
-    // For very large x, use asymptotic expansion
-    if x > 10.0 {
-        let inv = 1.0 / x;
-        let inv2 = inv * inv;
-        return x.ln() - 0.5 * inv - inv2 / 12.0 + inv2 * inv2 / 120.0 
-               - inv2 * inv2 * inv2 / 252.0;
-    }
-    
-    // For x < 0.5, use reflection formula
-    if x < 0.5 {
-        let pi = std::f64::consts::PI;
-        return digamma(1.0 - x) - pi / (pi * x).tan();
-    }
-    
-    // For 0.5 <= x < 10, use recurrence: digamma(x+1) = digamma(x) + 1/x
-    if x < 10.0 {
-        return digamma(x + 1.0) - 1.0 / x;
-    }
-    
-    0.0
-}
-
-/// Log-gamma function
-/// 
-/// Uses Stirling's approximation for large x and recurrence for small x
-pub fn lgamma(x: f64) -> f64 {
-    const COEFFS: [f64; 8] = [
-        76.18009172947146,
-        -86.50532032941677,
-        24.01409824083091,
-        -1.231739572450155,
-        0.1208650973866179e-2,
-        -0.5395239384953e-5,
-        0.0,
-        0.0,
-    ];
-    
-    if x <= 0.0 {
-        return f64::NAN;
-    }
-    
-    // For large x, use Stirling's approximation
-    if x > 20.0 {
-        let log_sqrt_2pi = 0.91893853320467274178;
-        return (x - 0.5) * x.ln() - x + log_sqrt_2pi 
-               + ((1.0 / (12.0 * x)) - (1.0 / (360.0 * x * x * x)));
-    }
-    
-    // For small x, use recurrence: lgamma(x+1) = lgamma(x) + ln(x)
-    if x < 0.5 {
-        let pi = std::f64::consts::PI;
-        return (pi / ((pi * x).sin())).ln() - lgamma(1.0 - x) - x.ln();
-    }
-    
-    // For intermediate x, use Lanczos approximation
-    let mut y = x;
-    let mut tmp = x + 5.5;
-    tmp -= (x + 0.5) * tmp.ln();
-    
-    let mut ser = 1.000000000190015;
-    for (_j, &coeff) in COEFFS.iter().enumerate() {
-        y += 1.0;
-        ser += coeff / y;
-    }
-    
-    -tmp + (2.5066282746310005 * ser / x).ln()
-}
-
-/// Compute autocorrelation at specific lag
-/// 
-/// Helper function for effective_size calculation
-fn autocorr_at_lag(samples: &Array1<f64>, lag: usize, mean: f64, var: f64) -> f64 {
-    let n = samples.len();
-    if lag >= n || var < 1e-10 {
-        return 0.0;
-    }
-    
-    let mut num = 0.0;
-    for i in 0..(n - lag) {
-        num += (samples[i] - mean) * (samples[i + lag] - mean);
-    }
-    
-    num / ((n - lag) as f64 * var)
-}
-
 /// Calculate effective sample size (ESS)
 ///
-/// Uses initial positive sequence estimator with monotone sequence
+/// Simple estimator: n / (1 + 2 * sum of autocorrelations)
 pub fn effective_size(samples: &Array1<f64>) -> f64 {
     let n = samples.len();
     if n < 10 {
@@ -160,32 +71,26 @@ pub fn effective_size(samples: &Array1<f64>) -> f64 {
         return n as f64;
     }
     
-    // Calculate initial positive sequence
-    let max_lag = (n / 2).min(500);
+    // Calculate autocorrelations up to lag n/2
+    let max_lag = n / 2;
     let mut rho_sum = 0.0;
-    let mut prev_rho = 1.0;
     
     for lag in 1..max_lag {
-        let rho = autocorr_at_lag(samples, lag, mean, var);
-        
-        // Stop if autocorrelation becomes negative or too small
-        if rho < 0.0 || rho > prev_rho {
-            break;
+        let mut num = 0.0;
+        for i in 0..(n - lag) {
+            num += (samples[i] - mean) * (samples[i + lag] - mean);
         }
+        let rho = num / ((n - lag) as f64 * var);
         
-        // Stop if autocorrelation is negligible
+        // Stop if autocorrelation becomes negligible
         if rho.abs() < 0.05 {
             break;
         }
         
         rho_sum += rho;
-        prev_rho = rho;
     }
     
-    let ess = n as f64 / (1.0 + 2.0 * rho_sum);
-    
-    // ESS should be between 1 and n
-    ess.max(1.0).min(n as f64)
+    n as f64 / (1.0 + 2.0 * rho_sum)
 }
 
 /// Geweke convergence diagnostic Z-score

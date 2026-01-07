@@ -22,30 +22,23 @@ run_bayesr <- function(w, y, wtw_diag, wty,
                        prior_params = NULL,
                        mcmc_params = NULL,
                        em_params = NULL,
-                       vb_params = NULL,
-                       method = c("mcmc", "em", "vb"),
+                       method = c("mcmc", "em"),
                        fold_id = 0L) {
   
   method <- match.arg(method)
   
-    if (method == "mcmc") {
+  if (method == "mcmc") {
     if (is.null(sigma2_ah) || is.null(prior_params) || is.null(mcmc_params)) {
       stop("For MCMC: sigma2_ah, prior_params, and mcmc_params required")
     }
     run_bayesr_mcmc(w, y, wtw_diag, wty, pi_vec, sigma2_vec, 
                     sigma2_e_init, sigma2_ah, prior_params, 
                     mcmc_params, fold_id)
-  } else if (method == "em") {
+  } else {
     if (is.null(em_params)) {
       em_params <- list(max_iter = 500L, tol = 1e-6)
     }
     run_bayesr_em(w, y, wtw_diag, wty, pi_vec, sigma2_vec, 
                   sigma2_e_init, em_params, fold_id)
-  } else {
-    if (is.null(vb_params)) {
-      vb_params <- list(max_iter = 500L, tol = 1e-6)
-    }
-    run_bayesr_vb(w, y, wtw_diag, wty, pi_vec, sigma2_vec,
-                  sigma2_e_init, vb_params, fold_id)
   }
 }
