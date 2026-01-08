@@ -75,20 +75,35 @@ jobs:
       - name: Build binary package
         shell: bash
         run: |
-          echo "Building TRUE binary package ..."
-          R CMD INSTALL --build --preclean .
+          echo "Installing package to temporary library..."
+          mkdir -p tmp_lib
+          R CMD INSTALL . --library=tmp_lib
+          
+          echo "Creating binary package..."
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cd tmp_lib
+            zip -r ../masbayes_binary.zip masbayes/
+          elif [ "${{ runner.os }}" == "Darwin" ]; then
+            cd tmp_lib
+            tar -czf ../masbayes_binary.tgz masbayes/
+          else
+            cd tmp_lib
+            tar -czf ../masbayes_binary.tar.gz masbayes/
+          fi
       
       - name: List built packages (debug)
         run: |
-          echo "All files matching masbayes*:"
-          ls -lh masbayes*
+          echo "All files in working directory:"
+          ls -lh
+          echo "Binary package created:"
+          ls -lh masbayes_binary.* 2>/dev/null || echo "Binary file not found in root"
         shell: bash
 
       - name: Rename for Upload
         id: rename_step
         shell: bash
         run: |
-          FILE=$(ls masbayes*.${{ matrix.config.ext }} | head -n 1)
+          FILE="masbayes_binary.${{ matrix.config.ext }}"
           NEW_NAME="masbayes_${{ matrix.config.arch }}_${{ matrix.config.rust-target }}.${{ matrix.config.ext }}"
           mv "$FILE" "$NEW_NAME"
           echo "pkg_file=$NEW_NAME" >> $GITHUB_OUTPUT
