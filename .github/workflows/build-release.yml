@@ -85,18 +85,19 @@ jobs:
           echo "Stripping source files for true binary..."
           rm -rf tmp_lib/masbayes/src/
           rm -f tmp_lib/masbayes/Makevars*
-          #
+          
+          echo "Current directory: $(pwd)"
           echo "Creating binary package..."
           if [ "${{ runner.os }}" == "Windows" ]; then
-            cd tmp_lib && zip -r ../masbayes_binary.zip masbayes/ && cd ..
+            (cd tmp_lib && zip -r ../masbayes_binary.zip masbayes/)
           elif [ "${{ runner.os }}" == "Darwin" ]; then
-            cd tmp_lib && tar -czf ../masbayes_binary.tgz masbayes/ && cd ..
+            (cd tmp_lib && tar -czf ../masbayes_binary.tgz masbayes/)
           else
-            cd tmp_lib && tar -czf ../masbayes_binary.tar.gz masbayes/ && cd ..
+            (cd tmp_lib && tar -czf ../masbayes_binary.tar.gz masbayes/)
           fi
           
-          echo "Verifying binary package created..."
-          ls -lh masbayes_binary.* || exit 1
+          echo "Files after compression:"
+          ls -lh masbayes_binary.*
       
       - name: List built packages (debug)
         run: |
