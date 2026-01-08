@@ -10,10 +10,28 @@
 
 # R package build
 *.tar.gz
+*.tgz
+*.zip
 /man/*.Rd~
+
+# Rust build artifacts
+src/rust/target/
+**/target/
+Cargo.lock
+*.rlib
+*.rmeta
 
 # macOS
 .DS_Store
 
 # RStudio
 *.Rproj
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*~
+*.swp
+*.swo

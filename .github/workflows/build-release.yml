@@ -64,11 +64,32 @@ jobs:
           R CMD INSTALL --build $(ls masbayes_*.tar.gz)
         shell: bash
       
+      - name: List built packages (debug)
+        run: |
+          echo "All files matching masbayes*:"
+          ls -lh masbayes*
+        shell: bash
+
       - name: Rename package file
         run: |
-          FILE=$(ls masbayes*.${{ matrix.config.ext }})
+          # Find the binary package (not source)
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            FILE=$(find . -maxdepth 1 -name "masbayes_*_R_*.tar.gz" -type f | head -n 1)
+          elif [ "${{ runner.os }}" == "Windows" ]; then
+            FILE=$(find . -maxdepth 1 -name "masbayes*.zip" -type f | head -n 1)
+          else
+            FILE=$(find . -maxdepth 1 -name "masbayes*.tgz" -type f | head -n 1)
+          fi
+          
+          if [ -z "$FILE" ]; then
+            echo "Error: Binary package not found"
+            ls -la masbayes*
+            exit 1
+          fi
+          
           NEW_NAME="masbayes_${{ matrix.config.arch }}_${{ matrix.config.rust-target }}_R${{ matrix.config.r }}.${{ matrix.config.ext }}"
           mv "$FILE" "$NEW_NAME"
+          echo "Renamed: $FILE -> $NEW_NAME"
         shell: bash
         
       - name: Upload artifacts

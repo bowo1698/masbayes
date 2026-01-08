@@ -1,0 +1,22 @@
+^\.github$
+^\.git$
+^\.gitignore$
+^.*\.Rproj$
+^\.Rproj\.user$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^\.vscode$
+^\.idea$
+^\.DS_Store$
+
+# CRITICAL: Exclude Rust build artifacts
+^src/rust/target$
+^src/rust/Cargo\.lock$
+^.*\.rlib$
+^.*\.rmeta$
+
+# Exclude binary outputs
+^.*\.tar\.gz$
+^.*\.tgz$
+^.*\.zip$
