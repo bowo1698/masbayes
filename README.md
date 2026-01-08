@@ -44,7 +44,7 @@ install.packages(
 )
 ```
 
-### Manual compile via Rust
+### Manual compiling via Rust
 
 #### 1. Rust Toolchain (Required)
 **macOS & Linux**:
