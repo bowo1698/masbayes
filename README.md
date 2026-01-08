@@ -14,6 +14,83 @@ Rust is a low-level programming language, standing at the same level as C++, whi
 
 ---
 
+## Installation
+
+### Direct R binary
+
+```r
+# Windows x64 x86
+install.packages(
+  "https://github.com/bowo1698/masbayes/releases/download/v.1.1/masbayes_x64_x86_64-pc-windows-gnu.zip", 
+  repos = NULL
+)
+
+# Linux x64 x86
+install.packages(
+  "https://github.com/bowo1698/masbayes/releases/download/v.1.1/masbayes_x64_x86_64-unknown-linux-gnu.tar.gz", 
+  repos = NULL
+)
+
+# MacOS ARM 64
+install.packages(
+  "https://github.com/bowo1698/masbayes/releases/download/v.1.1/masbayes_arm64_aarch64-apple-darwin.tar.gz", 
+  repos = NULL
+)
+
+# MacOS x64
+install.packages(
+  "https://github.com/bowo1698/masbayes/releases/download/v.1.1/masbayes_x64_x86_64-apple-darwin.tar.gz", 
+  repos = NULL
+)
+```
+
+### Manual compile via Rust
+
+#### 1. Rust Toolchain (Required)
+**macOS & Linux**:
+```bash
+# Install Rust using rustup (one-time, ~5 minutes)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Activate in current session
+source $HOME/.cargo/env
+
+# Verify
+rustc --version  # Should show: rustc 1.78.0 or higher
+cargo --version
+```
+
+**Windows**:
+1. Download and install [Rustup for Windows](https://rustup.rs/)
+2. Install [Rtools](https://cran.r-project.org/bin/windows/Rtools/) (if not already installed)
+3. Ensure MSVC toolchain: `rustup default stable-msvc`
+
+---
+
+#### 2. R dependencies
+```r
+# Required R packages
+install.packages(c("devtools", "Rcpp"))
+
+# Install from GitHub
+devtools::install_github("bowo1698/masbayes")
+```
+
+---
+
+### Check instalation
+```r
+# Load and verify
+library(masbayes)
+
+# Check available functions
+ls("package:masbayes")
+?construct_wah_matrix()
+#[1] "construct_wah_matrix"  "run_bayesa_mcmc"  "run_bayesr_mcmc"
+```
+
+---
+
 ## Theoretical background
 
 ### $W_αh$ matrix construction
@@ -290,58 +367,6 @@ $$
 $$
 
 This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
-
----
-
-## Installation
-
-### Prerequisites
-
-#### 1. Rust Toolchain (Required)
-**macOS & Linux**:
-```bash
-# Install Rust using rustup (one-time, ~5 minutes)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Activate in current session
-source $HOME/.cargo/env
-
-# Verify
-rustc --version  # Should show: rustc 1.78.0 or higher
-cargo --version
-```
-
-**Windows**:
-1. Download and install [Rustup for Windows](https://rustup.rs/)
-2. Install [Rtools](https://cran.r-project.org/bin/windows/Rtools/) (if not already installed)
-3. Ensure MSVC toolchain: `rustup default stable-msvc`
-
----
-
-#### 2. R dependencies
-```r
-# Required R packages
-install.packages(c("devtools", "Rcpp"))
-
-# Recommended (for pipeline integration)
-install.packages(c("tidyverse", "sommer", "coda"))
-```
-
----
-
-### Install masbayes
-```r
-# Install from GitHub
-devtools::install_github("bowo1698/masbayes")
-
-# Load and verify
-library(masbayes)
-
-# Check available functions
-ls("package:masbayes")
-?construct_wah_matrix()
-#[1] "construct_wah_matrix"  "run_bayesa_mcmc"  "run_bayesr_mcmc"
-```
 
 ---
 
