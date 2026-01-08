@@ -11,6 +11,4 @@
 ^\.DS_Store$
 
 # Rust build artifacts
-^src/rust$
-^Cargo\.toml$
-^Cargo\.lock$
+^src/rust/target$
