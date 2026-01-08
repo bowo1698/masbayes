@@ -19,27 +19,27 @@ Rust is a low-level programming language, standing at the same level as C++, whi
 ### Direct R binary
 
 ```r
-# Windows x64 x86
-install.packages(
-  "https://github.com/bowo1698/masbayes/releases/download/v.1.1/masbayes_x64_x86_64-pc-windows-gnu.zip", 
-  repos = NULL
-)
-
 # Linux x64 x86
 install.packages(
-  "https://github.com/bowo1698/masbayes/releases/download/v.1.1/masbayes_x64_x86_64-unknown-linux-gnu.tar.gz", 
+  "https://github.com/bowo1698/masbayes/releases/download/v1.1.0/masbayes_x64_x86_64-unknown-linux-gnu.tar.gz", 
   repos = NULL
 )
 
 # MacOS ARM 64
 install.packages(
-  "https://github.com/bowo1698/masbayes/releases/download/v.1.1/masbayes_arm64_aarch64-apple-darwin.tar.gz", 
+  "https://github.com/bowo1698/masbayes/releases/download/v1.1.0/masbayes_arm64_aarch64-apple-darwin.tar.gz", 
   repos = NULL
 )
 
 # MacOS x64
 install.packages(
-  "https://github.com/bowo1698/masbayes/releases/download/v.1.1/masbayes_x64_x86_64-apple-darwin.tar.gz", 
+  "https://github.com/bowo1698/masbayes/releases/download/v1.1.0/masbayes_x64_x86_64-apple-darwin.tar.gz", 
+  repos = NULL
+)
+
+# Windows x64 x86
+install.packages(
+  "https://github.com/bowo1698/masbayes/releases/download/v1.1.0/masbayes_x64_x86_64-pc-windows-gnu.zip", 
   repos = NULL
 )
 ```
