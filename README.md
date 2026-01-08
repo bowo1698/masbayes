@@ -10,7 +10,7 @@ MasBayes supports multi-allelic-based markers for genomic prediction, where mark
 
 **Why Rust?**
 
-Rust is a low-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, has a strict ownership model and memory safety guarantees to eliminate common bugs like memory leaks and segmentation faults without the need for a garbage collector. Rust also has simpler and more readable syntax than C++.
+Rust is a low-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, has a strict ownership model and memory safety guarantees to eliminate common bugs like memory leaks and segmentation faults without the need for a garbage collector.
 
 ---
 
@@ -577,16 +577,15 @@ You can email me to improve the Rust implementation, add a new model, documentat
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file
+GPL-3 License - see [LICENSE](LICENSE) file
 
 Copyright (c) 2025 Agus Wibowo
 
 ---
 
-## Support & Contact
+## Contact
 
 - **Email**: aguswibowo1698@gmail.com
-- **Documentation**: (coming soon)
 
 ---
 

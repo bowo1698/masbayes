@@ -2,9 +2,9 @@
 \alias{construct_wah_matrix}
 \title{Construct W_αh Matrix for Multi-allelic Markers}
 \description{
-Fast construction of allele-specific design matrix (W_αh) from haplotype genotypes 
-using Rust backend. Implements allele frequency-based coding for multi-allelic 
-microhaplotype markers with optional baseline allele dropping.
+Fast construction of allele-specific design matrix (W_αh) from haplotype-based genotypes.
+Implements allele frequency-based coding for multi-allelic 
+markers with optional baseline allele dropping.
 }
 \usage{
 construct_wah_matrix(
