@@ -11,18 +11,6 @@
 ^\.DS_Store$
 
 # Rust build artifacts
-^src/rust/target$
-^src/rust/Cargo\.lock$
-^src/rust/\.cargo$
-^src/rust/.*\.rlib$
-^src/rust/.*\.rmeta$
-
-# binary outputs
-^.*\.tar\.gz$
-^.*\.tgz$
-^.*\.zip$
-^.*\.o$
-^.*\.so$
-^.*\.dll$
-^.*\.dylib$
-^\..+$
+^src/rust$
+^Cargo\.toml$
+^Cargo\.lock$
