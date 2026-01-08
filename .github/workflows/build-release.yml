@@ -97,8 +97,8 @@ jobs:
         shell: bash
 
       - name: Rename package file
+        id: rename_step 
         run: |
-          # Find the binary package (not source)
           if [ "${{ runner.os }}" == "Linux" ]; then
             FILE=$(find . -maxdepth 1 -name "masbayes_*_R_*.tar.gz" -type f | head -n 1)
           elif [ "${{ runner.os }}" == "Windows" ]; then
@@ -109,20 +109,20 @@ jobs:
           
           if [ -z "$FILE" ]; then
             echo "Error: Binary package not found"
-            ls -la masbayes*
+            ls -la
             exit 1
           fi
           
           NEW_NAME="masbayes_${{ matrix.config.arch }}_${{ matrix.config.rust-target }}_R${{ matrix.config.r }}.${{ matrix.config.ext }}"
           mv "$FILE" "$NEW_NAME"
-          echo "Renamed: $FILE -> $NEW_NAME"
+          echo "pkg_file=$NEW_NAME" >> $GITHUB_OUTPUT # Simpan nama file ke output
         shell: bash
         
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.config.os }}-${{ matrix.config.rust-target }}
-          path: masbayes_*
+          path: ${{ steps.rename_step.outputs.pkg_file }}
           
   release:
     needs: build
