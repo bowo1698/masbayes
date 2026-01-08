@@ -70,7 +70,6 @@ jobs:
         env:
           R_BUILD_TAR: "internal"
           R_INSTALL_TAR: "internal"
-          PATH: ${{ env.PATH }}
         run: |
           R CMD build . --no-manual
           PKG_SRC=$(ls masbayes_*.tar.gz | head -n 1)
