@@ -27,6 +27,13 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+
+      - name: Fix Git Line Endings (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git checkout .
+        shell: bash
       
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
@@ -68,12 +75,20 @@ jobs:
       - name: Build binary package
         shell: bash
         env:
+          R_CUSTOM_TAR: "internal"
           R_BUILD_TAR: "internal"
           R_INSTALL_TAR: "internal"
+          TAR: "internal"
         run: |
-          R CMD build . --no-manual
-          PKG_SRC=$(ls masbayes_*.tar.gz | head -n 1)
-          R CMD INSTALL --build "$PKG_SRC"
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            echo "Building binary directly from source to avoid tar.gz issues on Windows..."
+            R CMD INSTALL --build . --no-manual
+          else
+            echo "Building source then binary for Unix-like OS..."
+            R CMD build . --no-manual
+            PKG_SRC=$(ls masbayes_*.tar.gz | head -n 1)
+            R CMD INSTALL --build "$PKG_SRC"
+          fi
       
       - name: List built packages (debug)
         run: |
