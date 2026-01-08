@@ -1,4 +1,4 @@
-name: Build and Release Binary Packages
+name: Build and release binary packages
 
 on:
   push:
@@ -67,7 +67,6 @@ jobs:
       - name: Clean and prepare sources
         if: runner.os == 'Windows'
         run: |
-          echo "=== Cleaning Rust build artifacts ==="
           rm -rf src/rust/target
           rm -f src/rust/Cargo.lock
         shell: bash
@@ -82,7 +81,6 @@ jobs:
           rm -f tmp_lib/masbayes/Makevars*
           
           EXT="${{ matrix.config.ext }}"
-          echo "Using extension: ${EXT}"
           
           if [ "${{ runner.os }}" == "Windows" ]; then
             (cd tmp_lib && zip -r ../masbayes_binary.${EXT} masbayes/)
@@ -94,9 +92,7 @@ jobs:
       
       - name: List built packages (debug)
         run: |
-          echo "All files in working directory:"
           ls -lh
-          echo "Binary package created:"
           ls -lh masbayes_binary.* 2>/dev/null || echo "Binary file not found in root"
         shell: bash
 
@@ -132,7 +128,6 @@ jobs:
           
       - name: Debug - List Downloaded Files
         run: |
-          echo "Daftar file yang akan di-release:"
           ls -R all_binaries
         shell: bash
 
