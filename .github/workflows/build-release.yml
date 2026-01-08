@@ -132,16 +132,23 @@ jobs:
       contents: write 
     
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: all_binaries 
           pattern: binary-*
           merge-multiple: true
           
+      - name: Debug - List Downloaded Files
+        run: |
+          echo "Daftar file yang akan di-release:"
+          ls -R all_binaries
+        shell: bash
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/masbayes_*
+          files: all_binaries/*
           draft: false
           prerelease: false
         env:
