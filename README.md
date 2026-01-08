@@ -86,7 +86,7 @@ library(masbayes)
 # Check available functions
 ls("package:masbayes")
 ?construct_wah_matrix()
-#[1] "construct_wah_matrix"  "run_bayesa_mcmc"  "run_bayesr_mcmc"
+#[1] "construct_wah_matrix"  "run_bayesa"  "run_bayesr"
 ```
 
 ---
@@ -445,17 +445,18 @@ mcmc_params <- list(
 )
 
 # Run BayesR MCMC
-result_bayesr <- run_bayesr_mcmc(
+result_bayesr <- run_bayesr(
   w = W,
   y = y,
   wtw_diag = wtw_diag,
   wty = wty,
-  pi_vec = c(0.90, 0.05, 0.03, 0.02),  # Mixture proportions
-  sigma2_vec = c(0, 0.001, 0.01, 0.1),  # Variance components
-  sigma2_e_init = var(y) * 0.5, # Initial error variance
-  sigma2_ah = var(y) * 0.5,  # Initial genetic variance
+  pi_vec = c(0.85, 0.08, 0.05, 0.02),     # Mixture proportions
+  sigma2_vec = c(1e-8, 0.001, 0.01, 0.1), # Variance components
+  sigma2_e_init = var(y) * 0.5,           # Initial error variance
+  sigma2_ah = var(y) * 0.5,               # Initial genetic variance
   prior_params = prior_params,
-  mcmc_params = mcmc_params
+  mcmc_params = mcmc_params,
+  method = "mcmc"
 )
 
 # Posterior means
@@ -511,16 +512,17 @@ mcmc_params <- list(
 )
 
 # Run BayesA
-result_bayesa <- run_bayesa_mcmc(
+result_bayesa <- run_bayesa(
   w = W,
   y = y,
   wtw_diag = wtw_diag,
   wty = wty,
-  nu = 4.5,                    # Prior df for marker variances
-  s_squared = var(y) / ncol(W),  # Prior scale
+  nu = 4.5,                     # Prior df for marker variances
+  s_squared = var(y) / ncol(W), # Prior scale
   sigma2_e_init = var(y) * 0.5,
   prior_params = prior_params,
-  mcmc_params = mcmc_params
+  mcmc_params = mcmc_params,
+  method = "mcmc"
 )
 
 # Posterior inference
