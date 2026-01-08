@@ -693,7 +693,7 @@ If you use `masbayes` in your research, please cite:
 ```bibtex
 @software{masbayes2025,
   author = {Agus Wibowo},
-  title = {masbayes: Rust-Accelerated Bayesian Genomic Prediction for Multi-Allelic Markers},
+  title = {masbayes: Bayesian model for genomic prediction using multi-allelic markers},
   year = {2025},
   url = {https://github.com/bowo1698/masbayes},
   note = {R package version 1.1.0}
