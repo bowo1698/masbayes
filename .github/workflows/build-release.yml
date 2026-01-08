@@ -17,7 +17,6 @@ jobs:
         config:
           # Windows
           - {os: windows-latest, r: 'release', rust-target: 'x86_64-pc-windows-gnu', ext: 'zip', arch: 'x64'}
-          - {os: windows-latest, r: 'release', rust-target: 'aarch64-pc-windows-msvc', ext: 'zip', arch: 'arm64'}
           
           # macOS
           - {os: macOS-latest, r: 'release', rust-target: 'x86_64-apple-darwin', ext: 'tgz', arch: 'x64'}
@@ -64,28 +63,18 @@ jobs:
           echo "=== Cleaning Rust build artifacts ==="
           rm -rf src/rust/target
           rm -f src/rust/Cargo.lock
-          
-          echo "=== Setting proper permissions ==="
-          find src -type f -exec chmod 644 {} \;
-          find src -type d -exec chmod 755 {} \;
-          
-          echo "=== Verifying no symlinks ==="
-          find . -type l
         shell: bash
-
+      
       - name: Build binary package
-        env:
-          TAR: ${{ runner.os == 'Windows' && 'tar --format=ustar' || 'tar' }}
-        run: |
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            R CMD build --no-manual .
-          else
-            R CMD build .
-          fi
-          PKG=$(ls masbayes_*.tar.gz | head -n 1)
-          echo "Building binary from: $PKG"
-          R CMD INSTALL --build "$PKG"
         shell: bash
+        env:
+          R_BUILD_TAR: "internal"
+          R_INSTALL_TAR: "internal"
+          PATH: ${{ env.PATH }}
+        run: |
+          R CMD build . --no-manual
+          PKG_SRC=$(ls masbayes_*.tar.gz | head -n 1)
+          R CMD INSTALL --build "$PKG_SRC"
       
       - name: List built packages (debug)
         run: |
