@@ -22,9 +22,7 @@ Imports:
     coda,
     dplyr
 Suggests:
-    testthat (>= 3.0.0),
-    knitr,
-    rmarkdown
+    testthat (>= 3.0.0)
 SystemRequirements: 
     Cargo (Rust's package manager),
     rustc (>= 1.70.0)

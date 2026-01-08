@@ -15,10 +15,16 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - {os: windows-latest, r: 'release', rust-target: 'x86_64-pc-windows-gnu', ext: 'zip'}
-          - {os: macOS-latest, r: 'release', rust-target: 'x86_64-apple-darwin', ext: 'tgz'}
-          - {os: macOS-latest, r: 'release', rust-target: 'aarch64-apple-darwin', ext: 'tgz'}
-          - {os: ubuntu-latest, r: 'release', rust-target: 'x86_64-unknown-linux-gnu', ext: 'tar.gz'}
+          # Windows
+          - {os: windows-latest, r: 'release', rust-target: 'x86_64-pc-windows-gnu', ext: 'zip', arch: 'x64'}
+          - {os: windows-latest, r: 'release', rust-target: 'aarch64-pc-windows-msvc', ext: 'zip', arch: 'arm64'}
+          
+          # macOS
+          - {os: macOS-latest, r: 'release', rust-target: 'x86_64-apple-darwin', ext: 'tgz', arch: 'x64'}
+          - {os: macos-14, r: 'release', rust-target: 'aarch64-apple-darwin', ext: 'tgz', arch: 'arm64'}
+          
+          # Linux (x64 only)
+          - {os: ubuntu-latest, r: 'release', rust-target: 'x86_64-unknown-linux-gnu', ext: 'tar.gz', arch: 'x64'}
     
     steps:
       - uses: actions/checkout@v4
@@ -27,32 +33,42 @@ jobs:
         uses: r-lib/actions/setup-r@v2
         with:
           r-version: ${{ matrix.config.r }}
+          use-public-rspm: true
           
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.config.rust-target }}
+      
+      - name: Install system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev
           
       - name: Install R dependencies
         run: |
           install.packages(c("remotes", "Rcpp"))
-          # Jika menggunakan rust, mungkin butuh: install.packages("rextendr")
+          remotes::install_deps(dependencies = TRUE)
+        shell: Rscript {0}
+      
+      - name: Setup rextendr
+        run: |
+          install.packages("rextendr")
+          rextendr::rust_sitrep()
         shell: Rscript {0}
         
       - name: Build binary package
         run: |
           R CMD build .
-          # Menggunakan --binary agar menghasilkan file .zip/.tgz/.tar.gz sesuai OS
           R CMD INSTALL --build $(ls masbayes_*.tar.gz)
         shell: bash
-        
+      
       - name: Rename package file
         run: |
-          # Cari file hasil build (zip untuk win, tgz untuk mac, tar.gz untuk linux)
           FILE=$(ls masbayes*.${{ matrix.config.ext }})
-          NEW_NAME="masbayes_${{ matrix.config.rust-target }}_R${{ matrix.config.r }}.${{ matrix.config.ext }}"
+          NEW_NAME="masbayes_${{ matrix.config.arch }}_${{ matrix.config.rust-target }}_R${{ matrix.config.r }}.${{ matrix.config.ext }}"
           mv "$FILE" "$NEW_NAME"
-          echo "FINAL_NAME=$NEW_NAME" >> $GITHUB_ENV
         shell: bash
         
       - name: Upload artifacts
@@ -66,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
-      contents: write # Wajib untuk create release
+      contents: write 
     
     steps:
       - uses: actions/download-artifact@v4
