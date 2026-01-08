@@ -86,14 +86,12 @@ jobs:
           rm -rf tmp_lib/masbayes/src/
           rm -f tmp_lib/masbayes/Makevars*
           
-          echo "Current directory: $(pwd)"
           echo "Creating binary package..."
+          EXT="${{ matrix.config.ext }}"
           if [ "${{ runner.os }}" == "Windows" ]; then
-            (cd tmp_lib && zip -r ../masbayes_binary.zip masbayes/)
-          elif [ "${{ runner.os }}" == "Darwin" ]; then
-            (cd tmp_lib && tar -czf ../masbayes_binary.tgz masbayes/)
+            (cd tmp_lib && zip -r ../masbayes_binary.${EXT} masbayes/)
           else
-            (cd tmp_lib && tar -czf ../masbayes_binary.tar.gz masbayes/)
+            (cd tmp_lib && tar -czf ../masbayes_binary.${EXT} masbayes/)
           fi
           
           echo "Files after compression:"
