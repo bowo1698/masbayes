@@ -19,8 +19,8 @@ jobs:
           - {os: windows-latest, r: 'release', rust-target: 'x86_64-pc-windows-gnu', ext: 'zip', arch: 'x64'}
           
           # macOS
-          - {os: macOS-latest, r: 'release', rust-target: 'x86_64-apple-darwin', ext: 'tgz', arch: 'x64'}
-          - {os: macos-14, r: 'release', rust-target: 'aarch64-apple-darwin', ext: 'tgz', arch: 'arm64'}
+          - {os: macOS-latest, r: 'release', rust-target: 'x86_64-apple-darwin', ext: 'tar.gz', arch: 'x64'}
+          - {os: macos-14, r: 'release', rust-target: 'aarch64-apple-darwin', ext: 'tar.gz', arch: 'arm64'}
           
           # Linux (x64 only)
           - {os: ubuntu-latest, r: 'release', rust-target: 'x86_64-unknown-linux-gnu', ext: 'tar.gz', arch: 'x64'}
@@ -75,27 +75,22 @@ jobs:
       - name: Build binary package
         shell: bash
         run: |
-          echo "Installing package to temporary library..."
           mkdir -p tmp_lib
           R CMD INSTALL . --library=tmp_lib || exit 1
           
-          echo "Verifying installation..."
-          ls -la tmp_lib/masbayes/ || exit 1
-          
-          echo "Stripping source files for true binary..."
           rm -rf tmp_lib/masbayes/src/
           rm -f tmp_lib/masbayes/Makevars*
           
-          echo "Creating binary package..."
           EXT="${{ matrix.config.ext }}"
+          echo "Using extension: ${EXT}"
+          
           if [ "${{ runner.os }}" == "Windows" ]; then
             (cd tmp_lib && zip -r ../masbayes_binary.${EXT} masbayes/)
           else
             (cd tmp_lib && tar -czf ../masbayes_binary.${EXT} masbayes/)
           fi
           
-          echo "Files after compression:"
-          ls -lh masbayes_binary.*
+          ls -lh masbayes_binary.${EXT}
       
       - name: List built packages (debug)
         run: |
