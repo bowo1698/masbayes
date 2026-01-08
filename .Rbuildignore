@@ -10,13 +10,19 @@
 ^\.idea$
 ^\.DS_Store$
 
-# CRITICAL: Exclude Rust build artifacts
+# Rust build artifacts
 ^src/rust/target$
 ^src/rust/Cargo\.lock$
-^.*\.rlib$
-^.*\.rmeta$
+^src/rust/\.cargo$
+^src/rust/.*\.rlib$
+^src/rust/.*\.rmeta$
 
-# Exclude binary outputs
+# binary outputs
 ^.*\.tar\.gz$
 ^.*\.tgz$
 ^.*\.zip$
+^.*\.o$
+^.*\.so$
+^.*\.dll$
+^.*\.dylib$
+^\..+$
