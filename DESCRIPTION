@@ -29,5 +29,4 @@ SystemRequirements:
     Cargo (Rust's package manager),
     rustc (>= 1.70.0)
 RoxygenNote: 7.2.0
-VignetteBuilder: knitr
 Config/rextendr/version: 0.4.2
