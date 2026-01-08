@@ -77,7 +77,10 @@ jobs:
         run: |
           echo "Installing package to temporary library..."
           mkdir -p tmp_lib
-          R CMD INSTALL . --library=tmp_lib
+          R CMD INSTALL . --library=tmp_lib || exit 1
+          
+          echo "Verifying installation..."
+          ls -la tmp_lib/masbayes/ || exit 1
           
           echo "Stripping source files for true binary..."
           rm -rf tmp_lib/masbayes/src/
@@ -85,15 +88,15 @@ jobs:
           
           echo "Creating binary package..."
           if [ "${{ runner.os }}" == "Windows" ]; then
-            cd tmp_lib
-            zip -r ../masbayes_binary.zip masbayes/
+            cd tmp_lib && zip -r ../masbayes_binary.zip masbayes/ && cd ..
           elif [ "${{ runner.os }}" == "Darwin" ]; then
-            cd tmp_lib
-            tar -czf ../masbayes_binary.tgz masbayes/
+            cd tmp_lib && tar -czf ../masbayes_binary.tgz masbayes/ && cd ..
           else
-            cd tmp_lib
-            tar -czf ../masbayes_binary.tar.gz masbayes/
+            cd tmp_lib && tar -czf ../masbayes_binary.tar.gz masbayes/ && cd ..
           fi
+          
+          echo "Verifying binary package created..."
+          ls -lh masbayes_binary.* || exit 1
       
       - name: List built packages (debug)
         run: |
