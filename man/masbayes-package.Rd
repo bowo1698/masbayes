@@ -54,7 +54,6 @@ for multi-allelic microhaplotype data.
 \itemize{
   \item \strong{Multi-allelic support}: Native handling of microhaplotype blocks
   \item \strong{Scalability}: Efficient for large-scale genomic data
-  \item \strong{Accuracy}: Identical statistical results to R implementations
   \item \strong{Diagnostics}: Built-in convergence monitoring (ESS, Geweke)
 }
 
@@ -73,12 +72,12 @@ for multi-allelic microhaplotype data.
 \strong{Statistical Background}
 
 BayesR implements a mixture model:
-\deqn{\beta_j | \gamma_j \sim N(0, \sigma^2_{\gamma_j})}
-where \eqn{\gamma_j \in \{0, 1, 2, 3\}} indicates component membership.
+\deqn{\beta_j | \gamma_j \sim N(0, \sigma^2_{\gamma_j})}{\beta[j] | \gamma[j] ~ N(0, \sigma^2[\gamma[j]])}
+where \eqn{\gamma_j \in \{0, 1, 2, 3\}}{\gamma[j] in {0,1,2,3}} indicates component membership.
 
 BayesA uses marker-specific variances:
-\deqn{\beta_j \sim N(0, \sigma^2_j)}
-\deqn{\sigma^2_j \sim \chi^{-2}(\nu, S^2)}
+\deqn{\beta_j \sim N(0, \sigma^2_j)}{\beta[j] ~ N(0, \sigma^2[j])}
+\deqn{\sigma^2_j \sim \chi^{-2}(\nu, S^2)}{\sigma^2[j] ~ \chi^{-2}(\nu, S^2)}
 
 Both methods use marginalised Gibbs sampling for posterior inference.
 
