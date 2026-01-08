@@ -79,6 +79,10 @@ jobs:
           mkdir -p tmp_lib
           R CMD INSTALL . --library=tmp_lib
           
+          echo "Stripping source files for true binary..."
+          rm -rf tmp_lib/masbayes/src/
+          rm -f tmp_lib/masbayes/Makevars*
+          
           echo "Creating binary package..."
           if [ "${{ runner.os }}" == "Windows" ]; then
             cd tmp_lib
