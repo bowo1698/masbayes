@@ -1,0 +1,85 @@
+name: Build and Release Binary Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.config.os }}
+    name: ${{ matrix.config.os }} (R-${{ matrix.config.r }} - ${{ matrix.config.rust-target }})
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: windows-latest, r: 'release', rust-target: 'x86_64-pc-windows-gnu', ext: 'zip'}
+          - {os: macOS-latest, r: 'release', rust-target: 'x86_64-apple-darwin', ext: 'tgz'}
+          - {os: macOS-latest, r: 'release', rust-target: 'aarch64-apple-darwin', ext: 'tgz'}
+          - {os: ubuntu-latest, r: 'release', rust-target: 'x86_64-unknown-linux-gnu', ext: 'tar.gz'}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.config.r }}
+          
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.config.rust-target }}
+          
+      - name: Install R dependencies
+        run: |
+          install.packages(c("remotes", "Rcpp"))
+          # Jika menggunakan rust, mungkin butuh: install.packages("rextendr")
+        shell: Rscript {0}
+        
+      - name: Build binary package
+        run: |
+          R CMD build .
+          # Menggunakan --binary agar menghasilkan file .zip/.tgz/.tar.gz sesuai OS
+          R CMD INSTALL --build $(ls masbayes_*.tar.gz)
+        shell: bash
+        
+      - name: Rename package file
+        run: |
+          # Cari file hasil build (zip untuk win, tgz untuk mac, tar.gz untuk linux)
+          FILE=$(ls masbayes*.${{ matrix.config.ext }})
+          NEW_NAME="masbayes_${{ matrix.config.rust-target }}_R${{ matrix.config.r }}.${{ matrix.config.ext }}"
+          mv "$FILE" "$NEW_NAME"
+          echo "FINAL_NAME=$NEW_NAME" >> $GITHUB_ENV
+        shell: bash
+        
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.config.os }}-${{ matrix.config.rust-target }}
+          path: masbayes_*
+          
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write # Wajib untuk create release
+    
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: binary-*
+          merge-multiple: true
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/masbayes_*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
