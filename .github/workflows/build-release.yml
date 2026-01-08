@@ -82,7 +82,7 @@ jobs:
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
             echo "Building binary directly from source to avoid tar.gz issues on Windows..."
-            R CMD INSTALL --build . --no-manual
+            R CMD INSTALL --build .
           else
             echo "Building source then binary for Unix-like OS..."
             R CMD build . --no-manual
