@@ -95,13 +95,9 @@ ls("package:masbayes")
 
 ### $W_αh$ matrix construction
 
-In the context of genomic prediction, we need to tell the computer what genetic variations are and which ones are significant. Therefore, having numerical values explaining the differences between individuals in a population is crucial. For example, imagine you're in a crowd of people wearing white, and you're trying to find your mom in that crowd. This would be difficult! It might take you hours to find your mom. But what if your mom is one of five people wearing red, out of a group of people mostly wearing white? It might only take a few minutes or even seconds to find her.
+SNP-based genotype data is generally represented as a simple matrix with values ​​0, 1, or 2 indicating the number of alleles at a single locus, but the $W_{ah}$ (additive haplotype) matrix adopts a multi-allelic approach that treats each base sequence variation within a haplotype block as a separate "allele" unit. While the SNP matrix represents only one locus per column, the $W_{ah}$ matrix represents each specific haplotype variant found in the population. Consequently, the $W_{ah}$ matrix is ​​able to capture linkage interactions between markers that often better reflect the effects of functional causal variants than single SNP. 
 
-This analogy is similar to genomic prediction. The presence of diversity empowers the computer to learn from genotype data, and the genotyping matrix helps the computer record these differences. This matrix weights each "difference" in the population. So, once variation is present, the score can go up or down.
-
-A specialized coding system by [Da. Y. (2015)](https://link.springer.com/article/10.1186/s12863-015-0301-1) gives larger deviation values to rare alleles and smaller values to common ones, making rare variants more influential in predictions while keeping the math balanced.
-
-Here, we apply a coding rure. For allele *k* with population frequency *p_k*, individual *i* is coded as:
+To construct this complex matrix, [Da. Y. (2015)](https://link.springer.com/article/10.1186/s12863-015-0301-1) introduced a special coding system that serves to balance the statistical influence of each variant based on its frequency. This system mathematically assigns larger deviation values ​​to rare alleles and smaller values ​​to common alleles. This aims to ensure that rare variants have a proportional influence on genomic predictions, while ensuring that the average additive effect across the population remains zero to keep the model balanced. Technically, the coding rule is applied to each individual i for haplotype k with population frequency $p_k$ as follows:
 
 $$
 W_{i,k} = \begin{cases}
