@@ -6,17 +6,19 @@
 
 ## Rust-based Bayesian genomic prediction package for multi-allelic markers
 
-MasBayes supports multi-allelic-based markers for genomic prediction, where markers such as haplotypes or microhaplotypes can be used as predictors directly feeding into prediction models without being decomposed into biallelic markers. We implemented the $W_{\alpha h}$ matrix as described by Da, Y. (2015) and developed BayesA and BayesR models specifically for multiallelic markers. Both matrix constructions and Bayesian models were built on Rust programming to optimise computational efficiency rather than purely using the R implementation. In addition, we also implemented marginalized Gibbs sampling for Bayesian models to reduce correlation between parameters within the MCMC chain and hasten convergence, while baseline allele dropping was also implemented to only estimate informative alleles per haplotype block.
+MasBayes supports multi-allelic-based markers for genomic prediction, where markers such as haplotypes or microhaplotypes can be used as predictors directly feeding into prediction models without being decomposed into biallelic markers. We implemented the $W_{\alpha h}$ matrix as described by [Da, Y. (2015)](https://doi.org/10.1186/s12863-015-0301-1) and developed BayesA and BayesR models specifically for multiallelic markers. Both matrix constructions and Bayesian models were built on Rust programming to optimise computational efficiency rather than purely using the R implementation. In addition, we also implemented marginalised Gibbs sampling for Bayesian models to reduce correlation between parameters within the MCMC chain and hasten convergence, while baseline allele dropping was also implemented to only estimate informative alleles per haplotype block.
 
 **Why Rust?**
 
-Rust is a low-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, has a strict ownership model and memory safety guarantees to eliminate common bugs like memory leaks and segmentation faults without the need for a garbage collector.
+Rust is a middle-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, has a strict ownership model and memory safety guarantees to eliminate common bugs like memory leaks and segmentation faults without the need for a garbage collector.
 
 ---
 
 ## Installation
 
 ### Direct R binary
+
+We have provided MasBayes as a ready-to-use package for R, which can be installed in a very convenient way.
 
 ```r
 # Linux x64 x86
@@ -45,6 +47,8 @@ install.packages(
 ```
 
 ### Manual compiling via Rust
+
+But if you want to manually build the Masbayes library, Cargo is the only compiler you can use.
 
 #### 1. Rust Toolchain (Required)
 **macOS & Linux**:
@@ -95,7 +99,7 @@ ls("package:masbayes")
 
 ### $W_αh$ matrix construction
 
-Biallelic SNP genotype data is generally represented as a simple matrix with values ​​0, 1, or 2 indicating the number of alleles at a single locus. However, the $W_{ah}$ matrix represents each specific haplotype (multi-allelic) variant found in the population. Consequently, the $W_{ah}$ matrix is ​​able to capture linkage interactions between markers that often better reflect the effects of functional causal variants than single SNP. 
+Biallelic SNP genotype data is generally represented as a simple matrix with values ​​0, 1, or 2 which indicate the number of alleles at a single locus. However, the $W_{ah}$ matrix represents each specific haplotype (multi-allelic) variant found in the population. Consequently, the $W_{ah}$ matrix is ​​able to capture linkage interactions between markers that often better reflect the effects of functional causal variants than single SNP. 
 
 To construct this complex matrix, [Da. Y. (2015)](https://link.springer.com/article/10.1186/s12863-015-0301-1) introduced a special coding system that serves to balance the statistical influence of each variant based on its frequency. This system mathematically assigns larger deviation values ​​to rare alleles and smaller values ​​to common alleles. This aims to ensure that rare variants have a proportional influence on genomic predictions, while ensuring that the average additive effect across the population remains zero to keep the model balanced. Technically, the coding rule is applied to each individual i for haplotype k with population frequency $p_k$ as follows:
 
@@ -111,7 +115,7 @@ where $k \neq \ell \neq m$ are distinct alleles. Note that we drop the most freq
 
 Allele frequencies are calculated from phased haplotypes (the two DNA copies each individual inherited from their parents), so tools like [Beagle](https://faculty.washington.edu/browning/beagle/beagle.html) (population-based phasing/imputation) and [FImpute](https://animalbiosciences.uoguelph.ca/~msargol/fimpute/) (pedigree-based phasing/imputation) are crucial. For each haplotype block, we count how many times each allele appears across all individuals and divide by total haplotypes (2n for n individuals). For example, if allele 3 appears in 5 out of 200 haplotypes (100 individuals), its frequency is $p_k = 5/200 = 0.025$ (2.5%).
 
-This standardization ensures three critical properties. First, the matrix is mean-centered with $\mathbb{E}[W_k] = 0$, meaning positive and negative deviations balance out across the population. Second, variance scales with $\text{Var}(W_k) \propto 2p_k(1-p_k)$, matching Hardy-Weinberg genetic expectations where intermediate-frequency alleles contribute most variance. Third, the genomic relationship matrix $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$ (where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$) becomes comparable to SNP-based GRM by [VanRaden. (2008)](https://www.journalofdairyscience.org/article/S0022-0302(08)70990-1/fulltext), enabling proven statistical methods like GBLUP and Bayesian alphabets to work directly with multi-allelic markers.
+This standardisation ensures three critical properties. First, the matrix is mean-centered with $\mathbb{E}[W_k] = 0$, meaning that positive and negative deviations balance out across the population. Second, variance scales with $\text{Var}(W_k) \propto 2p_k(1-p_k)$, matching Hardy-Weinberg genetic expectations where intermediate-frequency alleles contribute most variance. Third, the haplotype genomic relationship matrix $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$ (where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$) becomes comparable to SNP-based GRM by [VanRaden. (2008)](https://www.journalofdairyscience.org/article/S0022-0302(08)70990-1/fulltext), enabling proven statistical methods like GBLUP to work directly with multi-allelic markers.
 
 #### Example
 
@@ -155,15 +159,15 @@ $$
 
 where $\mathbf{y}$ is the phenotype vector, $W_{\alpha h}$ is our multi-allelic matrix, $\boldsymbol{\beta_{\alpha h}}$ contains all allele effects, and $\mathbf{e}$ is residual error. The key difference is that $\boldsymbol{\beta}$ now has thousands or tens of thousands of parameters instead of hundreds of thousands of SNPs, but each parameter carries more biological information.
 
-The challenge of having so many alleles per block is that we need a model that can automatically distinguish between influential and insignificant alleles, and also a model that can share information between alleles, because if one allele has a large effect, other alleles may also have the same effect.
+The challenge of having so many alleles per block is that we need a model that can automatically distinguish between influential and insignificant alleles, and also a model that can share information between alleles. Because if one allele has a large effect, other alleles may also have the same effect.
 
-Because we have so many allele combinations per block, a specialised model must be able to distinguish which alleles are influential and which are not. This is where Bayesian models excel, as they can distinguish allele effects into several classes (zero, small, medium, and large), allowing us to more precisely determine which alleles are making a significant contribution.
+Since we have so many allele combinations per block, a specialised model must be able to distinguish which alleles are influential and which are not. This is where Bayesian models excel, as they can distinguish allele effects into several classes, allowing us to more precisely determine which alleles are making a significant contribution.
 
-BayesR, for example, because it classifies alleles based on their effect size, ranging from none to very large (four class stratifications), is considered the most "learning" model. Meanwhile, BayesA only classifies allele effects into large or small.
+BayesR, for example, it classifies alleles based on their effect size, ranging from none to very large (four class stratifications), and this model is considered as the most "learning" model. Meanwhile, BayesA only classifies allele effects into large or small effects.
 
 To explore the effects of these alleles, the MCMC sampling algorithm is used. This algorithm works by taking multiple samples of genotype allele data and directly "seeing" how they affect the trait, which is done tens of thousands of times. This allows us to accurately determine the true distribution of allele effects.
 
-Therefore, we extend the use of this Bayesian model to multi-allelic markers. We hope that by grouping genetic markers into small blocks, rather than leaving them alone, we can "exploit" the collective effect of each allele within that block. Furthermore, from a computational perspective, fewer predictors are used, making the process more efficient.
+Therefore, we extend the use of these Bayesian models to multi-allelic markers. We hope that by grouping genetic markers into small blocks, rather than leaving them alone, we can "exploit" the collective effect of each allele within that block. Furthermore, from a computational perspective, fewer predictors are used, making the process more efficient.
 
 ---
 
@@ -171,7 +175,7 @@ Therefore, we extend the use of this Bayesian model to multi-allelic markers. We
 
 ### The core idea: Categorizing allele effects
 
-BayesR recognizes that in real biological systems, genetic variants don't all behave the same way. Some alleles have essentially zero effect on the trait, others have small effects, some have medium effects, and a rare few have large effects. Rather than forcing all alleles to follow the same statistical distribution, BayesR lets each allele belong to one of four categories, each with its own variance.
+BayesR recognises that in real biological systems, genetic variants don't all behave the same way. Some alleles have essentially zero effect on the trait, others have small effects, some have medium effects, and a rare few have large effects. Rather than forcing all alleles to follow the same statistical distribution, BayesR lets each allele belong to one of four categories, each with its own variance.
 
 The model works hierarchically, building from simple to complex:
 
@@ -215,7 +219,7 @@ $$
 
 Even the category variances and mixing proportions aren't fixed, they have their own prior distributions. This means the model adapts to our specific data, learning both which alleles belong to which categories and what those categories actually mean in terms of effect sizes.
 
-### Why marginalized Gibbs sampling?
+### Why marginalised Gibbs sampling?
 
 Traditional MCMC for mixture models faces a chicken-and-egg problem: to sample the effect size $\beta_j$, we need to know which category $\gamma_j$ it belongs to. But to assign the category $\gamma_j$, we need to know the effect size $\beta_j$. This creates strong correlation between these two parameters, causing the MCMC chain to explore the parameter space extremely slowly, we call this as "poor mixing."
 
@@ -226,7 +230,7 @@ Traditional MCMC for mixture models faces a chicken-and-egg problem: to sample t
 
 The issue is that if $\beta_j$ is currently large, the sampler is reluctant to switch $\gamma_j$ to a small-effect category, and vice versa. The parameters get "stuck" together.
 
-Instead of this back-and-forth, we use a mathematical trick called marginalization. We integrate out $\beta_j$ completely and ask: "What is the probability that allele $j$ belongs to category $k$, considering all possible values $\beta_j$ could have taken?" This gives us:
+Instead of this back-and-forth, we use a mathematical trick called marginalisation, referring to [Gianola et al (2009)](https://academic.oup.com/genetics/article-abstract/183/1/347/6063216?redirectedFrom=fulltext). We integrate out $\beta_j$ completely and ask: "What is the probability that allele $j$ belongs to category $k$, considering all possible values $\beta_j$ could have taken?" This gives us:
 
 $$
 p(\gamma_j = k \mid \cdot) = \int p(\gamma_j = k, \beta_j \mid \cdot) \, d\beta_j
@@ -265,7 +269,7 @@ The model essentially compares four hypotheses for each allele: "Does this allel
 
 ### Computational implementation
 
-However, computing these probabilities directly can cause numerical underflow (numbers too small to represent). We therefore work in log-space:
+However, computing these probabilities directly can cause numerical over/under flow (numbers too small or too large to represent). We therefore work in log-space:
 
 $$
 \log p(\gamma_j = k \mid \cdot) = \log \pi_k - \frac{1}{2}\log(1 + \lambda_j \rho_{jk}) + \frac{r_j^2 \sigma^2_k}{2\sigma^2_e(\sigma^2_e + \lambda_j \sigma^2_k)}
@@ -598,6 +602,10 @@ Copyright (c) 2025 Agus Wibowo
 ### References
 
 - Meuwissen, T. H. E. et al. Prediction of total genetic value using genome-wide dense marker maps. [Genetics 157, 1819–1829 (2001)](https://doi.org/10.1093/genetics/157.4.1819).
+
+- Sorensen, D. and Gianola, D. Likelihood, Bayesian, and MCMC methods in quantitative genetics. [Springer Science & Business Media. (2002)](https://link.springer.com/book/10.1007/b98952)
+
+- Gianola, D. et al. Additive genetic variability and the Bayesian alphabet. [Genetics. 1, 183 (2009)](https://academic.oup.com/genetics/article-abstract/183/1/347/6063216?redirectedFrom=fulltext).
 
 - Erbe, M. et al. Improving accuracy of genomic predictions within and between dairy cattle breeds with imputed high-density single nucleotide polymorphism panels. [J. Dairy Sci. 95, 4114–4129 (2012)](https://doi.org/10.3168/jds.2011-5019).
 
