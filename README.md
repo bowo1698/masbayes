@@ -159,9 +159,7 @@ $$
 
 where $\mathbf{y}$ is the phenotype vector, $W_{\alpha h}$ is our multi-allelic matrix, $\boldsymbol{\beta_{\alpha h}}$ contains all allele effects, and $\mathbf{e}$ is residual error. The key difference is that $\boldsymbol{\beta}$ now has thousands or tens of thousands of parameters instead of hundreds of thousands of SNPs, but each parameter carries more biological information.
 
-The challenge of having so many alleles per block is that we need a model that can automatically distinguish between influential and insignificant alleles, and also a model that can share information between alleles. Because if one allele has a large effect, other alleles may also have the same effect.
-
-Since we have so many allele combinations per block, a specialised model must be able to distinguish which alleles are influential and which are not. This is where Bayesian models excel, as they can distinguish allele effects into several classes, allowing us to more precisely determine which alleles are making a significant contribution.
+The challenge of having so many alleles per block is that we need a model that can automatically distinguish between influential and insignificant alleles, and also a model that can share information between alleles. Because if one allele has a large effect, other alleles may also have the same effect. This is where Bayesian models excel, as they can distinguish allele effects into several classes, allowing us to more precisely determine which alleles are making a significant contribution.
 
 BayesR, for example, it classifies alleles based on their effect size, ranging from none to very large (four class stratifications), and this model is considered as the most "learning" model. Meanwhile, BayesA only classifies allele effects into large or small effects.
 
