@@ -149,8 +149,6 @@ impl BayesREM {
 
         for j in 0..self.n_alleles {
             let l_j = self.wtw_diag[j];
-
-            // Use tracked residual: w_j' r + l_j * β_j
             let w_j = self.w.column(j);
             let wj_r = w_j.dot(&self.residual);
             let rhs = wj_r + l_j * self.beta[j];
@@ -160,7 +158,27 @@ impl BayesREM {
             
             for k in 1..4 {
                 let sigma2_k = self.sigma2_vec[k];
-                if sigma2_k < 1e-10                probs[k] = (log_probs[k] - max_log).exp();
+                if sigma2_k < 1e-10 {
+                    log_probs[k] = f64::NEG_INFINITY;
+                    continue;
+                }
+                
+                let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k;
+                let var_post = 1.0 / inv_var_post;
+                let mu_post = rhs * inv_sigma2_e * var_post;
+                
+                let log_prior = self.pi_vec[k].ln();
+                let log_lik = -0.5 * (sigma2_k.ln() + mu_post.powi(2) / var_post);
+                log_probs[k] = log_prior + log_lik;
+            }
+            
+            // Normalize probabilities
+            let max_log = log_probs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            let mut probs = [0.0; 4];
+            let mut sum_probs = 0.0;
+            
+            for k in 0..4 {
+                probs[k] = (log_probs[k] - max_log).exp();
                 sum_probs += probs[k];
             }
             
