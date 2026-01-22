@@ -23,25 +23,25 @@ We have provided MasBayes as a ready-to-use package for R, which can be installe
 ```r
 # Linux x64 x86
 install.packages(
-  "https://github.com/bowo1698/masbayes/releases/download/v1.1.0/masbayes_x64_x86_64-unknown-linux-gnu.tar.gz", 
+  "https://github.com/bowo1698/masbayes/releases/download/v1.0/masbayes_x64_x86_64-unknown-linux-gnu.tar.gz", 
   repos = NULL
 )
 
 # MacOS ARM 64
 install.packages(
-  "https://github.com/bowo1698/masbayes/releases/download/v1.1.0/masbayes_arm64_aarch64-apple-darwin.tar.gz", 
+  "https://github.com/bowo1698/masbayes/releases/download/v1.0/masbayes_arm64_aarch64-apple-darwin.tar.gz", 
   repos = NULL
 )
 
 # MacOS x64
 install.packages(
-  "https://github.com/bowo1698/masbayes/releases/download/v1.1.0/masbayes_x64_x86_64-apple-darwin.tar.gz", 
+  "https://github.com/bowo1698/masbayes/releases/download/v1.0/masbayes_x64_x86_64-apple-darwin.tar.gz", 
   repos = NULL
 )
 
 # Windows x64 x86
 install.packages(
-  "https://github.com/bowo1698/masbayes/releases/download/v1.1.0/masbayes_x64_x86_64-pc-windows-gnu.zip", 
+  "https://github.com/bowo1698/masbayes/releases/download/v1.0/masbayes_x64_x86_64-pc-windows-gnu.zip", 
   repos = NULL
 )
 ```
