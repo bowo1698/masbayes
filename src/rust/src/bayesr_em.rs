@@ -5,7 +5,9 @@ use crate::types::BayesRResults;
 
 pub struct BayesREM {
     w: Array2<f64>,
+    y: Array1<f64>,
     wtw_diag: Array1<f64>,
+    wty: Array1<f64>,
     
     n: usize,
     n_alleles: usize,
@@ -20,8 +22,6 @@ pub struct BayesREM {
     gamma_prob: Array2<f64>,
     sigma2_e: f64,
     fold_id: i32,
-
-    residual: Array1<f64>,  // r = y - Wβ, tracked incrementally
 }
 
 impl BayesREM {
@@ -39,16 +39,12 @@ impl BayesREM {
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
-
-        // Since beta starts at 0, residual = y - W×0 = y
-        let residual = Array1::from_vec(y.clone());
-
-        // wty is no longer needed - we use residual tracking instead
-        let _ = wty;
-
+        
         Self {
             w,
+            y: Array1::from_vec(y),
             wtw_diag: Array1::from_vec(wtw_diag),
+            wty: Array1::from_vec(wty),
             n,
             n_alleles,
             pi_vec: Array1::from_vec(pi_vec),
@@ -59,7 +55,6 @@ impl BayesREM {
             gamma_prob: Array2::<f64>::zeros((n_alleles, 4)),
             sigma2_e: sigma2_e_init,
             fold_id,
-            residual,
         }
     }
     
@@ -145,13 +140,18 @@ impl BayesREM {
     }
     
     fn e_step(&mut self) {
+        let fitted = self.w.dot(&self.beta);
         let inv_sigma2_e = 1.0 / self.sigma2_e;
-
+        
         for j in 0..self.n_alleles {
             let l_j = self.wtw_diag[j];
-            let w_j = self.w.column(j);
-            let wj_r = w_j.dot(&self.residual);
-            let rhs = wj_r + l_j * self.beta[j];
+            
+            // Residual for marker j
+            let mut residuals_prod = self.wty[j]; // w_j' y
+            for i in 0..self.n {
+                residuals_prod -= self.w[[i, j]] * fitted[i]; // w_j' (y - Ŷ)
+            }
+            let rhs = residuals_prod + l_j * self.beta[j];
             
             let mut log_probs = [0.0; 4];
             log_probs[0] = self.pi_vec[0].ln();
@@ -163,16 +163,14 @@ impl BayesREM {
                     continue;
                 }
                 
-                let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k;
-                let var_post = 1.0 / inv_var_post;
-                let mu_post = rhs * inv_sigma2_e * var_post;
+                let ratio_var = sigma2_k * inv_sigma2_e;
+                let log_det = (1.0 + l_j * ratio_var).ln();
+                let quad_term = (rhs.powi(2) * sigma2_k) / 
+                               (self.sigma2_e * (self.sigma2_e + l_j * sigma2_k));
                 
-                let log_prior = self.pi_vec[k].ln();
-                let log_lik = -0.5 * (sigma2_k.ln() + mu_post.powi(2) / var_post);
-                log_probs[k] = log_prior + log_lik;
+                log_probs[k] = self.pi_vec[k].ln() - 0.5 * log_det + 0.5 * quad_term;
             }
             
-            // Normalize probabilities
             let max_log = log_probs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
             let mut probs = [0.0; 4];
             let mut sum_probs = 0.0;
@@ -189,23 +187,25 @@ impl BayesREM {
     }
     
     fn m_step(&mut self) {
+        let mut fitted = self.w.dot(&self.beta);
         let inv_sigma2_e = 1.0 / self.sigma2_e;
-
+        
         // Update beta using mixture of components
         for j in 0..self.n_alleles {
             let l_j = self.wtw_diag[j];
-
-            // Use tracked residual: w_j' r + l_j * β_j
-            let w_j = self.w.column(j);
-            let wj_r = w_j.dot(&self.residual);
-            let rhs = wj_r + l_j * self.beta[j];
-
+            
+            let mut residuals_prod = self.wty[j];
+            for i in 0..self.n {
+                residuals_prod -= self.w[[i, j]] * fitted[i];
+            }
+            let rhs = residuals_prod + l_j * self.beta[j];
+            
             // Compute mixture posterior: E[β] = Σₖ P(γ=k) E[β|γ=k]
             let mut beta_new = 0.0;
-
+            
             for k in 0..4 {
                 let prob_k = self.gamma_prob[[j, k]];
-
+                
                 if k == 0 {
                     // Component 0: β = 0
                     beta_new += prob_k * 0.0;
@@ -215,59 +215,62 @@ impl BayesREM {
                         let inv_var_post = l_j * inv_sigma2_e + 1.0 / sigma2_k;
                         let var_post = 1.0 / inv_var_post;
                         let mu_post = rhs * inv_sigma2_e * var_post;
-
+                        
                         beta_new += prob_k * mu_post;
                     }
                 }
             }
-
+            
             let beta_old = self.beta[j];
             self.beta[j] = beta_new;
-
-            // Update residual incrementally: r -= (β_new - β_old) * w_j
-            if (self.beta[j] - beta_old).abs() > 1e-12 {
+            
+            // Update fitted values
+            if self.beta[j] != beta_old {
                 let delta = self.beta[j] - beta_old;
                 for i in 0..self.n {
-                    self.residual[i] -= self.w[[i, j]] * delta;
+                    fitted[i] += self.w[[i, j]] * delta;
                 }
             }
         }
-
-        // Update sigma2_e - use tracked residual directly
-        let sse: f64 = self.residual.iter().map(|r| r.powi(2)).sum();
+        
+        // Update sigma2_e
+        let residuals = &self.y - &fitted;
+        let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
         self.sigma2_e = sse / (self.n as f64);
-
+        
         // 3. Update sigma2_k
         for k in 1..4 {
             let mut ss = 0.0;
             let mut n_k_soft = 0.0;
-
+            
             for j in 0..self.n_alleles {
                 let prob_k = self.gamma_prob[[j, k]];
                 if prob_k < 1e-8 { continue; }
-
+                
                 let l_j = self.wtw_diag[j];
                 let sigma2_k = self.sigma2_vec[k];
                 if sigma2_k < 1e-10 { continue; }
-
-                // Use tracked residual: w_j' r + l_j * β_j
-                let w_j = self.w.column(j);
-                let wj_r = w_j.dot(&self.residual);
-                let rhs = wj_r + l_j * self.beta[j];
-
+                
+                // Recompute posterior for component k
+                let mut residuals_prod = self.wty[j];
+                for i in 0..self.n {
+                    residuals_prod -= self.w[[i, j]] * fitted[i];
+                }
+                let rhs = residuals_prod + l_j * self.beta[j];
+                
                 let var_post_k = 1.0 / (l_j / self.sigma2_e + 1.0 / sigma2_k);
                 let mu_post_k = rhs / self.sigma2_e * var_post_k;
-
+                
                 // E[β²] = μ² + σ²
                 ss += prob_k * (mu_post_k.powi(2) + var_post_k);
                 n_k_soft += prob_k;
             }
-
+            
             if n_k_soft > 0.1 {
                 self.sigma2_vec[k] = (ss / n_k_soft).max(1e-6);
             }
         }
-
+        
         // 4. Update pi
         for k in 0..4 {
             let sum_prob: f64 = (0..self.n_alleles)
