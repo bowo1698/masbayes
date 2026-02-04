@@ -101,7 +101,7 @@ ls("package:masbayes")
 
 Biallelic SNP genotype data is generally represented as a simple matrix with values ​​0, 1, or 2 which indicate the number of alleles at a single locus. However, the $W_{ah}$ matrix represents each specific haplotype (multi-allelic) variant found in the population. Consequently, the $W_{ah}$ matrix is ​​able to capture linkage interactions between markers that often better reflect the effects of functional causal variants than single SNP. 
 
-To construct this complex matrix, [Da. Y. (2015)](https://link.springer.com/article/10.1186/s12863-015-0301-1) introduced a special coding system that serves to balance the statistical influence of each variant based on its frequency. This system mathematically assigns larger deviation values ​​to rare alleles and smaller values ​​to common alleles. This aims to ensure that rare variants have a proportional influence on genomic predictions, while ensuring that the average additive effect across the population remains zero to keep the model balanced. Technically, the coding rule is applied to each individual i for haplotype k with population frequency $p_k$ as follows:
+To construct this complex matrix, [Da. Y. (2015)](https://link.springer.com/article/10.1186/s12863-015-0301-1) introduced a special coding system that serves to balance the statistical influence of each variant based on its frequency. This system mathematically assigns larger deviation values ​​to rare alleles and smaller values ​​to common alleles. This aims to ensure that rare variants have a proportional influence on genomic predictions, while ensuring that the average additive effect across the population remains zero to keep the model balanced. Technically, the coding rule is applied to each individual $i$ for haplotype $k$ with population frequency $p_k$ as follows:
 
 $$
 W_{i,k} = \begin{cases}
@@ -111,21 +111,21 @@ W_{i,k} = \begin{cases}
 \end{cases}
 $$
 
-where $k \neq \ell \neq m$ are distinct alleles. Note that we drop the most frequent allele (baseline) from each block, keeping only $h-1$ informative alleles.
+where $k \neq \ell \neq m$ are distinct alleles. Note that we drop the most frequent allele (baseline) from each block, keeping only $h-1$ alleles to provide unique solutions.
 
-Allele frequencies are calculated from phased haplotypes (the two DNA copies each individual inherited from their parents), so tools like [Beagle](https://faculty.washington.edu/browning/beagle/beagle.html) (population-based phasing/imputation) and [FImpute](https://animalbiosciences.uoguelph.ca/~msargol/fimpute/) (pedigree-based phasing/imputation) are crucial. For each haplotype block, we count how many times each allele appears across all individuals and divide by total haplotypes (2n for n individuals). For example, if allele 3 appears in 5 out of 200 haplotypes (100 individuals), its frequency is $p_k = 5/200 = 0.025$ (2.5%).
+Allele frequencies are calculated from phased haplotypes (the two DNA copies each individual inherited from their parents), so tools like [Beagle](https://faculty.washington.edu/browning/beagle/beagle.html) (population-based phasing/imputation) and [FImpute](https://animalbiosciences.uoguelph.ca/~msargol/fimpute/) (pedigree-based phasing/imputation) are crucial. For each haplotype block, we count how many times each allele appears across all individuals and divide by total haplotypes ($2n$ for $n$ individuals). For example, if allele 3 appears in 5 out of 200 haplotypes (100 individuals), its frequency is $p_k = 5/200 = 0.025$ (2.5%).
 
 This standardisation ensures three critical properties. First, the matrix is mean-centered with $\mathbb{E}[W_k] = 0$, meaning that positive and negative deviations balance out across the population. Second, variance scales with $\text{Var}(W_k) \propto 2p_k(1-p_k)$, matching Hardy-Weinberg genetic expectations where intermediate-frequency alleles contribute most variance. Third, the haplotype genomic relationship matrix $\mathbf{G} = \mathbf{W}\mathbf{W}^\top / k_{\alpha h}$ (where $k_{\alpha h} = \text{tr}(\mathbf{G}) / n$) becomes comparable to SNP-based GRM by [VanRaden. (2008)](https://www.journalofdairyscience.org/article/S0022-0302(08)70990-1/fulltext), enabling proven statistical methods like GBLUP to work directly with multi-allelic markers.
 
 #### Example
 
-Consider 4 individuals genotyped at haplotype block 1_1 containing 4 alleles. Allele 2 is most frequent (60%, baseline allele, dropped). The remaining alleles have frequencies: allele 1 at 37.5%, allele 3 at 2.5% (rare), and allele 4 at 0% in this sample.
+Consider 4 individuals genotyped at **Locus 1_1** which has 4 distinct alleles. Allele 2 is the most frequent (60%), chosen as baseline and dropped. Allele 1 (37.5%) and Allele 3 (2.5% - rare) are included in the matrix. Allele 4 (0%) is ignored as it is monomorphic in this sample.
 
 Step 1: Phased genotypes (maternal/paternal)
-- ID1: 1/3 → carries alleles 1 and 3
-- ID2: 1/2 → carries allele 1 and baseline
-- ID3: 2/2 → only baseline (homozygous)
-- ID4: 3/3 → only allele 3 (homozygous)
+- ID1: 1/3 → carries two different non-baseline alleles, alleles 1 and 3
+- ID2: 1/2 → Carries one non-baseline and one baseline allele, allele 1 and 2 (baseline)
+- ID3: 2/2 → Homozygous for the baseline allele (allele 2)
+- ID4: 3/3 → Homozygous for the rare allele (allele 3)
 
 Step 2: Apply coding rule
 
@@ -145,9 +145,16 @@ Step 3: Final $W_αh$ matrix
 | ID3 | 0.75            | 0.05            |
 | ID4 | 0.75            | -1.95           |
 
-For rare allele 3 (2.5% frequency): Individuals carrying it get large negative values (ID1: -0.95 heterozygous, ID4: -1.95 homozygous), making them stand out strongly from the population. Non-carriers get small positive values (0.05), barely different from average. 
+The matrix $W_{\alpha h}$ uses allele frequencies to "weight" the genotypes. Here is how to interpret the resulting values:
 
-For common allele 1 (37.5% frequency): Carriers get moderate negative values (-0.25 for heterozygous), while non-carriers get moderate positive values (0.75). The deviations are smaller because this allele is common and less "informative."
+* **Rare alleles (e.g., Allele 3 at 2.5%):** Because this allele is scarce, its presence creates a massive statistical "deviation." 
+    - **Carriers** (ID1 & ID4) get large negative values (**-0.95** to **-1.95**), making them stand out sharply. 
+    - **Non-carriers** (ID2 & ID3) get a value near zero (**0.05**), meaning they stay close to the population average.
+
+* **Common alleles (e.g., Allele 1 at 37.5%):** Because this allele is common, its presence is less surprising to the model. 
+    - **Carriers** (ID1 & ID2) receive moderate negative values (**-0.25**).
+    - **Non-carriers** (ID3 & ID4) receive moderate positive values (**0.75**). 
+    The gap between carrier and non-carrier is smaller here because the allele is less "informative" than a rare one.
 
 This weighting ensures rare, potentially high-impact genetic variants contribute more to genomic predictions than common background variation.
 
