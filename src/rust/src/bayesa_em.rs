@@ -118,6 +118,7 @@ impl BayesAEM {
             beta_samples,
             sigma2_j_samples,
             sigma2_e_samples: Array1::from_vec(vec![self.sigma2_e]),
+            mu_samples: Array1::from_vec(vec![0.0]),
         }
     }
     

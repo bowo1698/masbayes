@@ -136,6 +136,7 @@ impl BayesREM {
             sigma2_medium_samples: Array1::from_vec(vec![self.sigma2_vec[2]]),
             sigma2_large_samples: Array1::from_vec(vec![self.sigma2_vec[3]]),
             pi_samples: Array2::from_shape_fn((1, 4), |(_, k)| self.pi_vec[k]),
+            mu_samples: Array1::from_vec(vec![0.0]),
         }
     }
     

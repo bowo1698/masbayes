@@ -20,16 +20,16 @@ pub struct BayesRRunner {
     // Hyperparameters
     pi_vec: Array1<f64>,
     sigma2_vec: Array1<f64>,
+    mu: f64,
     
     // Prior parameters
     a0_e: f64,
     b0_e: f64,
-    a0_small: f64,
-    b0_small: f64,
-    a0_medium: f64,
-    b0_medium: f64,
-    a0_large: f64,
-    b0_large: f64,
+    a0_g: f64,
+    b0_g: f64,
+
+    // Fold multipliers [0.0, 0.0001, 0.001, 0.01]
+    fold: Array1<f64>,
     
     // MCMC parameters
     n_iter: usize,
@@ -53,13 +53,11 @@ impl BayesRRunner {
         wtw_diag: Vec<f64>,
         wty: Vec<f64>,
         pi_vec: Vec<f64>,
-        sigma2_vec: Vec<f64>,
+        fold: Vec<f64>,        // e.g. [0.0, 0.0001, 0.001, 0.01]
         sigma2_e_init: f64,
         sigma2_ah: f64,
         a0_e: f64, b0_e: f64,
-        a0_small: f64, b0_small: f64,
-        a0_medium: f64, b0_medium: f64,
-        a0_large: f64, b0_large: f64,
+        a0_g: f64, b0_g: f64,  // single prior for base variance
         n_iter: usize,
         n_burn: usize,
         n_thin: usize,
@@ -78,6 +76,10 @@ impl BayesRRunner {
         for i in 0..n_alleles {
             beta[i] = rnorm(&mut init_rng, 0.0, init_sd);
         }
+
+        // Initial base variance estimate
+        let varg_init = sigma2_ah / ((1.0 - pi_vec[0]) * n_alleles as f64);
+        let sigma2_vec: Vec<f64> = fold.iter().map(|&f| f * varg_init).collect();
         
         Self {
             w,
@@ -88,10 +90,10 @@ impl BayesRRunner {
             n_alleles,
             pi_vec: Array1::from_vec(pi_vec),
             sigma2_vec: Array1::from_vec(sigma2_vec),
+            mu: 0.0,
             a0_e, b0_e,
-            a0_small, b0_small,
-            a0_medium, b0_medium,
-            a0_large, b0_large,
+            a0_g, b0_g,
+            fold: Array1::from_vec(fold),
             n_iter,
             n_burn,
             n_thin,
@@ -105,6 +107,7 @@ impl BayesRRunner {
     
     pub fn run(&mut self) -> BayesRResults {
         let n_save = (self.n_iter - self.n_burn) / self.n_thin;
+        let mut mu_samples = Array1::<f64>::zeros(n_save);
         
         // Storage
         let mut beta_samples = Array2::<f64>::zeros((n_save, self.n_alleles));
@@ -128,8 +131,22 @@ impl BayesRRunner {
         
         // MCMC loop
         for iter in 0..self.n_iter {
+            // Sample intercept
+            let fitted = self.w.dot(&self.beta);
+            let resid_sum: f64 = self.y.iter()
+                .zip(fitted.iter())
+                .map(|(yi, fi)| yi - fi - self.mu)
+                .sum();
+            let mu_post = resid_sum / self.n as f64 + self.mu;
+            let mu_sd = (self.sigma2_e / self.n as f64).sqrt();
+            self.mu = rnorm(&mut self.rng, mu_post, mu_sd);
+
             // 1. Sample beta and gamma
             let mut fitted = self.w.dot(&self.beta);
+            // Add mu to fitted so residuals = y - mu - W*beta
+            for i in 0..self.n {
+                fitted[i] += self.mu;
+            }
             let inv_sigma2_e = 1.0 / self.sigma2_e;
             
             for j in 0..self.n_alleles {
@@ -222,26 +239,27 @@ impl BayesRRunner {
             let b_e = self.b0_e + sse / 2.0;
             self.sigma2_e = rinvgamma(&mut self.rng, a_e, b_e);
             
-            // Sample mixture variances
+            // Tabulate component counts
             let n_counts = tabulate(&self.gamma, 4);
 
-            // Compute sum of squares for each component in one pass
-            let mut ss_components = [0.0; 4];
+            // Pooled base variance update
+            let mut varg_sum = 0.0;
+            let mut n_nz: usize = 0;
             for j in 0..self.n_alleles {
                 let comp = self.gamma[j];
-                if comp > 0 && comp < 4 {
-                    ss_components[comp] += self.beta[j].powi(2);
+                if comp > 0 {
+                    varg_sum += self.beta[j].powi(2) / self.fold[comp];
+                    n_nz += 1;
                 }
             }
 
-            // Sample variance for each non-zero component
-            let prior_a = [self.a0_small, self.a0_medium, self.a0_large];
-            let prior_b = [self.b0_small, self.b0_medium, self.b0_large];
+            let a_g = self.a0_g + (n_nz as f64) / 2.0;
+            let b_g = self.b0_g + varg_sum / 2.0;
+            let varg = rinvgamma(&mut self.rng, a_g, b_g);
 
+            // Propagate to all components
             for k in 1..4 {
-                let a_k = prior_a[k-1] + (n_counts[k] as f64) / 2.0;
-                let b_k = prior_b[k-1] + ss_components[k] / 2.0;
-                self.sigma2_vec[k] = rinvgamma(&mut self.rng, a_k, b_k);
+                self.sigma2_vec[k] = varg * self.fold[k];
             }
             
             // 3. Sample mixture proportions
@@ -253,6 +271,7 @@ impl BayesRRunner {
             
             // 4. Store samples
             if iter >= self.n_burn && (iter - self.n_burn) % self.n_thin == 0 {
+                mu_samples[save_idx] = self.mu;
                 for j in 0..self.n_alleles {
                     beta_samples[[save_idx, j]] = self.beta[j];
                     gamma_samples[[save_idx, j]] = self.gamma[j] as f64;
@@ -297,6 +316,7 @@ impl BayesRRunner {
             sigma2_medium_samples,
             sigma2_large_samples,
             pi_samples,
+            mu_samples,
         }
     }
 }

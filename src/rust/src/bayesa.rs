@@ -36,6 +36,7 @@ pub struct BayesARunner {
     beta_a: Array1<f64>,
     sigma2_j: Array1<f64>,
     sigma2_e_a: f64,
+    mu: f64,
     fold_id: i32,
 }
 
@@ -79,6 +80,7 @@ impl BayesARunner {
             beta_a: Array1::<f64>::zeros(n_alleles),
             sigma2_j: Array1::<f64>::from_elem(n_alleles, s_squared),
             sigma2_e_a: sigma2_e_init,
+            mu: 0.0,
             fold_id,
         }
     }
@@ -90,6 +92,7 @@ impl BayesARunner {
         let mut beta_samples = Array2::<f64>::zeros((n_save, self.n_alleles));
         let mut sigma2_j_samples = Array2::<f64>::zeros((n_save, self.n_alleles));
         let mut sigma2_e_samples = Array1::<f64>::zeros(n_save);
+        let mut mu_samples = Array1::<f64>::zeros(n_save);
         
         let mut save_idx = 0;
         
@@ -100,21 +103,31 @@ impl BayesARunner {
         
         // MCMC loop
         for iter in 0..self.n_iter {
-            // 1. Sample beta_j
+            // Sample beta_j
             let mut fitted = self.w.dot(&self.beta_a);
+            let resid_sum: f64 = (0..self.n)
+                .map(|i| self.y[i] - fitted[i] - self.mu)
+                .sum();
+            let mu_mean = self.mu + resid_sum / self.n as f64;
+            let mu_var = self.sigma2_e_a / self.n as f64;
+            self.mu = rnorm(&mut self.rng, mu_mean, mu_var.sqrt());
             let inv_sigma2_e = 1.0 / self.sigma2_e_a;
             
             for j in 0..self.n_alleles {
                 let l_j = self.wtw_diag[j];
                 
-                // Compute residual correlation
+                // Sample sigma2_j | beta_j_current 
+                let shape_j = (self.nu + 1.0) / 2.0;
+                let scale_j = (self.nu * self.s_squared + self.beta_a[j].powi(2)) / 2.0;
+                self.sigma2_j[j] = rinvgamma(&mut self.rng, shape_j, scale_j);
+                
+                // Sample beta_j | sigma2_j_new 
                 let mut residuals_prod = self.wty[j];
                 for i in 0..self.n {
                     residuals_prod -= self.w[[i, j]] * fitted[i];
                 }
                 let rhs = residuals_prod + l_j * self.beta_a[j];
                 
-                // Posterior distribution
                 let inv_var_post = l_j * inv_sigma2_e + 1.0 / self.sigma2_j[j];
                 let var_post = 1.0 / inv_var_post;
                 let mu_post = rhs * inv_sigma2_e * var_post;
@@ -122,7 +135,7 @@ impl BayesARunner {
                 let beta_old = self.beta_a[j];
                 self.beta_a[j] = rnorm(&mut self.rng, mu_post, var_post.sqrt());
                 
-                // Incremental update
+                // Incremental update fitted
                 if self.beta_a[j] != beta_old {
                     let delta = self.beta_a[j] - beta_old;
                     for i in 0..self.n {
@@ -131,32 +144,26 @@ impl BayesARunner {
                 }
             }
             
-            // 2. Sample sigma2_j
-            let shape_j = (self.nu + 1.0) / 2.0;
-            for j in 0..self.n_alleles {
-                let scale_j = (self.nu * self.s_squared + self.beta_a[j].powi(2)) / 2.0;
-                self.sigma2_j[j] = rinvgamma(&mut self.rng, shape_j, scale_j);
-            }
-            
-            // 3. Sample sigma2_e
-            let residuals = &self.y - &fitted;
+            // Sample sigma2_e
+            let residuals = &self.y - &fitted - self.mu;
             let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
             
             let a_e = self.a0_e + (self.n as f64) / 2.0;
             let b_e = self.b0_e + sse / 2.0;
             self.sigma2_e_a = rinvgamma(&mut self.rng, a_e, b_e);
             
-            // 4. Store samples
+            // Store samples
             if iter >= self.n_burn && (iter - self.n_burn) % self.n_thin == 0 {
                 for j in 0..self.n_alleles {
                     beta_samples[[save_idx, j]] = self.beta_a[j];
                     sigma2_j_samples[[save_idx, j]] = self.sigma2_j[j];
                 }
                 sigma2_e_samples[save_idx] = self.sigma2_e_a;
+                mu_samples[save_idx] = self.mu;
                 save_idx += 1;
             }
             
-            // 5. Monitor convergence
+            // Monitor convergence
             let monitor_interval = (self.n_iter / 10).max(100).min(1000);
             if iter % monitor_interval == 0 {
                 let mean_beta_abs = self.beta_a.iter().map(|b| b.abs()).sum::<f64>() / (self.n_alleles as f64);
@@ -183,6 +190,7 @@ impl BayesARunner {
             beta_samples,
             sigma2_j_samples,
             sigma2_e_samples,
+            mu_samples,
         }
     }
 }

@@ -1,6 +1,6 @@
 use ndarray::{Array1, Array2};
 
-/// Results from BayesR MCMC
+/// Results from BayesR 
 pub struct BayesRResults {
     pub beta_samples: Array2<f64>,
     pub gamma_samples: Array2<f64>,
@@ -9,11 +9,13 @@ pub struct BayesRResults {
     pub sigma2_medium_samples: Array1<f64>,
     pub sigma2_large_samples: Array1<f64>,
     pub pi_samples: Array2<f64>,
+    pub mu_samples: Array1<f64>,
 }
 
-/// Results from BayesA MCMC
+/// Results from BayesA 
 pub struct BayesAResults {
     pub beta_samples: Array2<f64>,
     pub sigma2_j_samples: Array2<f64>,
     pub sigma2_e_samples: Array1<f64>,
+    pub mu_samples: Array1<f64>,
 }

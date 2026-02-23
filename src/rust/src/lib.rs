@@ -244,7 +244,6 @@ fn run_bayesr_mcmc(
     wtw_diag: Vec<f64>,
     wty: Vec<f64>,
     pi_vec: Vec<f64>,
-    sigma2_vec: Vec<f64>,
     sigma2_e_init: f64,
     sigma2_ah: f64,
     prior_params: List,
@@ -261,16 +260,16 @@ fn run_bayesr_mcmc(
     // Extract prior parameters
     let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
     let b0_e = prior_params.dollar("b0_e").unwrap().as_real().unwrap();
-    let a0_small = prior_params.dollar("a0_small").unwrap().as_real().unwrap();
-    let b0_small = prior_params.dollar("b0_small").unwrap().as_real().unwrap();
-    let a0_medium = prior_params.dollar("a0_medium").unwrap().as_real().unwrap();
-    let b0_medium = prior_params.dollar("b0_medium").unwrap().as_real().unwrap();
-    let a0_large = prior_params.dollar("a0_large").unwrap().as_real().unwrap();
-    let b0_large = prior_params.dollar("b0_large").unwrap().as_real().unwrap();
     
     // Convert R matrix to ndarray
     let w_array = utils::rmatrix_to_array2(&w);
     
+    let fold_vec = prior_params.dollar("fold").unwrap()
+        .as_real_vector()
+        .expect("'fold' must be numeric vector");
+    let a0_g = prior_params.dollar("a0_g").unwrap().as_real().unwrap();
+    let b0_g = prior_params.dollar("b0_g").unwrap().as_real().unwrap();
+
     // Create runner
     let mut runner = BayesRRunner::new(
         w_array,
@@ -278,13 +277,11 @@ fn run_bayesr_mcmc(
         wtw_diag,
         wty,
         pi_vec,
-        sigma2_vec,
+        fold_vec,
         sigma2_e_init,
         sigma2_ah,
         a0_e, b0_e,
-        a0_small, b0_small,
-        a0_medium, b0_medium,
-        a0_large, b0_large,
+        a0_g, b0_g,
         n_iter,
         n_burn,
         n_thin,
@@ -303,7 +300,8 @@ fn run_bayesr_mcmc(
         sigma2_small_samples = array1_to_vec(&results.sigma2_small_samples),
         sigma2_medium_samples = array1_to_vec(&results.sigma2_medium_samples),
         sigma2_large_samples = array1_to_vec(&results.sigma2_large_samples),
-        pi_samples = array2_to_rmatrix(&results.pi_samples)
+        pi_samples = array2_to_rmatrix(&results.pi_samples),
+        mu_samples = array1_to_vec(&results.mu_samples)
     )
 }
 
@@ -370,7 +368,8 @@ fn run_bayesa_mcmc(
     list!(
         beta_samples = array2_to_rmatrix(&results.beta_samples),
         sigma2_j_samples = array2_to_rmatrix(&results.sigma2_j_samples),
-        sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples)
+        sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
+        mu_samples = array1_to_vec(&results.mu_samples)
     )
 }
 

@@ -17,8 +17,9 @@
 #' @param fold_id Fold identifier
 #' @export
 run_bayesr <- function(w, y, wtw_diag, wty, 
-                       pi_vec, sigma2_vec, sigma2_e_init,
+                       pi_vec, sigma2_e_init,
                        sigma2_ah = NULL,
+                       sigma2_vec = NULL,
                        prior_params = NULL,
                        mcmc_params = NULL,
                        em_params = NULL,
@@ -31,7 +32,7 @@ run_bayesr <- function(w, y, wtw_diag, wty,
     if (is.null(sigma2_ah) || is.null(prior_params) || is.null(mcmc_params)) {
       stop("For MCMC: sigma2_ah, prior_params, and mcmc_params required")
     }
-    run_bayesr_mcmc(w, y, wtw_diag, wty, pi_vec, sigma2_vec, 
+    run_bayesr_mcmc(w, y, wtw_diag, wty, pi_vec, 
                     sigma2_e_init, sigma2_ah, prior_params, 
                     mcmc_params, fold_id)
   } else {
