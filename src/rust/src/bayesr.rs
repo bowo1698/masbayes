@@ -28,8 +28,8 @@ pub struct BayesRRunner {
     a0_g: f64,
     b0_g: f64,
 
-    // Fold multipliers [0.0, 0.0001, 0.001, 0.01]
-    fold: Array1<f64>,
+    // variance classes [0.0, 0.0001, 0.001, 0.01]
+    variance_class: Array1<f64>,
     
     // MCMC parameters
     n_iter: usize,
@@ -53,7 +53,7 @@ impl BayesRRunner {
         wtw_diag: Vec<f64>,
         wty: Vec<f64>,
         pi_vec: Vec<f64>,
-        fold: Vec<f64>,        // e.g. [0.0, 0.0001, 0.001, 0.01]
+        variance_class: Vec<f64>,        // e.g. [0.0, 0.0001, 0.001, 0.01]
         sigma2_e_init: f64,
         sigma2_ah: f64,
         a0_e: f64, b0_e: f64,
@@ -79,7 +79,7 @@ impl BayesRRunner {
 
         // Initial base variance estimate
         let varg_init = sigma2_ah / ((1.0 - pi_vec[0]) * n_alleles as f64);
-        let sigma2_vec: Vec<f64> = fold.iter().map(|&f| f * varg_init).collect();
+        let sigma2_vec: Vec<f64> = variance_class.iter().map(|&f| f * varg_init).collect();
         
         Self {
             w,
@@ -93,7 +93,7 @@ impl BayesRRunner {
             mu: 0.0,
             a0_e, b0_e,
             a0_g, b0_g,
-            fold: Array1::from_vec(fold),
+            variance_class: Array1::from_vec(variance_class),
             n_iter,
             n_burn,
             n_thin,
@@ -248,7 +248,7 @@ impl BayesRRunner {
             for j in 0..self.n_alleles {
                 let comp = self.gamma[j];
                 if comp > 0 {
-                    varg_sum += self.beta[j].powi(2) / self.fold[comp];
+                    varg_sum += self.beta[j].powi(2) / self.variance_class[comp];
                     n_nz += 1;
                 }
             }
@@ -259,7 +259,7 @@ impl BayesRRunner {
 
             // Propagate to all components
             for k in 1..4 {
-                self.sigma2_vec[k] = varg * self.fold[k];
+                self.sigma2_vec[k] = varg * self.variance_class[k];
             }
             
             // 3. Sample mixture proportions
@@ -307,6 +307,25 @@ impl BayesRRunner {
         
         eprintln!("[Fold {}] ESS: {:.0} | Geweke Z: {:.3}", self.fold_id, ess, geweke);
         eprintln!("\n[Fold {}] BayesR MCMC completed!\n", self.fold_id);
+
+        // Posterior means
+        let beta_hat = beta_samples.mean_axis(ndarray::Axis(0)).unwrap();
+        let mu_hat = mu_samples.mean().unwrap();
+        let sigma2_e_hat = sigma2_e_samples.mean().unwrap();
+
+        // GEBV train = W * beta_hat + mu_hat
+        let mut gebv_train = self.w.dot(&beta_hat);
+        gebv_train.mapv_inplace(|v| v + mu_hat);
+
+        // Variance of GEBV = sigma2_g
+        let gebv_mean = gebv_train.mean().unwrap();
+        let sigma2_g = gebv_train.iter()
+            .map(|&g| (g - gebv_mean).powi(2))
+            .sum::<f64>() / (self.n as f64 - 1.0);
+
+        let h2 = sigma2_g / (sigma2_g + sigma2_e_hat);
+
+        eprintln!("[Fold {}] σ²_g = {:.6} | h² = {:.4}", self.fold_id, sigma2_g, h2);
         
         BayesRResults {
             beta_samples,
@@ -317,6 +336,12 @@ impl BayesRRunner {
             sigma2_large_samples,
             pi_samples,
             mu_samples,
+            beta_hat,
+            mu_hat,
+            sigma2_e_hat,
+            gebv_train,
+            sigma2_g,
+            h2,
         }
     }
 }

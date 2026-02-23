@@ -113,12 +113,33 @@ impl BayesAEM {
         let sigma2_j_samples = Array2::from_shape_fn((1, self.n_alleles), |(_, j)| self.sigma2_j[j]);
         
         eprintln!("\n[Fold {}] BayesA EM completed!\n", self.fold_id);
+
+        let beta_hat = self.beta.clone();
+        let mu_hat = 0.0;
+        let sigma2_e_hat = self.sigma2_e;
+        let sigma2_j_hat = self.sigma2_j.clone();
+
+        let mut gebv_train = self.w.dot(&beta_hat);
+        gebv_train.mapv_inplace(|v| v + mu_hat);
+
+        let gebv_mean = gebv_train.mean().unwrap();
+        let sigma2_g = gebv_train.iter()
+            .map(|&g| (g - gebv_mean).powi(2))
+            .sum::<f64>() / (self.n as f64 - 1.0);
+        let h2 = sigma2_g / (sigma2_g + sigma2_e_hat);
         
         BayesAResults {
             beta_samples,
             sigma2_j_samples,
             sigma2_e_samples: Array1::from_vec(vec![self.sigma2_e]),
             mu_samples: Array1::from_vec(vec![0.0]),
+            beta_hat,
+            mu_hat,
+            sigma2_e_hat,
+            sigma2_j_hat,
+            gebv_train,
+            sigma2_g,
+            h2,
         }
     }
     

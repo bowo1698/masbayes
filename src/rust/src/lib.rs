@@ -264,9 +264,9 @@ fn run_bayesr_mcmc(
     // Convert R matrix to ndarray
     let w_array = utils::rmatrix_to_array2(&w);
     
-    let fold_vec = prior_params.dollar("fold").unwrap()
+    let variance_class = prior_params.dollar("variance_class").unwrap()
         .as_real_vector()
-        .expect("'fold' must be numeric vector");
+        .expect("'variance_class' must be numeric vector");
     let a0_g = prior_params.dollar("a0_g").unwrap().as_real().unwrap();
     let b0_g = prior_params.dollar("b0_g").unwrap().as_real().unwrap();
 
@@ -277,7 +277,7 @@ fn run_bayesr_mcmc(
         wtw_diag,
         wty,
         pi_vec,
-        fold_vec,
+        variance_class,
         sigma2_e_init,
         sigma2_ah,
         a0_e, b0_e,
@@ -301,7 +301,13 @@ fn run_bayesr_mcmc(
         sigma2_medium_samples = array1_to_vec(&results.sigma2_medium_samples),
         sigma2_large_samples = array1_to_vec(&results.sigma2_large_samples),
         pi_samples = array2_to_rmatrix(&results.pi_samples),
-        mu_samples = array1_to_vec(&results.mu_samples)
+        mu_samples = array1_to_vec(&results.mu_samples),
+        beta_hat = array1_to_vec(&results.beta_hat),
+        mu_hat = results.mu_hat,
+        sigma2_e_hat = results.sigma2_e_hat,
+        gebv_train = array1_to_vec(&results.gebv_train),
+        sigma2_g = results.sigma2_g,
+        h2 = results.h2
     )
 }
 
@@ -369,7 +375,14 @@ fn run_bayesa_mcmc(
         beta_samples = array2_to_rmatrix(&results.beta_samples),
         sigma2_j_samples = array2_to_rmatrix(&results.sigma2_j_samples),
         sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
-        mu_samples = array1_to_vec(&results.mu_samples)
+        mu_samples = array1_to_vec(&results.mu_samples),
+        beta_hat = array1_to_vec(&results.beta_hat),
+        mu_hat = results.mu_hat,
+        sigma2_e_hat = results.sigma2_e_hat,
+        sigma2_j_hat = array1_to_vec(&results.sigma2_j_hat),
+        gebv_train = array1_to_vec(&results.gebv_train),
+        sigma2_g = results.sigma2_g,
+        h2 = results.h2
     )
 }
 
@@ -409,7 +422,14 @@ fn run_bayesr_em(
         sigma2_small_samples = array1_to_vec(&results.sigma2_small_samples),
         sigma2_medium_samples = array1_to_vec(&results.sigma2_medium_samples),
         sigma2_large_samples = array1_to_vec(&results.sigma2_large_samples),
-        pi_samples = array2_to_rmatrix(&results.pi_samples)
+        pi_samples = array2_to_rmatrix(&results.pi_samples),
+        mu_samples = array1_to_vec(&results.mu_samples),
+        beta_hat = array1_to_vec(&results.beta_hat),
+        mu_hat = results.mu_hat,
+        sigma2_e_hat = results.sigma2_e_hat,
+        gebv_train = array1_to_vec(&results.gebv_train),
+        sigma2_g = results.sigma2_g,
+        h2 = results.h2
     )
 }
 
@@ -441,7 +461,15 @@ fn run_bayesa_em(
     list!(
         beta_samples = array2_to_rmatrix(&results.beta_samples),
         sigma2_j_samples = array2_to_rmatrix(&results.sigma2_j_samples),
-        sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples)
+        sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
+        mu_samples = array1_to_vec(&results.mu_samples),
+        beta_hat = array1_to_vec(&results.beta_hat),
+        mu_hat = results.mu_hat,
+        sigma2_e_hat = results.sigma2_e_hat,
+        sigma2_j_hat = array1_to_vec(&results.sigma2_j_hat),
+        gebv_train = array1_to_vec(&results.gebv_train),
+        sigma2_g = results.sigma2_g,
+        h2 = results.h2
     )
 }
 

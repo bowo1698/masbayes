@@ -16,7 +16,8 @@
 #' @param fold_id Fold identifier
 #' @export
 run_bayesa <- function(w, y, wtw_diag, wty,
-                       nu, s_squared, sigma2_e_init,
+                       nu = 4.5,
+                       s_squared, sigma2_e_init,
                        prior_params = NULL,
                        mcmc_params = NULL,
                        em_params = NULL,
@@ -26,9 +27,15 @@ run_bayesa <- function(w, y, wtw_diag, wty,
   method <- match.arg(method)
   
   if (method == "mcmc") {
-    if (is.null(prior_params) || is.null(mcmc_params)) {
-      stop("For MCMC: prior_params and mcmc_params required")
-    }
+    mcmc_params <- modifyList(
+      list(n_iter = 40000L, n_burn = 20000L, n_thin = 10L, seed = 123L),
+      mcmc_params %||% list()
+    )
+    # Default prior params
+    prior_params <- modifyList(
+      list(a0_e = 10, b0_e = sigma2_e_init * (10 - 1)),
+      prior_params %||% list()
+    )
     run_bayesa_mcmc(w, y, wtw_diag, wty, nu, s_squared, 
                     sigma2_e_init, prior_params, mcmc_params, fold_id)
   } else {
