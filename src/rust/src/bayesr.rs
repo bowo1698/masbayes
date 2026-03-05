@@ -255,6 +255,18 @@ impl BayesRRunner {
             self.fold_id,
             self.pi_vec[0], self.pi_vec[1], self.pi_vec[2], self.pi_vec[3],
             self.sigma2_e);
+        
+        eprintln!("[Fold {}] sigma2_vec=[{:.2e},{:.2e},{:.2e},{:.2e}]",
+            self.fold_id,
+            self.sigma2_vec[0], self.sigma2_vec[1], self.sigma2_vec[2], self.sigma2_vec[3]);
+        eprintln!("[Fold {}] b0_g={:.6} | a0_g={:.4}",
+            self.fold_id, self.b0_g, self.a0_g);
+        let sum_abs_beta_hap = self.beta_hap.as_ref()
+            .map(|b| b.iter().map(|x| x.abs()).sum::<f64>()).unwrap_or(0.0);
+        let sum_abs_beta_snp = self.beta_snp.as_ref()
+            .map(|b| b.iter().map(|x| x.abs()).sum::<f64>()).unwrap_or(0.0);
+        eprintln!("[Fold {}] sum|beta_hap_init|={:.4} | sum|beta_snp_init|={:.4}",
+            self.fold_id, sum_abs_beta_hap, sum_abs_beta_snp);
 
         for iter in 0..self.n_iter {
 
