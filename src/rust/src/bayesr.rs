@@ -50,7 +50,7 @@ impl BayesRRunner {
         pi_vec: Vec<f64>,
         variance_class: Vec<f64>,
         sigma2_e_init: f64,
-        _sigma2_ah: f64,
+        sigma2_ah: f64,
         a0_e: f64, b0_e: f64,
         a0_g: f64, b0_g: f64,
         n_iter: usize,
@@ -97,9 +97,8 @@ impl BayesRRunner {
                 (None, None, 0, None, None)
             };
 
-        //let n_total = (n_hap_alleles + n_snp).max(1);
-        //let varg_init = sigma2_ah / n_total as f64;
-        let varg_init = b0_g / a0_g; 
+        let n_total = (n_hap_alleles + n_snp).max(1);
+        let varg_init = sigma2_ah / n_total as f64;
         let sigma2_vec: Vec<f64> = variance_class.iter().map(|&f| f * varg_init).collect();
 
         Self {
@@ -115,11 +114,11 @@ impl BayesRRunner {
             n_snp,
             beta_snp,
             gamma_snp,
-            y: y_arr.clone(),
+            y: y_arr,
             n,
             pi_vec: Array1::from_vec(pi_vec),
             sigma2_vec: Array1::from_vec(sigma2_vec),
-            mu: y_arr.mean().unwrap_or(0.0),
+            mu: 0.0,
             a0_e, b0_e,
             a0_g, b0_g,
             variance_class: Array1::from_vec(variance_class),
@@ -279,18 +278,8 @@ impl BayesRRunner {
             let resid_sum: f64 = self.y.iter().zip(fitted.iter())
                 .map(|(yi, fi)| yi - fi)
                 .sum();
-
-            if iter == 0 {
-                eprintln!("[Fold {}] mu sebelum sample: {:.4}", self.fold_id, self.mu);
-                eprintln!("[Fold {}] resid_sum/n: {:.4}", self.fold_id, resid_sum / self.n as f64);
-            }
-
             let mu_sd = (self.sigma2_e / self.n as f64).sqrt();
             self.mu = rnorm(&mut self.rng, resid_sum / self.n as f64, mu_sd);
-
-            if iter == 0 {
-                eprintln!("[Fold {}] mu setelah sample: {:.4}", self.fold_id, self.mu);
-            }
 
             // Rebuild fitted dengan mu baru
             let mut fitted = Array1::<f64>::from_elem(self.n, self.mu);
@@ -299,22 +288,6 @@ impl BayesRRunner {
             }
             if let (Some(ref w), Some(ref b)) = (&self.w_snp, &self.beta_snp) {
                 fitted = fitted + w.dot(b);
-            }
-
-            if iter == 0 {
-                if let (Some(ref w), Some(_), Some(ref wty)) = 
-                    (&self.w_hap, &self.wtw_diag_hap, &self.wty_hap) 
-                {
-                    let rhs_sample: Vec<f64> = (0..10.min(w.ncols())).map(|j| {
-                        wty[j]
-                    }).collect();
-                    eprintln!("[Fold {}] rhs_hap[0..10]={:?}", self.fold_id, 
-                        rhs_sample.iter().map(|x| format!("{:.2}", x)).collect::<Vec<_>>());
-                    let rhs_max = wty.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-                    eprintln!("[Fold {}] rhs_hap max={:.2} | mean_abs={:.2}", 
-                        self.fold_id, rhs_max,
-                        wty.iter().map(|x| x.abs()).sum::<f64>() / wty.len() as f64);
-                }
             }
 
             // --- Update haplotype effects ---
@@ -345,11 +318,6 @@ impl BayesRRunner {
                     self.sigma2_e, &self.sigma2_vec,
                     &self.pi_vec, &mut self.rng, self.n,
                 );
-            }
-
-            if iter == 0 {
-                let sse_check: f64 = (&self.y - &fitted).iter().map(|r| r.powi(2)).sum();
-                eprintln!("[Fold {}] SSE after iter 0 effects: {:.2}", self.fold_id, sse_check);
             }
 
             // --- Variance components ---
