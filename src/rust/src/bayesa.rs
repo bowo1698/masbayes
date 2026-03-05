@@ -140,10 +140,6 @@ impl BayesARunner {
         for j in 0..w.ncols() {
             let l_j = wtw_diag[j];
 
-            let shape_j = (nu + 1.0) / 2.0;
-            let scale_j = (nu * s_squared + beta[j].powi(2)) / 2.0;
-            sigma2_j[j] = rinvgamma(rng, shape_j, scale_j);
-
             // RHS = W_j'y - W_j'fitted + l_j * beta_j
             let mut wtf: f64 = 0.0;
             for i in 0..n {
@@ -164,6 +160,10 @@ impl BayesARunner {
                     fitted[i] += w[[i, j]] * delta;
                 }
             }
+
+            let shape_j = (nu + 1.0) / 2.0;
+            let scale_j = (nu * s_squared + beta[j].powi(2)) / 2.0;
+            sigma2_j[j] = rinvgamma(rng, shape_j, scale_j);
         }
     }
 
@@ -200,10 +200,10 @@ impl BayesARunner {
             }
 
             let resid_sum: f64 = self.y.iter().zip(fitted.iter())
-                .map(|(yi, fi)| yi - fi - self.mu)
+                .map(|(yi, fi)| yi - fi)
                 .sum();
             let mu_sd = (self.sigma2_e / self.n as f64).sqrt();
-            self.mu = rnorm(&mut self.rng, resid_sum / self.n as f64 + self.mu, mu_sd);
+            self.mu = rnorm(&mut self.rng, resid_sum / self.n as f64, mu_sd);
 
             // Rebuild fitted dengan mu baru
             let mut fitted = Array1::<f64>::from_elem(self.n, self.mu);

@@ -268,10 +268,10 @@ impl BayesRRunner {
             }
 
             let resid_sum: f64 = self.y.iter().zip(fitted.iter())
-                .map(|(yi, fi)| yi - fi - self.mu)
+                .map(|(yi, fi)| yi - fi)
                 .sum();
             let mu_sd = (self.sigma2_e / self.n as f64).sqrt();
-            self.mu = rnorm(&mut self.rng, resid_sum / self.n as f64 + self.mu, mu_sd);
+            self.mu = rnorm(&mut self.rng, resid_sum / self.n as f64, mu_sd);
 
             // Rebuild fitted dengan mu baru
             let mut fitted = Array1::<f64>::from_elem(self.n, self.mu);

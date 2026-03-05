@@ -91,10 +91,9 @@ impl WMatrixBuilder {
     
     /// Extract base block name (handle "block_1" and "block_1_copy" -> "block_1")
     fn get_block_base_name(haplotype: &str) -> String {
-        // Remove common suffixes like "_copy", "_2", etc.
         haplotype
-            .trim_end_matches("_copy")
-            .trim_end_matches(|c: char| c.is_digit(10) && haplotype.ends_with(&c.to_string()))
+            .strip_suffix("_1")
+            .unwrap_or(haplotype)
             .to_string()
     }
     
