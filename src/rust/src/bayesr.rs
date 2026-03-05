@@ -291,6 +291,22 @@ impl BayesRRunner {
                 fitted = fitted + w.dot(b);
             }
 
+            if iter == 0 {
+                if let (Some(ref w), Some(_), Some(ref wty)) = 
+                    (&self.w_hap, &self.wtw_diag_hap, &self.wty_hap) 
+                {
+                    let rhs_sample: Vec<f64> = (0..10.min(w.ncols())).map(|j| {
+                        wty[j]
+                    }).collect();
+                    eprintln!("[Fold {}] rhs_hap[0..10]={:?}", self.fold_id, 
+                        rhs_sample.iter().map(|x| format!("{:.2}", x)).collect::<Vec<_>>());
+                    let rhs_max = wty.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                    eprintln!("[Fold {}] rhs_hap max={:.2} | mean_abs={:.2}", 
+                        self.fold_id, rhs_max,
+                        wty.iter().map(|x| x.abs()).sum::<f64>() / wty.len() as f64);
+                }
+            }
+
             // --- Update haplotype effects ---
             if self.w_hap.is_some() {
                 let w = self.w_hap.as_ref().unwrap();
