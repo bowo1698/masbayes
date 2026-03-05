@@ -64,7 +64,7 @@ construct_wah_matrix <- function(hap_matrix,
 #' Build W_alpha SNP matrix for training set
 #' Allele frequencies are calculated from training individuals.
 #'
-#' @param snp_files Character vector path file per chr
+#' @param dosage Matrix of SNP dosage (n x m), rownames = individual IDs
 #' @param ind_ids Character vector ID individual training (for subset and sequence validation)
 #' @return List with W_alpha matrix and snp_freq (reference for test set)
 #' @export
@@ -92,7 +92,7 @@ build_w_snp_train <- function(dosage, ind_ids) {
 #' Build W_alpha SNP matrix for test set
 #' Using allele frequencies from training
 #'
-#' @param snp_files Character vector path file per chr
+#' @param dosage Matrix of SNP dosage (n x m), rownames = individual IDs
 #' @param ind_ids Character vector ID individual test
 #' @param snp_freq Named numeric vector of allele frequencies from training
 #' @return W_alpha matrix (n_test x n_snp)
