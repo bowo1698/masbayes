@@ -337,6 +337,11 @@ impl BayesRRunner {
                 );
             }
 
+            if iter == 0 {
+                let sse_check: f64 = (&self.y - &fitted).iter().map(|r| r.powi(2)).sum();
+                eprintln!("[Fold {}] SSE after iter 0 effects: {:.2}", self.fold_id, sse_check);
+            }
+
             // --- Variance components ---
             let residuals = &self.y - &fitted;
             let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
