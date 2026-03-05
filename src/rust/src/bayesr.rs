@@ -81,11 +81,7 @@ impl BayesRRunner {
             if let Some(ref w) = w_hap {
                 let m = w.ncols();
                 let (wtw, wty) = compute_wtw_wty(w);
-                let init_sd = (sigma2_ah / m as f64).sqrt();
-                let mut beta = Array1::<f64>::zeros(m);
-                for i in 0..m {
-                    beta[i] = rnorm(&mut init_rng, 0.0, init_sd);
-                }
+                let beta = Array1::<f64>::zeros(m);
                 (Some(wtw), Some(wty), m, Some(beta), Some(Array1::<usize>::zeros(m)))
             } else {
                 (None, None, 0, None, None)
@@ -95,11 +91,7 @@ impl BayesRRunner {
             if let Some(ref w) = w_snp {
                 let m = w.ncols();
                 let (wtw, wty) = compute_wtw_wty(w);
-                let init_sd = (sigma2_ah / m as f64).sqrt();
-                let mut beta = Array1::<f64>::zeros(m);
-                for i in 0..m {
-                    beta[i] = rnorm(&mut init_rng, 0.0, init_sd);
-                }
+                let beta = Array1::<f64>::zeros(m);
                 (Some(wtw), Some(wty), m, Some(beta), Some(Array1::<usize>::zeros(m)))
             } else {
                 (None, None, 0, None, None)
@@ -267,6 +259,10 @@ impl BayesRRunner {
             .map(|b| b.iter().map(|x| x.abs()).sum::<f64>()).unwrap_or(0.0);
         eprintln!("[Fold {}] sum|beta_hap_init|={:.4} | sum|beta_snp_init|={:.4}",
             self.fold_id, sum_abs_beta_hap, sum_abs_beta_snp);
+        let y_mean = self.y.mean().unwrap_or(0.0);
+        let y_var = self.y.iter().map(|&yi| (yi - y_mean).powi(2)).sum::<f64>() / (self.n as f64 - 1.0);
+        let y_sd = y_var.sqrt();
+        eprintln!("[Fold {}] y_mean={:.4} | y_sd={:.4} | y_var={:.4}", self.fold_id, y_mean, y_sd, y_var);
 
         for iter in 0..self.n_iter {
 
