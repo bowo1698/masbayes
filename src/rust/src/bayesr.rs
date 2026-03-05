@@ -50,7 +50,7 @@ impl BayesRRunner {
         pi_vec: Vec<f64>,
         variance_class: Vec<f64>,
         sigma2_e_init: f64,
-        sigma2_ah: f64,
+        _sigma2_ah: f64,
         a0_e: f64, b0_e: f64,
         a0_g: f64, b0_g: f64,
         n_iter: usize,
@@ -99,7 +99,7 @@ impl BayesRRunner {
 
         //let n_total = (n_hap_alleles + n_snp).max(1);
         //let varg_init = sigma2_ah / n_total as f64;
-        let varg_init = sigma2_ah;
+        let varg_init = b0_g / a0_g; 
         let sigma2_vec: Vec<f64> = variance_class.iter().map(|&f| f * varg_init).collect();
 
         Self {
