@@ -97,8 +97,7 @@ impl BayesRRunner {
                 (None, None, 0, None, None)
             };
 
-        let n_total = (n_hap_alleles + n_snp).max(1);
-        let varg_init = sigma2_ah / n_total as f64;
+        let varg_init = sigma2_ah;
         let sigma2_vec: Vec<f64> = variance_class.iter().map(|&f| f * varg_init).collect();
 
         Self {
@@ -247,22 +246,6 @@ impl BayesRRunner {
             self.fold_id,
             self.pi_vec[0], self.pi_vec[1], self.pi_vec[2], self.pi_vec[3],
             self.sigma2_e);
-        
-        eprintln!("[Fold {}] sigma2_vec=[{:.2e},{:.2e},{:.2e},{:.2e}]",
-            self.fold_id,
-            self.sigma2_vec[0], self.sigma2_vec[1], self.sigma2_vec[2], self.sigma2_vec[3]);
-        eprintln!("[Fold {}] b0_g={:.6} | a0_g={:.4}",
-            self.fold_id, self.b0_g, self.a0_g);
-        let sum_abs_beta_hap = self.beta_hap.as_ref()
-            .map(|b| b.iter().map(|x| x.abs()).sum::<f64>()).unwrap_or(0.0);
-        let sum_abs_beta_snp = self.beta_snp.as_ref()
-            .map(|b| b.iter().map(|x| x.abs()).sum::<f64>()).unwrap_or(0.0);
-        eprintln!("[Fold {}] sum|beta_hap_init|={:.4} | sum|beta_snp_init|={:.4}",
-            self.fold_id, sum_abs_beta_hap, sum_abs_beta_snp);
-        let y_mean = self.y.mean().unwrap_or(0.0);
-        let y_var = self.y.iter().map(|&yi| (yi - y_mean).powi(2)).sum::<f64>() / (self.n as f64 - 1.0);
-        let y_sd = y_var.sqrt();
-        eprintln!("[Fold {}] y_mean={:.4} | y_sd={:.4} | y_var={:.4}", self.fold_id, y_mean, y_sd, y_var);
 
         for iter in 0..self.n_iter {
 

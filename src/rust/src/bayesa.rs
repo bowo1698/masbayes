@@ -92,8 +92,6 @@ impl BayesARunner {
             } else {
                 (None, None, 0, None, None)
             };
-        
-        let y_mean = y_arr.mean().unwrap_or(0.0);
 
         Self {
             w_hap,
@@ -119,7 +117,7 @@ impl BayesARunner {
             n_thin,
             rng,
             sigma2_e: sigma2_e_init,
-            mu: y_mean,
+            mu: 0.0,
             fold_id,
         }
     }
