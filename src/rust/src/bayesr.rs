@@ -65,6 +65,7 @@ impl BayesRRunner {
             .expect("Minimal satu matrix harus ada");
 
         let rng = Pcg64::seed_from_u64(seed);
+        //let mut init_rng = Pcg64::seed_from_u64(seed);
         let y_arr = Array1::from_vec(y.clone());
 
         let compute_wtw_wty = |w: &Array2<f64>| -> (Array1<f64>, Array1<f64>) {
@@ -96,8 +97,9 @@ impl BayesRRunner {
                 (None, None, 0, None, None)
             };
 
-        let n_total = (n_hap_alleles + n_snp).max(1);
-        let varg_init = sigma2_ah / n_total as f64;
+        //let n_total = (n_hap_alleles + n_snp).max(1);
+        //let varg_init = sigma2_ah / n_total as f64;
+        let varg_init = sigma2_ah;
         let sigma2_vec: Vec<f64> = variance_class.iter().map(|&f| f * varg_init).collect();
 
         Self {
