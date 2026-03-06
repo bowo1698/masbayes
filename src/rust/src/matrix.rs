@@ -207,7 +207,7 @@ impl WMatrixBuilder {
         }
     }
     
-    /// Build W matrix for test set using reference structure
+    /// Build W matrix for test set using reference structure from W
     pub fn build_with_reference(
         hap_matrix: Array2<i32>,
         colnames: Vec<String>,

@@ -126,3 +126,14 @@ pub fn geweke_z(samples: &Array1<f64>) -> f64 {
     
     (mean1 - mean2) / se
 }
+
+/// Tabulate component assignments
+pub fn tabulate(gamma: &Array1<usize>, nbins: usize) -> Vec<usize> {
+    let mut counts = vec![0; nbins];
+    for &g in gamma.iter() {
+        if g < nbins {
+            counts[g] += 1;
+        }
+    }
+    counts
+}

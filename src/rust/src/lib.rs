@@ -235,9 +235,10 @@ fn construct_wah_matrix(
 /// @return List containing posterior samples and diagnostics
 #[extendr]
 fn run_bayesr_mcmc(
-    w_hap: Nullable<RMatrix<f64>>,   // haplotype matrix
-    w_snp: Nullable<RMatrix<f64>>,
+    w: RMatrix<f64>,
     y: Vec<f64>,
+    wtw_diag: Vec<f64>,
+    wty: Vec<f64>,
     pi_vec: Vec<f64>,
     sigma2_e_init: f64,
     sigma2_ah: f64,
@@ -245,68 +246,64 @@ fn run_bayesr_mcmc(
     mcmc_params: List,
     fold_id: i32,
 ) -> List {
+    
+    // Extract MCMC parameters
     let n_iter = mcmc_params.dollar("n_iter").unwrap().as_integer().unwrap() as usize;
     let n_burn = mcmc_params.dollar("n_burn").unwrap().as_integer().unwrap() as usize;
     let n_thin = mcmc_params.dollar("n_thin").unwrap().as_integer().unwrap() as usize;
-    let seed   = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
-
+    let seed = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
+    
+    // Extract prior parameters
     let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
     let b0_e = prior_params.dollar("b0_e").unwrap().as_real().unwrap();
+    
+    // Convert R matrix to ndarray
+    let w_array = utils::rmatrix_to_array2(&w);
+    
+    let variance_class = prior_params.dollar("variance_class").unwrap()
+        .as_real_vector()
+        .expect("'variance_class' must be numeric vector");
     let a0_g = prior_params.dollar("a0_g").unwrap().as_real().unwrap();
     let b0_g = prior_params.dollar("b0_g").unwrap().as_real().unwrap();
-    let variance_class = prior_params.dollar("variance_class").unwrap()
-        .as_real_vector().expect("'variance_class' must be numeric vector");
 
-    // Build matrices via orchestrator
-    let hap_input = if let NotNull(w) = w_hap {
-        Some(utils::rmatrix_to_array2(&w))
-    } else { None };
-
-    let snp_input = if let NotNull(w) = w_snp {
-        Some(utils::rmatrix_to_array2(&w))
-    } else { None };
-
+    // Create runner
     let mut runner = BayesRRunner::new(
-        hap_input, snp_input,
-        y, pi_vec, variance_class,
-        sigma2_e_init, sigma2_ah,
-        a0_e, b0_e, a0_g, b0_g,
-        n_iter, n_burn, n_thin, seed, fold_id,
+        w_array,
+        y,
+        wtw_diag,
+        wty,
+        pi_vec,
+        variance_class,
+        sigma2_e_init,
+        sigma2_ah,
+        a0_e, b0_e,
+        a0_g, b0_g,
+        n_iter,
+        n_burn,
+        n_thin,
+        seed,
+        fold_id,
     );
-
+    
+    // Run MCMC
     let results = runner.run();
-
-    // SNP fields 
-    let beta_snp_hat = results.beta_snp_hat
-        .map(|b| b.to_vec())
-        .unwrap_or_default();
-    let beta_snp_samples = results.beta_snp_samples
-        .as_ref()
-        .map(|b| array2_to_rmatrix(b))
-        .unwrap_or_else(|| RMatrix::new(0, 0));
-    let gamma_snp_samples = results.gamma_snp_samples
-        .as_ref()
-        .map(|g| array2_to_rmatrix(g))
-        .unwrap_or_else(|| RMatrix::new(0, 0));
-
+    
+    // Convert ndarray results to R objects
     list!(
-        beta_samples     = array2_to_rmatrix(&results.beta_samples),
-        gamma_samples    = array2_to_rmatrix(&results.gamma_samples),
-        beta_snp_samples = beta_snp_samples,
-        gamma_snp_samples = gamma_snp_samples,
+        beta_samples = array2_to_rmatrix(&results.beta_samples),
+        gamma_samples = array2_to_rmatrix(&results.gamma_samples),
         sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
         sigma2_small_samples = array1_to_vec(&results.sigma2_small_samples),
         sigma2_medium_samples = array1_to_vec(&results.sigma2_medium_samples),
         sigma2_large_samples = array1_to_vec(&results.sigma2_large_samples),
-        pi_samples       = array2_to_rmatrix(&results.pi_samples),
-        mu_samples       = array1_to_vec(&results.mu_samples),
-        beta_hat         = array1_to_vec(&results.beta_hat),
-        beta_snp_hat     = beta_snp_hat,
-        mu_hat           = results.mu_hat,
-        sigma2_e_hat     = results.sigma2_e_hat,
-        gebv_train       = array1_to_vec(&results.gebv_train),
-        sigma2_g         = results.sigma2_g,
-        h2               = results.h2
+        pi_samples = array2_to_rmatrix(&results.pi_samples),
+        mu_samples = array1_to_vec(&results.mu_samples),
+        beta_hat = array1_to_vec(&results.beta_hat),
+        mu_hat = results.mu_hat,
+        sigma2_e_hat = results.sigma2_e_hat,
+        gebv_train = array1_to_vec(&results.gebv_train),
+        sigma2_g = results.sigma2_g,
+        h2 = results.h2
     )
 }
 
@@ -324,9 +321,10 @@ fn run_bayesr_mcmc(
 /// @return List containing posterior samples and diagnostics
 #[extendr]
 fn run_bayesa_mcmc(
-    w_hap: Nullable<RMatrix<f64>>,
-    w_snp: Nullable<RMatrix<f64>>,
+    w: RMatrix<f64>,
     y: Vec<f64>,
+    wtw_diag: Vec<f64>,
+    wty: Vec<f64>,
     nu: f64,
     s_squared: f64,
     sigma2_e_init: f64,
@@ -334,61 +332,53 @@ fn run_bayesa_mcmc(
     mcmc_params: List,
     fold_id: i32,
 ) -> List {
+    // Extract MCMC parameters
     let n_iter = mcmc_params.dollar("n_iter").unwrap().as_integer().unwrap() as usize;
     let n_burn = mcmc_params.dollar("n_burn").unwrap().as_integer().unwrap() as usize;
     let n_thin = mcmc_params.dollar("n_thin").unwrap().as_integer().unwrap() as usize;
-    let seed   = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
-    let a0_e   = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
-    let b0_e   = prior_params.dollar("b0_e").unwrap().as_real().unwrap();
-
-    let hap_input = if let NotNull(w) = w_hap {
-        Some(utils::rmatrix_to_array2(&w))
-    } else { None };
-
-    let snp_input = if let NotNull(w) = w_snp {
-        Some(utils::rmatrix_to_array2(&w))
-    } else { None };
-
+    let seed = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
+    
+    // Extract prior parameters
+    let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
+    let b0_e = prior_params.dollar("b0_e").unwrap().as_real().unwrap();
+    
+    // Convert R matrix to ndarray
+    let w_array = utils::rmatrix_to_array2(&w);
+    
+    // Create runner
     let mut runner = BayesARunner::new(
-        hap_input, snp_input,
-        y, nu, s_squared, sigma2_e_init,
-        a0_e, b0_e,
-        n_iter, n_burn, n_thin, seed, fold_id,
+        w_array,
+        y,
+        wtw_diag,
+        wty,
+        nu,
+        s_squared,
+        sigma2_e_init,
+        a0_e,
+        b0_e,
+        n_iter,
+        n_burn,
+        n_thin,
+        seed,
+        fold_id,
     );
-
+    
+    // Run MCMC
     let results = runner.run();
-
-    let beta_snp_hat = results.beta_snp_hat
-        .map(|b| b.to_vec())
-        .unwrap_or_default();
-    let beta_snp_samples = results.beta_snp_samples
-        .as_ref()
-        .map(|b| array2_to_rmatrix(b))
-        .unwrap_or_else(|| RMatrix::new(0, 0));
-    let sigma2_j_snp_hat = results.sigma2_j_snp_hat
-        .map(|s| s.to_vec())
-        .unwrap_or_default();
-    let sigma2_j_snp_samples = results.sigma2_j_snp_samples
-        .as_ref()
-        .map(|s| array2_to_rmatrix(s))
-        .unwrap_or_else(|| RMatrix::new(0, 0));
-
+    
+    // Convert ndarray results to R objects
     list!(
-        beta_samples      = array2_to_rmatrix(&results.beta_samples),
-        beta_snp_samples  = beta_snp_samples,
-        sigma2_j_samples  = array2_to_rmatrix(&results.sigma2_j_samples),
-        sigma2_j_snp_samples  = sigma2_j_snp_samples,
-        sigma2_e_samples  = array1_to_vec(&results.sigma2_e_samples),
-        mu_samples        = array1_to_vec(&results.mu_samples),
-        beta_hat          = array1_to_vec(&results.beta_hat),
-        beta_snp_hat      = beta_snp_hat,
-        mu_hat            = results.mu_hat,
-        sigma2_e_hat      = results.sigma2_e_hat,
-        sigma2_j_hat      = array1_to_vec(&results.sigma2_j_hat),
-        sigma2_j_snp_hat  = sigma2_j_snp_hat,
-        gebv_train        = array1_to_vec(&results.gebv_train),
-        sigma2_g          = results.sigma2_g,
-        h2                = results.h2
+        beta_samples = array2_to_rmatrix(&results.beta_samples),
+        sigma2_j_samples = array2_to_rmatrix(&results.sigma2_j_samples),
+        sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
+        mu_samples = array1_to_vec(&results.mu_samples),
+        beta_hat = array1_to_vec(&results.beta_hat),
+        mu_hat = results.mu_hat,
+        sigma2_e_hat = results.sigma2_e_hat,
+        sigma2_j_hat = array1_to_vec(&results.sigma2_j_hat),
+        gebv_train = array1_to_vec(&results.gebv_train),
+        sigma2_g = results.sigma2_g,
+        h2 = results.h2
     )
 }
 

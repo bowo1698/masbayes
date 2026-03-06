@@ -10,7 +10,9 @@ MasBayes supports multi-allelic-based markers for genomic prediction, where mark
 
 Furthermore, to avoid perfect multicollinearity and ensure a full rank for the design matrix, we treated alleles with the highest frequency at each locus as the baseline reference and excluded them from the matrix construction, but their effects are implicitly captured by the model’s intercept.
 
-> **Why Rust?** Rust is a middle-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, has a strict ownership model and memory safety guarantees to eliminate common bugs like memory leaks and segmentation faults without the need for a garbage collector. In addition, we developed this Rust-based library, as Rust implementation is still limited for genomic analysis purposes, while this programming language potentially offers more benefits than others.
+> **Why Rust?** Rust is a middle-level programming language, standing at the same level as C++, which is the common backend for many currently existing R packages due to its computational efficiency. Rust, however, has a strict ownership model and memory safety guarantees to eliminate common bugs like memory leaks and segmentation faults without the need for a garbage collector. In addition, we developed this Rust-based library, as Rust implementation is still limited for genomic analysis purposes, while this programming language potentially offers more benefits than others. 
+
+mmmmm
 
 ---
 

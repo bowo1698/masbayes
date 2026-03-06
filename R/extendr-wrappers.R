@@ -9,20 +9,20 @@ NULL
 
 #' Run BayesR MCMC
 #' @export
-run_bayesr_mcmc <- function(w_hap, w_snp, y, pi_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id = 0L) {
-    .Call(wrap__run_bayesr_mcmc, w_hap, w_snp, y, pi_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id)
+run_bayesr_mcmc <- function(w, y, wtw_diag, wty, pi_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id = 0L) {
+    .Call(wrap__run_bayesr_mcmc, w, y, wtw_diag, wty, pi_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id)
 }
 
 #' Run BayesA MCMC
 #' @export
-run_bayesa_mcmc <- function(w_hap, w_snp, y, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id = 0L) {
-    .Call(wrap__run_bayesa_mcmc, w_hap, w_snp, y, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id)
+run_bayesa_mcmc <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id = 0L) {
+    .Call(wrap__run_bayesa_mcmc, w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id)
 }
 
 #' Construct W Matrix (Rust)
 #' @export
 construct_wah_matrix <- function(hap_matrix, colnames, allele_freq_filtered, reference_structure, drop_baseline) {
-    .Call(wrap__construct_wah_matrix, hap_matrix, colnames, allele_freq_filtered, reference_structure, drop_baseline)
+    .Call(wrap__construct_w_matrix_rust, hap_matrix, colnames, allele_freq_filtered, reference_structure, drop_baseline)
 }
 
 # nolint end
