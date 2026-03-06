@@ -12,6 +12,8 @@
 #' @param sigma2_ah Total genetic variance (for MCMC)
 #' @param prior_params Prior hyperparameters (for MCMC)
 #' @param mcmc_params MCMC parameters (for method="mcmc")
+#' @param em_params EM parameters (for method="em")
+#' @param method Either "mcmc" or "em"
 #' @param fold_id Fold identifier
 #' @export
 run_bayesr <- function(w, y, wtw_diag, wty, 
@@ -21,8 +23,13 @@ run_bayesr <- function(w, y, wtw_diag, wty,
                        sigma2_vec = NULL,
                        prior_params = NULL,
                        mcmc_params = NULL,
+                       em_params = NULL,
+                       method = c("mcmc", "em"),
                        fold_id = 0L) {
   
+  method <- match.arg(method)
+  
+  if (method == "mcmc") {
     if (is.null(sigma2_ah)) stop("sigma2_ah required for MCMC")
     
     # Default MCMC params
@@ -45,4 +52,11 @@ run_bayesr <- function(w, y, wtw_diag, wty,
     run_bayesr_mcmc(w, y, wtw_diag, wty, pi_vec, 
                     sigma2_e_init, sigma2_ah, prior_params, 
                     mcmc_params, fold_id)
+  } else {
+    if (is.null(em_params)) {
+      em_params <- list(max_iter = 500L, tol = 1e-6)
+    }
+    run_bayesr_em(w, y, wtw_diag, wty, pi_vec, sigma2_vec, 
+                  sigma2_e_init, em_params, fold_id)
+  }
 }

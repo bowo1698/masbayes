@@ -11,6 +11,8 @@
 #' @param sigma2_e_init Initial residual variance
 #' @param prior_params Prior hyperparameters (for MCMC)
 #' @param mcmc_params MCMC parameters (for method="mcmc")
+#' @param em_params EM parameters (for method="em")
+#' @param method Either "mcmc" or "em"
 #' @param fold_id Fold identifier
 #' @export
 run_bayesa <- function(w, y, wtw_diag, wty,
@@ -18,8 +20,13 @@ run_bayesa <- function(w, y, wtw_diag, wty,
                        s_squared, sigma2_e_init,
                        prior_params = NULL,
                        mcmc_params = NULL,
+                       em_params = NULL,
+                       method = c("mcmc", "em"),
                        fold_id = 0L) {
   
+  method <- match.arg(method)
+  
+  if (method == "mcmc") {
     mcmc_params <- modifyList(
       list(n_iter = 40000L, n_burn = 20000L, n_thin = 10L, seed = 123L),
       mcmc_params %||% list()
@@ -31,4 +38,11 @@ run_bayesa <- function(w, y, wtw_diag, wty,
     )
     run_bayesa_mcmc(w, y, wtw_diag, wty, nu, s_squared, 
                     sigma2_e_init, prior_params, mcmc_params, fold_id)
+  } else {
+    if (is.null(em_params)) {
+      em_params <- list(max_iter = 500L, tol = 1e-6)
+    }
+    run_bayesa_em(w, y, wtw_diag, wty, nu, s_squared, 
+                  sigma2_e_init, em_params, fold_id)
+  }
 }

@@ -3,11 +3,15 @@ use extendr_api::prelude::*;
 mod matrix;
 mod bayesr;
 mod bayesa;
+mod bayesr_em;
+mod bayesa_em;
 mod utils;
 mod types;
 
 use bayesr::BayesRRunner;
 use bayesa::BayesARunner;
+use bayesr_em::BayesREM;
+use bayesa_em::BayesAEM;
 use crate::matrix::{WMatrixBuilder, AlleleFreq, ReferenceStructure, DroppedAllele};
 
 /// Convert R list to AlleleFreq vector
@@ -382,10 +386,99 @@ fn run_bayesa_mcmc(
     )
 }
 
+#[extendr]
+fn run_bayesr_em(
+    w: RMatrix<f64>,
+    y: Vec<f64>,
+    wtw_diag: Vec<f64>,
+    wty: Vec<f64>,
+    pi_vec: Vec<f64>,
+    sigma2_vec: Vec<f64>,
+    sigma2_e_init: f64,
+    em_params: List,
+    fold_id: i32,
+) -> List {
+    let max_iter = em_params.dollar("max_iter").unwrap().as_integer().unwrap() as usize;
+    let tol = em_params.dollar("tol").unwrap().as_real().unwrap();
+    //let seed = em_params.dollar("seed")
+    //    .ok()                           
+    //    .and_then(|s| s.as_integer())   
+    //    .unwrap_or(123) as u64;
+    
+    let w_array = utils::rmatrix_to_array2(&w);
+    
+    let mut runner = BayesREM::new(
+        w_array, y, wtw_diag, wty,
+        pi_vec, sigma2_vec, sigma2_e_init,
+        max_iter, tol, fold_id, // seed,
+    );
+    
+    let results = runner.run();
+    
+    list!(
+        beta_samples = array2_to_rmatrix(&results.beta_samples),
+        gamma_samples = array2_to_rmatrix(&results.gamma_samples),
+        sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
+        sigma2_small_samples = array1_to_vec(&results.sigma2_small_samples),
+        sigma2_medium_samples = array1_to_vec(&results.sigma2_medium_samples),
+        sigma2_large_samples = array1_to_vec(&results.sigma2_large_samples),
+        pi_samples = array2_to_rmatrix(&results.pi_samples),
+        mu_samples = array1_to_vec(&results.mu_samples),
+        beta_hat = array1_to_vec(&results.beta_hat),
+        mu_hat = results.mu_hat,
+        sigma2_e_hat = results.sigma2_e_hat,
+        gebv_train = array1_to_vec(&results.gebv_train),
+        sigma2_g = results.sigma2_g,
+        h2 = results.h2
+    )
+}
+
+#[extendr]
+fn run_bayesa_em(
+    w: RMatrix<f64>,
+    y: Vec<f64>,
+    wtw_diag: Vec<f64>,
+    wty: Vec<f64>,
+    nu: f64,
+    s_squared: f64,
+    sigma2_e_init: f64,
+    em_params: List,
+    fold_id: i32,
+) -> List {
+    let max_iter = em_params.dollar("max_iter").unwrap().as_integer().unwrap() as usize;
+    let tol = em_params.dollar("tol").unwrap().as_real().unwrap();
+    
+    let w_array = utils::rmatrix_to_array2(&w);
+    
+    let mut runner = BayesAEM::new(
+        w_array, y, wtw_diag, wty,
+        nu, s_squared, sigma2_e_init,
+        max_iter, tol, fold_id,
+    );
+    
+    let results = runner.run();
+    
+    list!(
+        beta_samples = array2_to_rmatrix(&results.beta_samples),
+        sigma2_j_samples = array2_to_rmatrix(&results.sigma2_j_samples),
+        sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
+        mu_samples = array1_to_vec(&results.mu_samples),
+        beta_hat = array1_to_vec(&results.beta_hat),
+        mu_hat = results.mu_hat,
+        sigma2_e_hat = results.sigma2_e_hat,
+        sigma2_j_hat = array1_to_vec(&results.sigma2_j_hat),
+        gebv_train = array1_to_vec(&results.gebv_train),
+        sigma2_g = results.sigma2_g,
+        h2 = results.h2
+    )
+}
+
 // Macro to generate exports
 extendr_module! {
     mod masbayes_extendr;
     fn run_bayesr_mcmc;
     fn run_bayesa_mcmc;
+    fn run_bayesr_em;
+    fn run_bayesa_em; 
     fn construct_wah_matrix;
 }
