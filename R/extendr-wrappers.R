@@ -34,7 +34,7 @@ run_bayesa_em <- function(w, y, wtw_diag, wty, nu, s_squared, sigma2_e_init, em_
 #' Construct W Matrix (Rust)
 #' @export
 construct_wah_matrix <- function(hap_matrix, colnames, allele_freq_filtered, reference_structure, drop_baseline) {
-    .Call(wrap__construct_w_matrix_rust, hap_matrix, colnames, allele_freq_filtered, reference_structure, drop_baseline)
+    .Call(wrap__construct_w_matrix, hap_matrix, colnames, allele_freq_filtered, reference_structure, drop_baseline)
 }
 
 # nolint end
