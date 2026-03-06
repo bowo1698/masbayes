@@ -151,6 +151,16 @@ impl BayesARunner {
                     .sum();
                 eprintln!("[Fold {}] SSE iter0: {:.2} | mu: {:.4}", self.fold_id, sse0, self.mu);
             }
+
+            if iter == 1000 {
+                let mean_abs_beta = self.beta_a.iter().map(|x| x.abs()).sum::<f64>() / self.n_alleles as f64;
+                let fitted_check = self.w.dot(&self.beta_a);
+                let sse_check: f64 = self.y.iter().zip(fitted_check.iter())
+                    .map(|(y, f)| (y - f - self.mu).powi(2))
+                    .sum();
+                eprintln!("[Fold {}] iter1000: mean|beta|={:.4} | SSE={:.2} | mu={:.4}", 
+                    self.fold_id, mean_abs_beta, sse_check, self.mu);
+            }
             
             // Sample sigma2_e
             let residuals = &self.y - &fitted;
