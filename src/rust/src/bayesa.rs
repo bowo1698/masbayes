@@ -106,9 +106,9 @@ impl BayesARunner {
             // Sample beta_j
             let mut fitted = self.w.dot(&self.beta_a);
             let resid_sum: f64 = (0..self.n)
-                .map(|i| self.y[i] - fitted[i] - self.mu)
+                .map(|i| self.y[i] - fitted[i])
                 .sum();
-            let mu_mean = self.mu + resid_sum / self.n as f64;
+            let mu_mean = resid_sum / self.n as f64;
             let mu_var = self.sigma2_e_a / self.n as f64;
             self.mu = rnorm(&mut self.rng, mu_mean, mu_var.sqrt());
             let inv_sigma2_e = 1.0 / self.sigma2_e_a;
@@ -143,9 +143,17 @@ impl BayesARunner {
                     }
                 }
             }
+
+            if iter == 0 {
+                let sse0: f64 = (0..self.n)
+                    .map(|i| (self.y[i] - fitted[i] - self.mu).powi(2))
+                    .sum();
+                eprintln!("[Fold {}] SSE iter0: {:.2} | mu: {:.4}", self.fold_id, sse0, self.mu);
+            }
             
             // Sample sigma2_e
-            let residuals = &self.y - &fitted - self.mu;
+            let total_fitted = &fitted + self.mu;
+            let residuals = &self.y - &total_fitted;
             let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
             
             let a_e = self.a0_e + (self.n as f64) / 2.0;
