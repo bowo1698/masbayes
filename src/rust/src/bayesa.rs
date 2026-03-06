@@ -105,6 +105,7 @@ impl BayesARunner {
         for iter in 0..self.n_iter {
             // Sample beta_j
             let mut fitted = self.w.dot(&self.beta_a);
+            fitted.mapv_inplace(|v| v + self.mu);
             let resid_sum: f64 = (0..self.n)
                 .map(|i| self.y[i] - fitted[i])
                 .sum();
@@ -146,14 +147,13 @@ impl BayesARunner {
 
             if iter == 0 {
                 let sse0: f64 = (0..self.n)
-                    .map(|i| (self.y[i] - fitted[i] - self.mu).powi(2))
+                    .map(|i| (self.y[i] - fitted[i]).powi(2))
                     .sum();
                 eprintln!("[Fold {}] SSE iter0: {:.2} | mu: {:.4}", self.fold_id, sse0, self.mu);
             }
             
             // Sample sigma2_e
-            let total_fitted = &fitted + self.mu;
-            let residuals = &self.y - &total_fitted;
+            let residuals = &self.y - &fitted;
             let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
             
             let a_e = self.a0_e + (self.n as f64) / 2.0;
