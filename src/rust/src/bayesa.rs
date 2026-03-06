@@ -104,14 +104,17 @@ impl BayesARunner {
         // MCMC loop
         for iter in 0..self.n_iter {
             // Sample beta_j
-            let mut fitted = self.w.dot(&self.beta_a);
-            fitted.mapv_inplace(|v| v + self.mu);
+            let w_beta = self.w.dot(&self.beta_a);
+            // Sampling mu dari residual y - W*beta (tanpa mu)
             let resid_sum: f64 = (0..self.n)
-                .map(|i| self.y[i] - fitted[i])
+                .map(|i| self.y[i] - w_beta[i])
                 .sum();
             let mu_mean = resid_sum / self.n as f64;
             let mu_var = self.sigma2_e_a / self.n as f64;
             self.mu = rnorm(&mut self.rng, mu_mean, mu_var.sqrt());
+            // fitted = W*beta + mu_BARU
+            let mut fitted = w_beta;
+            fitted.mapv_inplace(|v| v + self.mu);
             let inv_sigma2_e = 1.0 / self.sigma2_e_a;
             
             for j in 0..self.n_alleles {
