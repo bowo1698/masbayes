@@ -2,6 +2,4 @@
 export(run_bayesr)
 export(run_bayesa)
 export(construct_wah_matrix)
-export(build_w_snp_train)
-export(build_w_snp_test)
 useDynLib(masbayes, .registration = TRUE)
