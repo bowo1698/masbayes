@@ -55,7 +55,7 @@ impl BayesRRunner {
         pi_vec: Vec<f64>,
         variance_class: Vec<f64>,        // e.g. [0.0, 0.0001, 0.001, 0.01]
         sigma2_e_init: f64,
-        _sigma2_ah: f64,
+        sigma2_ah: f64,
         a0_e: f64, b0_e: f64,
         a0_g: f64, b0_g: f64,  // single prior for base variance
         n_iter: usize,
@@ -70,20 +70,27 @@ impl BayesRRunner {
         let rng = Pcg64::seed_from_u64(seed);
         
         // Initialize beta with small random values
-        let beta = Array1::<f64>::zeros(n_alleles);
-        let varg_init = b0_g / a0_g;
+        let init_sd = (sigma2_ah / n_alleles as f64).sqrt();
+        let mut beta = Array1::<f64>::zeros(n_alleles);
+        let mut init_rng = Pcg64::seed_from_u64(seed);
+        for i in 0..n_alleles {
+            beta[i] = rnorm(&mut init_rng, 0.0, init_sd);
+        }
+
+        // Initial base variance estimate
+        let varg_init = sigma2_ah / ((1.0 - pi_vec[0]) * n_alleles as f64);
         let sigma2_vec: Vec<f64> = variance_class.iter().map(|&f| f * varg_init).collect();
         
         Self {
             w,
-            y: Array1::from_vec(y.clone()),
+            y: Array1::from_vec(y),
             wtw_diag: Array1::from_vec(wtw_diag),
             wty: Array1::from_vec(wty),
             n,
             n_alleles,
             pi_vec: Array1::from_vec(pi_vec),
             sigma2_vec: Array1::from_vec(sigma2_vec),
-            mu: Array1::from_vec(y.clone()).mean().unwrap_or(0.0),
+            mu: 0.0,
             a0_e, b0_e,
             a0_g, b0_g,
             variance_class: Array1::from_vec(variance_class),
@@ -125,17 +132,21 @@ impl BayesRRunner {
         // MCMC loop
         for iter in 0..self.n_iter {
             // Sample intercept
-            let w_beta = self.w.dot(&self.beta);
+            let fitted = self.w.dot(&self.beta);
             let resid_sum: f64 = self.y.iter()
-                .zip(w_beta.iter())
-                .map(|(yi, fi)| yi - fi)
+                .zip(fitted.iter())
+                .map(|(yi, fi)| yi - fi - self.mu)
                 .sum();
-            let mu_mean = resid_sum / self.n as f64;
+            let mu_post = resid_sum / self.n as f64 + self.mu;
             let mu_sd = (self.sigma2_e / self.n as f64).sqrt();
-            self.mu = rnorm(&mut self.rng, mu_mean, mu_sd);
+            self.mu = rnorm(&mut self.rng, mu_post, mu_sd);
 
-            let mut fitted = w_beta;
-            fitted.mapv_inplace(|v| v + self.mu);
+            // 1. Sample beta and gamma
+            let mut fitted = self.w.dot(&self.beta);
+            // Add mu to fitted so residuals = y - mu - W*beta
+            for i in 0..self.n {
+                fitted[i] += self.mu;
+            }
             let inv_sigma2_e = 1.0 / self.sigma2_e;
             
             for j in 0..self.n_alleles {
