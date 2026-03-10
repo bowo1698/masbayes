@@ -15,7 +15,7 @@ pub struct BayesRResults {
     pub beta_hat: Array1<f64>,
     pub mu_hat: f64,
     pub sigma2_e_hat: f64,
-    pub gebv_train: Array1<f64>,
+    pub pred_train: Array1<f64>,
     pub sigma2_g: f64,
     pub h2: f64,
 }
@@ -32,7 +32,7 @@ pub struct BayesAResults {
     pub mu_hat: f64,
     pub sigma2_e_hat: f64,
     pub sigma2_j_hat: Array1<f64>,
-    pub gebv_train: Array1<f64>,
+    pub pred_train: Array1<f64>,
     pub sigma2_g: f64,
     pub h2: f64,
 }

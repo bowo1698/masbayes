@@ -119,11 +119,11 @@ impl BayesAEM {
         let sigma2_e_hat = self.sigma2_e;
         let sigma2_j_hat = self.sigma2_j.clone();
 
-        let mut gebv_train = self.w.dot(&beta_hat);
-        gebv_train.mapv_inplace(|v| v + mu_hat);
+        let mut pred_train = self.w.dot(&beta_hat);
+        pred_train.mapv_inplace(|v| v + mu_hat);
 
-        let gebv_mean = gebv_train.mean().unwrap();
-        let sigma2_g = gebv_train.iter()
+        let gebv_mean = pred_train.mean().unwrap();
+        let sigma2_g = pred_train.iter()
             .map(|&g| (g - gebv_mean).powi(2))
             .sum::<f64>() / (self.n as f64 - 1.0);
         let h2 = sigma2_g / (sigma2_g + sigma2_e_hat);
@@ -137,7 +137,7 @@ impl BayesAEM {
             mu_hat,
             sigma2_e_hat,
             sigma2_j_hat,
-            gebv_train,
+            pred_train,
             sigma2_g,
             h2,
         }

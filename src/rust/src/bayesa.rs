@@ -214,12 +214,12 @@ impl BayesARunner {
         let sigma2_j_hat = sigma2_j_samples.mean_axis(ndarray::Axis(0)).unwrap();
 
         // GEBV train = W * beta_hat + mu_hat
-        let mut gebv_train = self.w.dot(&beta_hat);
-        gebv_train.mapv_inplace(|v| v + mu_hat);
+        let mut pred_train = self.w.dot(&beta_hat);
+        pred_train.mapv_inplace(|v| v + mu_hat);
 
         // Variance of GEBV = sigma2_g
-        let gebv_mean = gebv_train.mean().unwrap();
-        let sigma2_g = gebv_train.iter()
+        let gebv_mean = pred_train.mean().unwrap();
+        let sigma2_g = pred_train.iter()
             .map(|&g| (g - gebv_mean).powi(2))
             .sum::<f64>() / (self.n as f64 - 1.0);
 
@@ -236,7 +236,7 @@ impl BayesARunner {
             mu_hat,
             sigma2_e_hat,
             sigma2_j_hat,
-            gebv_train,
+            pred_train,
             sigma2_g,
             h2,
         }

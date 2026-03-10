@@ -305,7 +305,7 @@ fn run_bayesr_mcmc(
         beta_hat = array1_to_vec(&results.beta_hat),
         mu_hat = results.mu_hat,
         sigma2_e_hat = results.sigma2_e_hat,
-        gebv_train = array1_to_vec(&results.gebv_train),
+        pred_train = array1_to_vec(&results.pred_train),
         sigma2_g = results.sigma2_g,
         h2 = results.h2
     )
@@ -380,7 +380,7 @@ fn run_bayesa_mcmc(
         mu_hat = results.mu_hat,
         sigma2_e_hat = results.sigma2_e_hat,
         sigma2_j_hat = array1_to_vec(&results.sigma2_j_hat),
-        gebv_train = array1_to_vec(&results.gebv_train),
+        pred_train = array1_to_vec(&results.pred_train),
         sigma2_g = results.sigma2_g,
         h2 = results.h2
     )
@@ -427,7 +427,7 @@ fn run_bayesr_em(
         beta_hat = array1_to_vec(&results.beta_hat),
         mu_hat = results.mu_hat,
         sigma2_e_hat = results.sigma2_e_hat,
-        gebv_train = array1_to_vec(&results.gebv_train),
+        pred_train = array1_to_vec(&results.pred_train),
         sigma2_g = results.sigma2_g,
         h2 = results.h2
     )
@@ -467,7 +467,7 @@ fn run_bayesa_em(
         mu_hat = results.mu_hat,
         sigma2_e_hat = results.sigma2_e_hat,
         sigma2_j_hat = array1_to_vec(&results.sigma2_j_hat),
-        gebv_train = array1_to_vec(&results.gebv_train),
+        pred_train = array1_to_vec(&results.pred_train),
         sigma2_g = results.sigma2_g,
         h2 = results.h2
     )
