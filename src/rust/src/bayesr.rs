@@ -78,8 +78,7 @@ impl BayesRRunner {
         }
 
         // Initial base variance estimate
-        //let varg_init = sigma2_ah / ((1.0 - pi_vec[0]) * n_alleles as f64);
-        let varg_init = sigma2_ah / (1.0 - pi_vec[0]);
+        let varg_init = sigma2_ah / ((1.0 - pi_vec[0]) * n_alleles as f64);
         let sigma2_vec: Vec<f64> = variance_class.iter().map(|&f| f * varg_init).collect();
         
         Self {
