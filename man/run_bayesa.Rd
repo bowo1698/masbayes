@@ -14,7 +14,7 @@ run_bayesa(
   wtw_diag,
   wty,
   nu,
-  s_squared,
+  sigma2_g,
   sigma2_e_init,
   prior_params = NULL,
   mcmc_params = NULL,
@@ -37,8 +37,9 @@ run_bayesa(
   \item{nu}{Numeric. Degrees of freedom for marker-specific variance prior 
     (scaled inverse chi-squared). Typical values: 4-5.}
   
-  \item{s_squared}{Numeric. Prior scale for marker variances. Often set as 
-    \code{var(y) / p} to distribute genetic variance across markers.}
+  \item{sigma2_g}{Numeric. Initial value for genetic variance. Can be set as \code{var(y) * 0.5}
+    (assuming h² ≈ 0.5) or obtained from GBLUP variance component estimation for 
+    data-driven initialization.}
   
   \item{sigma2_e_init}{Numeric. Initial value for residual variance. 
     Can be set as \code{var(y) * 0.5} (assuming h² ≈ 0.5) or obtained 
@@ -46,8 +47,7 @@ run_bayesa(
   
   \item{prior_params}{List with components (required for MCMC only):
     \describe{
-      \item{a0_e}{Shape parameter for residual variance inverse-gamma prior}
-      \item{b0_e}{Scale parameter for residual variance inverse-gamma prior}
+      \item{a0_e}{Shape parameter for residual variance inverse-gamma prior. Default value \code{10}}
     }}
   
   \item{mcmc_params}{List with components (required for method="mcmc"):
@@ -123,8 +123,7 @@ wty <- as.vector(crossprod(W, y))
 
 # Prior parameters
 prior_params <- list(
-  a0_e = 3.0,
-  b0_e = var(y) * 0.5 * 2
+  a0_e = 10,
 )
 
 n_iter = as.integer(100)
@@ -140,7 +139,7 @@ res_mcmc <- run_bayesa(
   wtw_diag = wtw_diag,
   wty = wty,
   nu = 4.5,
-  s_squared = var(y) / ncol(W),
+  sigma2_g = var(y) / ncol(W),
   sigma2_e_init = var(y) * 0.5,
   prior_params = prior_params,
   mcmc_params = list(
