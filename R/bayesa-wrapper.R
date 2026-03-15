@@ -7,7 +7,7 @@
 #' @param wtw_diag Diagonal of W'W
 #' @param wty W'y vector
 #' @param nu Degrees of freedom
-#' @param s_squared Prior scale
+#' @param sigma2_g Initial genetic variance
 #' @param sigma2_e_init Initial residual variance
 #' @param prior_params Prior hyperparameters (for MCMC)
 #' @param mcmc_params MCMC parameters (for method="mcmc")
@@ -17,7 +17,7 @@
 #' @export
 run_bayesa <- function(w, y, wtw_diag, wty,
                        nu = 4.5,
-                       s_squared, sigma2_e_init,
+                       sigma2_g, sigma2_e_init,
                        prior_params = NULL,
                        mcmc_params = NULL,
                        em_params = NULL,
@@ -26,6 +26,9 @@ run_bayesa <- function(w, y, wtw_diag, wty,
   
   method <- match.arg(method)
   
+  sum_2pq   <- sum(apply(w, 2, var))
+  s_squared <- sigma2_g * (nu - 2) / (nu * sum_2pq)
+  
   if (method == "mcmc") {
     mcmc_params <- modifyList(
       list(n_iter = 40000L, n_burn = 20000L, n_thin = 10L, seed = 123L),
@@ -33,9 +36,10 @@ run_bayesa <- function(w, y, wtw_diag, wty,
     )
     # Default prior params
     prior_params <- modifyList(
-      list(a0_e = 10, b0_e = sigma2_e_init * (10 - 1)),
+      list(a0_e = 10),
       prior_params %||% list()
     )
+    prior_params$b0_e <- sigma2_e_init * (prior_params$a0_e - 1)
     run_bayesa_mcmc(w, y, wtw_diag, wty, nu, s_squared, 
                     sigma2_e_init, prior_params, mcmc_params, fold_id)
   } else {

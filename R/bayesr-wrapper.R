@@ -38,17 +38,19 @@ run_bayesr <- function(w, y, wtw_diag, wty,
       mcmc_params %||% list()
     )
     # Default prior params
-    var_class_default <- c(0, 0.0001, 0.001, 0.01)
     prior_params <- modifyList(
       list(
         a0_e = 10,
-        b0_e = sigma2_e_init * (10 - 1),
-        a0_g = 4,
-        b0_g = sigma2_ah * (4 - 2) / 4 / ((1 - pi_vec[1]) * ncol(w)),
-        variance_class = var_class_default
+        a0_g = 10,
+        variance_class = c(0, 0.01, 0.1, 1.0)
       ),
       prior_params %||% list()
     )
+
+    # Hitung derived params dari high-level inputs
+    prior_params$b0_e <- sigma2_e_init * (prior_params$a0_e - 1)
+    prior_params$b0_g <- sigma2_ah * (prior_params$a0_g - 2) / 
+                        prior_params$a0_g / (1 - pi_vec[1])
     run_bayesr_mcmc(w, y, wtw_diag, wty, pi_vec, 
                     sigma2_e_init, sigma2_ah, prior_params, 
                     mcmc_params, fold_id)
