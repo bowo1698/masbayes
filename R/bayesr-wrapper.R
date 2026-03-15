@@ -42,7 +42,7 @@ run_bayesr <- function(w, y, wtw_diag, wty,
       list(
         a0_e = 10,
         a0_g = 10,
-        variance_class = c(0, 0.01, 0.1, 1.0)
+        variance_class = c(0, 0.001, 0.01, 0.1)
       ),
       prior_params %||% list()
     )
