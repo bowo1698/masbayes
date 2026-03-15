@@ -13,7 +13,6 @@ run_bayesr(
   wtw_diag,
   wty,
   pi_vec,
-  sigma2_vec,
   sigma2_e_init,
   sigma2_ah = NULL,
   prior_params = NULL,
@@ -36,12 +35,10 @@ run_bayesr(
   
   \item{pi_vec}{Numeric vector of length 4. Initial mixture proportions for 
     [zero, small, medium, large] effect components. Must sum to 1. 
-    Typical: \code{c(0.85, 0.08, 0.05, 0.02)}.}
+    Default values: \code{c(0.95, 0.02, 0.02, 0.01)}.}
   
-  \item{sigma2_vec}{Numeric vector of length 4. Variance components for 
-    [zero, small, medium, large] effects. First element should be near-zero 
-    (e.g., 1e-8) rather than exact 0 to avoid numerical issues. 
-    Typical: \code{c(1e-8, 0.001, 0.01, 0.1)}.}
+  \item{sigma2_vec}{Variance components for [zero, small, medium, large] only for EM. 
+    Default values: \code{c(0.95, 0.02, 0.02, 0.01)}.}
   
   \item{sigma2_e_init}{Numeric. Initial value for residual variance. 
     Can be set as \code{var(y) * 0.5} (assuming h² ≈ 0.5) or obtained 
@@ -53,10 +50,12 @@ run_bayesr(
   
   \item{prior_params}{List with components (required for MCMC only):
     \describe{
-      \item{a0_e, b0_e}{Shape and scale for residual variance inverse-gamma prior}
-      \item{a0_small, b0_small}{Shape and scale for small effect variance prior}
-      \item{a0_medium, b0_medium}{Shape and scale for medium effect variance prior}
-      \item{a0_large, b0_large}{Shape and scale for large effect variance prior}
+      \item{a0_e}{Prior proportions of residual variance. Default value: \code{10}}
+      \item{a0_g}{Prior proportions of genetic variance. Default value: \code{10}}
+      \item{variance_class}{Variance components for 
+      [zero, small, medium, large] effects. First element should be near-zero 
+      (e.g., 1e-8) rather than exact 0 to avoid numerical issues. 
+      Defaul values: \code{c(0, 0.001, 0.01, 0.1)}}
     }}
   
   \item{mcmc_params}{List with components (required for method="mcmc"):
@@ -167,14 +166,9 @@ wty <- as.vector(crossprod(W, y))
 
 # Prior parameters
 prior_params <- list(
-  a0_e = 3.0,
-  b0_e = 0.5,
-  a0_small = 3.0,
-  b0_small = 0.001,
-  a0_medium = 5.0,
-  b0_medium = 0.005,
-  a0_large = 3.0,
-  b0_large = 0.05
+  a0_e = 10,
+  a0_g = 10,
+  variance_class = c(0, 0.001, 0.01, 0.1)
 )
 
 # MCMC parameters
@@ -190,7 +184,6 @@ res_mcmc <- run_bayesr(
   wtw_diag = wtw_diag,
   wty = wty,
   pi_vec = c(0.85, 0.08, 0.05, 0.02),
-  sigma2_vec = c(1e-8, 0.001, 0.01, 0.1),
   sigma2_e_init = var(y) * 0.5,
   sigma2_ah = var(y) * 0.5,
   prior_params = prior_params,
