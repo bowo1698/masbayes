@@ -55,10 +55,24 @@ run_bayesr <- function(w, y, wtw_diag, wty,
                     sigma2_e_init, sigma2_ah, prior_params, 
                     mcmc_params, fold_id)
   } else {
-    if (is.null(em_params)) {
-      em_params <- list(max_iter = 500L, tol = 1e-6)
+    if (is.null(sigma2_ah)) stop("sigma2_ah required for EM")
+    
+    em_params <- modifyList(
+      list(max_iter = 500L, tol = 1e-6),
+      em_params %||% list()
+    )
+    
+    # Hitung sigma2_vec konsisten dengan MCMC
+    variance_class <- if (!is.null(prior_params$variance_class)) {
+      prior_params$variance_class
+    } else {
+      c(0, 0.001, 0.01, 0.1)
     }
-    run_bayesr_em(w, y, wtw_diag, wty, pi_vec, sigma2_vec, 
+    varg_init    <- sigma2_ah / ((1 - pi_vec[1]) * ncol(w))
+    sigma2_vec   <- variance_class * varg_init
+    sigma2_vec[1] <- 0
+
+    run_bayesr_em(w, y, wtw_diag, wty, pi_vec, sigma2_vec,
                   sigma2_e_init, em_params, fold_id)
   }
 }

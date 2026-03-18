@@ -91,17 +91,22 @@ The Rust implementation uses marginalized Gibbs sampling for efficient MCMC
 convergence. Sufficient statistics (\code{wtw_diag}, \code{wty}) are precomputed 
 in R to minimize overhead in the sampling loop.
 }
+
 \value{
-A list with three components:
-  \item{beta_samples}{Numeric matrix (n_save × p for MCMC, 1 x p for EM). Posterior samples of marker 
-    effect sizes, where n_save = (n_iter - n_burn) / n_thin.}
-  
-  \item{sigma2_j_samples}{Numeric matrix (n_save × p). Posterior samples of 
-    marker-specific variances.}
-  
-  \item{sigma2_e_samples}{Numeric vector (length n_save). Posterior samples of 
-    residual variance.}
+A list with the following components:
+  \item{beta_hat}{Numeric vector (p). Posterior mean marker effects.}
+  \item{mu_hat}{Numeric scalar. Intercept estimate.}
+  \item{sigma2_e_hat}{Numeric scalar. Posterior mean residual variance.}
+  \item{sigma2_j_hat}{Numeric vector (p). Posterior mean marker-specific variances.}
+  \item{sigma2_g}{Numeric scalar. Genetic variance (variance of GEBVs).}
+  \item{h2}{Numeric scalar. Heritability estimate.}
+  \item{pred_train}{Numeric vector (n). Fitted values on training set.}
+  \item{beta_samples}{Numeric matrix (n_save × p for MCMC, 1 × p for EM). Posterior samples of marker effects.}
+  \item{sigma2_j_samples}{Numeric matrix (n_save × p for MCMC, 1 × p for EM). Posterior samples of marker-specific variances.}
+  \item{sigma2_e_samples}{Numeric vector (length n_save, length 1 for EM). Posterior samples of residual variance.}
+  \item{mu_samples}{Numeric vector (length n_save). Posterior samples of intercept.}
 }
+
 \references{
 Meuwissen THE, Hayes BJ, Goddard ME (2001). Prediction of total genetic value 
   using genome-wide dense marker maps. \emph{Genetics}, 157(4): 1819-1829.
@@ -123,7 +128,7 @@ wty <- as.vector(crossprod(W, y))
 
 # Prior parameters
 prior_params <- list(
-  a0_e = 10,
+  a0_e = 10
 )
 
 n_iter = as.integer(100)
@@ -146,7 +151,7 @@ res_mcmc <- run_bayesa(
     n_iter = n_iter,
     n_burn = n_burn,
     n_thin = n_thin,
-    seed = seed,
+    seed = seed
   ),
   method = "mcmc"
 )
@@ -158,13 +163,14 @@ res_em <- run_bayesa(
   wtw_diag = wtw_diag,
   wty = wty,
   nu = 4.5,
-  s_squared = var(y) / ncol(W),
+  sigma2_g = var(y) * 0.5,        
   sigma2_e_init = var(y) * 0.5,
   em_params = list(
     max_iter = n_iter,
     tol = tol
   ),
-  method = "em"
+  method = "em",
+  fold_id = 0L
 )
 
 # Posterior inference (MCMC)
@@ -186,6 +192,8 @@ top_markers <- order(sigma2_j_mean, decreasing = TRUE)[1:10]
 plot(res_mcmc$sigma2_e_samples, type = "l", main = "Residual Variance Trace")
 hist(beta_hat, breaks = 50, main = "Posterior Mean Effects")
 }
+str(res_mcmc)
+str(res_em)
 }
 \seealso{
 \code{\link{run_bayesr}}, \code{\link{construct_wah_matrix}}

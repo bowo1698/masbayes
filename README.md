@@ -434,8 +434,8 @@ wty <- as.vector(crossprod(W, y))
 
 # Hyperparameters
 prior_params <- list(
-  a0_e = 3.0,       # Residual variance prior df
-  b0_e = 0.5,      # Residual variance prior scale
+  a0_e = 3.0,       # Prior residual variance
+  a0_g = 0.5,      # Prior genetic 
   a0_small = 5.0,    # Small effects prior df
   b0_small = 0.001,
   a0_medium = 5.0,   # Medium effects prior df

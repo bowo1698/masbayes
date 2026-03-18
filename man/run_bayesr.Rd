@@ -37,16 +37,18 @@ run_bayesr(
     [zero, small, medium, large] effect components. Must sum to 1. 
     Default values: \code{c(0.95, 0.02, 0.02, 0.01)}.}
   
-  \item{sigma2_vec}{Variance components for [zero, small, medium, large] only for EM. 
-    Default values: \code{c(0.95, 0.02, 0.02, 0.01)}.}
+  \item{sigma2_vec}{Variance components for [zero, small, medium, large] only for EM.
+    Not required if \code{sigma2_ah} is provided — computed automatically from 
+    \code{sigma2_ah} and \code{variance_class} in the wrapper.
+    Default values: \code{c(0, 0.001, 0.01, 0.1)} × varg_init.}
   
   \item{sigma2_e_init}{Numeric. Initial value for residual variance. 
     Can be set as \code{var(y) * 0.5} (assuming h² ≈ 0.5) or obtained 
     from GBLUP variance component estimation for data-driven initialization.}
   
   \item{sigma2_ah}{Numeric. Initial total genetic variance for marker effect 
-    initialization, only applicable for MCMC method. 
-    Suggested: \code{var(y) * 0.5} or genetic variance from GBLUP.}
+    initialization. Required for both MCMC and EM — used to compute 
+    \code{sigma2_vec} automatically via \code{varg_init = sigma2_ah / ((1 - pi_vec[1]) * p)}.} 
   
   \item{prior_params}{List with components (required for MCMC only):
     \describe{
@@ -117,28 +119,30 @@ Both methods use precomputed sufficient statistics (\code{wtw_diag}, \code{wty})
 to minimize overhead in the sampling/iteration loops.
 }
 \value{
-A list with seven components:
-  \item{beta_samples}{Numeric matrix (n_save × p). Posterior samples of marker 
-    effect sizes.}
-  
-  \item{gamma_samples}{Numeric matrix (n_save × p). Posterior samples of component 
-    assignments (0 = zero, 1 = small, 2 = medium, 3 = large).}
-  
-  \item{sigma2_e_samples}{Numeric vector (length n_save). Posterior samples of 
-    residual variance.}
-  
-  \item{sigma2_small_samples}{Numeric vector (length n_save). Posterior samples 
-    of small effect variance component.}
-  
-  \item{sigma2_medium_samples}{Numeric vector (length n_save). Posterior samples 
-    of medium effect variance component.}
-  
-  \item{sigma2_large_samples}{Numeric vector (length n_save). Posterior samples 
-    of large effect variance component.}
-  
-  \item{pi_samples}{Numeric matrix (n_save × 4). Posterior samples of mixture 
-    proportions.}
+A list with the following components:
+  \item{beta_hat}{Numeric vector (p). Posterior mean marker effects.}
+  \item{mu_hat}{Numeric scalar. Intercept estimate (0 for EM).}
+  \item{sigma2_e_hat}{Numeric scalar. Posterior mean residual variance.}
+  \item{sigma2_g}{Numeric scalar. Genetic variance estimated from variance of GEBVs.}
+  \item{h2}{Numeric scalar. Heritability estimate (sigma2_g / (sigma2_g + sigma2_e_hat)).}
+  \item{pred_train}{Numeric vector (n). Fitted values on training set.}
+  \item{beta_samples}{Numeric matrix (n_save × p for MCMC, 1 × p for EM). 
+    Posterior samples of marker effects.}
+  \item{gamma_samples}{Numeric matrix (n_save × p for MCMC, 1 × p for EM). 
+    Component assignments (0 = zero, 1 = small, 2 = medium, 3 = large).}
+  \item{sigma2_e_samples}{Numeric vector (length n_save, 1 for EM). 
+    Posterior samples of residual variance.}
+  \item{sigma2_small_samples}{Numeric vector (length n_save, 1 for EM). 
+    Posterior samples of small effect variance component.}
+  \item{sigma2_medium_samples}{Numeric vector (length n_save, 1 for EM). 
+    Posterior samples of medium effect variance component.}
+  \item{sigma2_large_samples}{Numeric vector (length n_save, 1 for EM). 
+    Posterior samples of large effect variance component.}
+  \item{pi_samples}{Numeric matrix (n_save × 4 for MCMC, 1 × 4 for EM). 
+    Posterior samples of mixture proportions.}
+  \item{mu_samples}{Numeric vector (length n_save). Posterior samples of intercept.}
 }
+
 \references{
 Erbe M, Hayes BJ, Matukumalli LK, et al. (2012). Improving accuracy of genomic 
   predictions within and between dairy cattle breeds with imputed high-density 
@@ -204,14 +208,15 @@ res_em <- run_bayesr(
   wtw_diag = wtw_diag,
   wty = wty,
   pi_vec = c(0.85, 0.08, 0.05, 0.02),
-  sigma2_vec = c(1e-8, 0.001, 0.01, 0.1),
   sigma2_e_init = var(y) * 0.5,
+  sigma2_ah = var(y) * 0.5,               
+  prior_params = prior_params,             
   em_params = list(
     max_iter = n_iter,
-    tol = tol,
-    seed = seed
+    tol = tol
   ),
-  method = "em"
+  method = "em",
+  fold_id = 0L
 )
 
 # Posterior inference
@@ -243,6 +248,10 @@ matplot(res_mcmc$pi_samples, type = "l", main = "Mixture Proportions",
 legend("topright", legend = c("Zero", "Small", "Medium", "Large"), 
        col = 1:4, lty = 1)
 }
+
+str(res_mcmc)
+str(res_em)
+
 }
 \seealso{
 \code{\link{run_bayesa}}, \code{\link{construct_wah_matrix}}

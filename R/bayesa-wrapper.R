@@ -43,10 +43,11 @@ run_bayesa <- function(w, y, wtw_diag, wty,
     run_bayesa_mcmc(w, y, wtw_diag, wty, nu, s_squared, 
                     sigma2_e_init, prior_params, mcmc_params, fold_id)
   } else {
-    if (is.null(em_params)) {
-      em_params <- list(max_iter = 500L, tol = 1e-6)
-    }
-    run_bayesa_em(w, y, wtw_diag, wty, nu, s_squared, 
+    em_params <- modifyList(
+      list(max_iter = 500L, tol = 1e-6),
+      em_params %||% list()
+    )
+    run_bayesa_em(w, y, wtw_diag, wty, nu, s_squared,
                   sigma2_e_init, em_params, fold_id)
   }
 }
