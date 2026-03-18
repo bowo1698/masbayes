@@ -2,7 +2,7 @@
 \alias{masbayes-package}
 \alias{masbayes}
 \docType{package}
-\title{Rust-Accelerated MCMC Backend for Multi-Allelic Genomic Prediction}
+\title{masbayes: Bayesian Genomic Prediction for Multi-Allelic Markers}
 \description{
 MasBayes supports multi-allelic-based markers for genomic prediction, where markers such as haplotypes
 or microhaplotypes can be used as predictors directly feeding into prediction models without being
