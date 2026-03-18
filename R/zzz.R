@@ -6,21 +6,21 @@
   version <- utils::packageVersion("masbayes")
   
   packageStartupMessage(
-    "\n═══════════════════════════════════════════════════════════════\n",
+    "\n===============================================================\n",
     " masbayes v", version, "\n",
     " Bayesian Genomic Prediction models for multi-allelic marker\n",
-    "───────────────────────────────────────────────────────────────\n",
+    "---------------------------------------------------------------\n",
     " Methods:    BayesR (mixture) | BayesA (marker-specific)\n",
     " Algorithms: MCMC (full Bayesian) | Stochastic EM (fast)\n",
-    "───────────────────────────────────────────────────────────────\n",
+    "---------------------------------------------------------------\n",
     " Core Functions:\n",
-    "   • construct_wah_matrix()  - Design matrix construction\n",
-    "   • run_bayesr()            - Mixture-based variable selection\n",
-    "   • run_bayesa()            - Marker-specific variance modeling\n",
-    "───────────────────────────────────────────────────────────────\n",
+    "   * construct_wah_matrix()  - Design matrix construction\n",
+    "   * run_bayesr()            - Mixture-based variable selection\n",
+    "   * run_bayesa()            - Marker-specific variance modeling\n",
+    "---------------------------------------------------------------\n",
     " Documentation:  ?masbayes\n",
     " Report bugs:    github.com/bowo1698/masbayes/issues\n",
-    "═══════════════════════════════════════════════════════════════\n"
+    "===============================================================\n"
   )
 }
 

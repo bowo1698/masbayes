@@ -68,8 +68,8 @@ run_bayesr <- function(w, y, wtw_diag, wty,
     } else {
       c(0, 0.001, 0.01, 0.1)
     }
-    varg_init    <- sigma2_ah / ((1 - pi_vec[1]) * ncol(w))
-    sigma2_vec   <- variance_class * varg_init
+    varg_init     <- as.numeric(sigma2_ah / ((1 - pi_vec[1]) * ncol(w)))
+    sigma2_vec    <- as.vector(variance_class) * varg_init
     sigma2_vec[1] <- 0
 
     run_bayesr_em(w, y, wtw_diag, wty, pi_vec, sigma2_vec,
