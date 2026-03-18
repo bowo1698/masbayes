@@ -1,5 +1,6 @@
 .onLoad <- function(libname, pkgname) {
   library.dynam("masbayes", pkgname, libname)
+  options(help_type = "html")
 }
 
 .onAttach <- function(libname, pkgname) {
