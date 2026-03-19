@@ -144,7 +144,7 @@ res_mcmc <- run_bayesa(
   wtw_diag = wtw_diag,
   wty = wty,
   nu = 4.5,
-  sigma2_g = var(y) / ncol(W),
+  sigma2_g = var(y) * 0.5,
   sigma2_e_init = var(y) * 0.5,
   prior_params = prior_params,
   mcmc_params = list(

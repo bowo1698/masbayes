@@ -434,14 +434,9 @@ wty <- as.vector(crossprod(W, y))
 
 # Hyperparameters
 prior_params <- list(
-  a0_e = 3.0,       # Prior residual variance
-  a0_g = 0.5,      # Prior genetic 
-  a0_small = 5.0,    # Small effects prior df
-  b0_small = 0.001,
-  a0_medium = 5.0,   # Medium effects prior df
-  b0_medium = 0.005,
-  a0_large = 5.0,    # Large effects prior df
-  b0_large = 0.1
+  a0_e = 10,       # Prior residual variance
+  a0_g = 10,      # Prior genetic 
+  variance_class = c(0, 0.001, 0.01, 0.1) # variance classes
 )
 
 mcmc_params <- list(
@@ -457,8 +452,7 @@ result_bayesr <- run_bayesr(
   y = y,
   wtw_diag = wtw_diag,
   wty = wty,
-  pi_vec = c(0.85, 0.08, 0.05, 0.02),     # Mixture proportions
-  sigma2_vec = c(1e-8, 0.001, 0.01, 0.1), # Variance components
+  pi_vec = c(0.50, 0.30, 0.15, 0.05),     # Mixture proportions
   sigma2_e_init = var(y) * 0.5,           # Initial error variance
   sigma2_ah = var(y) * 0.5,               # Initial genetic variance
   prior_params = prior_params,
@@ -506,8 +500,7 @@ wty <- as.vector(crossprod(W, y))
 
 # Prior parameters
 prior_params <- list(
-  a0_e = 3.0,
-  b0_e = var(y) * 0.5 * 2
+  a0_e = 10
 )
 
 # MCMC parameters
@@ -525,7 +518,7 @@ result_bayesa <- run_bayesa(
   wtw_diag = wtw_diag,
   wty = wty,
   nu = 4.5,                     # Prior df for marker variances
-  s_squared = var(y) / ncol(W), # Prior scale
+  sigma2_g = var(y) * 0.5,      # Prior scale
   sigma2_e_init = var(y) * 0.5,
   prior_params = prior_params,
   mcmc_params = mcmc_params,
