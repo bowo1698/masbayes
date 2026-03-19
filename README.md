@@ -4,7 +4,7 @@
 [![Rust](https://img.shields.io/badge/Rust-1.9+-orange.svg)](https://www.rust-lang.org/)
 [![R](https://img.shields.io/badge/R-4.4+-blue.svg)](https://www.r-project.org/)
 
-## Rust-based Bayesian genomic prediction package for multi-allelic markers
+## Bayesian genomic prediction for multi-allelic markers
 
 MasBayes supports multi-allelic-based markers for genomic prediction, where markers such as haplotypes or microhaplotypes can be used as predictors directly feeding into prediction models without being decomposed into biallelic markers. We implemented the $W_{\alpha h}$ matrix as described by [Da, Y. (2015)](https://doi.org/10.1186/s12863-015-0301-1) and developed BayesA and BayesR models specifically for multiallelic markers. Both matrix constructions and Bayesian models were built on Rust programming to optimise computational efficiency rather than purely using the R implementation. In addition, we also implemented marginalised Gibbs sampling for Bayesian models to reduce correlation between parameters within the MCMC chain and hasten convergence.
 
@@ -48,7 +48,7 @@ install.packages(
 
 ### Manual compiling via Cargo
 
-But if you want to manually build the Masbayes library, Cargo is the only compiler you can use.
+But it is **highly recommended** to manually build the Masbayes package, as different architecture may require different Rust library. So, Cargo is the only compiler you can use.
 
 #### 1. Rust Toolchain (Required)
 **macOS & Linux**:
