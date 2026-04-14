@@ -2,9 +2,9 @@
 # MasBayes
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Rust](https://img.shields.io/badge/Rust-1.9+-orange.svg)](https://www.rust-lang.org/)
 [![R](https://img.shields.io/badge/R-4.4+-blue.svg)](https://www.r-project.org/)
 [![Examples](https://img.shields.io/badge/Examples-Click%20Here-blue)](examples/)
+[![Rust][Rust]][Rust-url]
 
 <!-- TABLE OF CONTENTS -->
 <details>
@@ -55,10 +55,6 @@
     <li><a href="#citation">Citation</a></li>
   </ol>
 </details>
-
-### Built With
-
-* [![Rust][Rust]][Rust-url]
 
 ## Bayesian genomic prediction for multi-allelic markers
 
