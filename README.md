@@ -3,6 +3,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Rust](https://img.shields.io/badge/Rust-1.9+-orange.svg)](https://www.rust-lang.org/)
 [![R](https://img.shields.io/badge/R-4.4+-blue.svg)](https://www.r-project.org/)
+[![Examples](https://img.shields.io/badge/Examples-Click%20Here-blue)](examples/)
 
 ## Bayesian genomic prediction for multi-allelic markers
 
@@ -378,166 +379,9 @@ This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
 ---
 
 ## Quick start
-
-### W_αh matrix construction
-```r
-library(masbayes)
-
-# Simulated haplotype data (n × 2B matrix)
-set.seed(123)
-n <- 10  # individuals
-B <- 100   # haplotype blocks
-
-hap_matrix <- matrix(
-  sample(1:5, n * B * 2, replace = TRUE),
-  nrow = n,
-  ncol = B * 2
-)
-
-# Column names (pairs of haplotypes)
-col_names <- paste0("block_", rep(1:B, each = 2))
-
-# Allele frequencies (required for W matrix construction)
-# Must be a LIST with: haplotype, allele, freq
-allele_freq <- list(
-  haplotype = rep(paste0("blk_", 1:B), each = 3),
-  allele = rep(1:5, B * 2),
-  freq = rep(c(0.6, 0.3, 0.1), B)
-)
-
-# Construct W_αh matrix
-train_Wah <- construct_wah_matrix(
-  hap_matrix = hap_matrix,
-  colnames = col_names,
-  allele_freq_filtered = allele_freq,
-  reference_structure = NULL,
-  drop_baseline = TRUE
-)
-
-# Output
-dim(train_Wah$W_ah)          # n × m (m = total informative alleles)
-head(train_Wah$allele_info)  # Metadata for each column
-head(train_Wah$dropped_alleles)  # Baseline alleles removed
-```
-
----
-
-### BayesR genomic prediction
-```r
-# Use the W matrix that has been constructed by construct_wah_matrix()
-W <- train_Wah$W_ah
-y <- rnorm(n)  # Phenotypes
-
-# Precompute sufficient statistics
-wtw_diag <- colSums(W^2)
-wty <- as.vector(crossprod(W, y))
-
-# Hyperparameters
-prior_params <- list(
-  a0_e = 10,       # Prior residual variance
-  a0_g = 10,      # Prior genetic 
-  variance_class = c(0, 0.001, 0.01, 0.1) # variance classes
-)
-
-mcmc_params <- list(
-  n_iter = as.integer(100), # Total iteration is typically more than 10000
-  n_burn = as.integer(20),  # Burn-in can be a half of n_iter
-  n_thin = as.integer(2),   # Thinning interval can be 3, 5, or 10
-  seed = as.integer(42)
-)
-
-# Run BayesR MCMC
-result_bayesr <- run_bayesr(
-  w = W,
-  y = y,
-  wtw_diag = wtw_diag,
-  wty = wty,
-  pi_vec = c(0.50, 0.30, 0.15, 0.05),     # Mixture proportions
-  sigma2_e_init = var(y) * 0.5,           # Initial error variance
-  sigma2_ah = var(y) * 0.5,               # Initial genetic variance
-  prior_params = prior_params,
-  mcmc_params = mcmc_params,
-  method = "mcmc"
-)
-
-# Posterior means
-beta_hat <- colMeans(result_bayesr$beta_samples)
-pi_post <- colMeans(result_bayesr$pi_samples)
-
-# Genomic predictions
-GEBV <- W %*% beta_hat
-
-# Posterior mixture proportions
-pi_post <- colMeans(res$pi_samples)
-names(pi_post) <- c("Zero", "Small", "Medium", "Large")
-print(pi_post)
-
-# Identify markers with non-zero effects
-gamma_mode <- apply(res$gamma_samples, 2, function(x) {
-  as.numeric(names(sort(table(x), decreasing = TRUE)[1]))
-})
-important_markers <- which(gamma_mode > 0)
-
-# Convergence diagnostics
-plot(res$sigma2_e_samples, type = "l", main = "Residual Variance Trace")
-matplot(res$pi_samples, type = "l", main = "Mixture Proportions", 
-        ylab = "Proportion", col = 1:4, lty = 1)
-legend("topright", legend = c("Zero", "Small", "Medium", "Large"), 
-       col = 1:4, lty = 1)
-```
-
----
-
-### BayesA with marker-specific variance
-```r
-# Use the W matrix that has been constructed by construct_wah_matrix()
-W <- result$W_ah
-y <- rnorm(n)  # Phenotypes
-
-# Precompute sufficient statistics
-wtw_diag <- as.numeric(colSums(W^2))
-wty <- as.vector(crossprod(W, y))
-
-# Prior parameters
-prior_params <- list(
-  a0_e = 10
-)
-
-# MCMC parameters
-mcmc_params <- list(
-  n_iter = as.integer(100), # typically more than 10000
-  n_burn = as.integer(20),  # half of n_iter
-  n_thin = as.integer(2),   # can be 3, 5, or 10
-  seed = as.integer(42)
-)
-
-# Run BayesA
-result_bayesa <- run_bayesa(
-  w = W,
-  y = y,
-  wtw_diag = wtw_diag,
-  wty = wty,
-  nu = 4.5,                     # Prior df for marker variances
-  sigma2_g = var(y) * 0.5,      # Prior scale
-  sigma2_e_init = var(y) * 0.5,
-  prior_params = prior_params,
-  mcmc_params = mcmc_params,
-  method = "mcmc"
-)
-
-# Posterior inference
-beta_hat <- colMeans(result_bayesa$beta_samples)
-GEBV <- W %*% beta_hat
-
-# Prediction accuracy
-cor(GEBV, y)
-
-# Marker-specific variances
-sigma2_j_hat <- colMeans(result_bayesa$sigma2_j_samples)
-
-# Identify markers with large effects
-important_markers <- which(sigma2_j_hat > quantile(sigma2_j_hat, 0.95))
-```
+- [Basic continuous trait example](examples/01_basic_continuous.R)
+- [Binary trait with Albert-Chib](examples/02_binary_trait.R)  
+- [SNP vs MH simulation proof-of-concept](examples/03_snp_vs_mh_simulation.R)
 
 ---
 
@@ -631,7 +475,7 @@ If you use `masbayes` in your research, please cite:
   title = {masbayes: Bayesian model for genomic prediction using multi-allelic markers},
   year = {2025},
   url = {https://github.com/bowo1698/masbayes},
-  note = {R package version 1.1.0}
+  note = {R package version 4.4.0}
 }
 ```
 
