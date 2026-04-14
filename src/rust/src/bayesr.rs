@@ -44,6 +44,11 @@ pub struct BayesRRunner {
     gamma: Array1<usize>,
     sigma2_e: f64,
     fold_id: i32,
+
+    // Albert-Chib
+    is_binary: bool,
+    z: Array1<f64>,        // latent liability
+    wtz: Array1<f64>,      // W'z, updated each iter
 }
 
 impl BayesRRunner {
@@ -63,6 +68,7 @@ impl BayesRRunner {
         n_thin: usize,
         seed: u64,
         fold_id: i32,
+        is_binary: bool, 
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
@@ -80,12 +86,19 @@ impl BayesRRunner {
         // Initial base variance estimate
         let varg_init = sigma2_ah / ((1.0 - pi_vec[0]) * n_alleles as f64);
         let sigma2_vec: Vec<f64> = variance_class.iter().map(|&f| f * varg_init).collect();
+
+        let y_arr = Array1::from_vec(y.clone());
+        let wty_arr = Array1::from_vec(wty.clone());
+
+        // Initialize z = y for gaussian, same for binary start
+        let z_init = y_arr.clone();
+        let wtz_init = wty_arr.clone();
         
         Self {
             w,
-            y: Array1::from_vec(y),
+            y: y_arr,
             wtw_diag: Array1::from_vec(wtw_diag),
-            wty: Array1::from_vec(wty),
+            wty: wty_arr,
             n,
             n_alleles,
             pi_vec: Array1::from_vec(pi_vec),
@@ -102,6 +115,9 @@ impl BayesRRunner {
             gamma: Array1::<usize>::zeros(n_alleles),
             sigma2_e: sigma2_e_init,
             fold_id,
+            is_binary,
+            z: z_init,
+            wtz: wtz_init,
         }
     }
     
@@ -117,6 +133,11 @@ impl BayesRRunner {
         let mut sigma2_medium_samples = Array1::<f64>::zeros(n_save);
         let mut sigma2_large_samples = Array1::<f64>::zeros(n_save);
         let mut pi_samples = Array2::<f64>::zeros((n_save, 4));
+        let mut z_samples: Option<Array2<f64>> = if self.is_binary {
+            Some(Array2::<f64>::zeros((n_save, self.n)))
+        } else {
+            None
+        };
         
         let mut save_idx = 0;
         
@@ -131,11 +152,31 @@ impl BayesRRunner {
         
         // MCMC loop
         for iter in 0..self.n_iter {
+
+            // Albert-Chib data augmentation (binary only) ──────────
+            if self.is_binary {
+                let fitted_z = self.w.dot(&self.beta);
+                for i in 0..self.n {
+                    let mu_i = fitted_z[i] + self.mu;
+                    self.z[i] = if self.y[i] > 0.5 {
+                        utils::rtruncnorm_lower(&mut self.rng, mu_i, 0.0)
+                    } else {
+                        utils::rtruncnorm_upper(&mut self.rng, mu_i, 0.0)
+                    };
+                }
+                // Update wtz = W'z
+                self.wtz = self.w.t().dot(&self.z);
+                // Fix sigma2_e = 1 for identifiability
+                self.sigma2_e = 1.0;
+            }
+
             // Sample intercept
             let fitted = self.w.dot(&self.beta);
-            let resid_sum: f64 = self.y.iter()
+            // Use z instead of y if binary
+            let response = if self.is_binary { &self.z } else { &self.y };
+            let resid_sum: f64 = response.iter()
                 .zip(fitted.iter())
-                .map(|(yi, fi)| yi - fi - self.mu)
+                .map(|(ri, fi)| ri - fi - self.mu)
                 .sum();
             let mu_post = resid_sum / self.n as f64 + self.mu;
             let mu_sd = (self.sigma2_e / self.n as f64).sqrt();
@@ -154,7 +195,8 @@ impl BayesRRunner {
                 let l_j = self.wtw_diag[j];
                 
                 // Compute residual correlation
-                let mut residuals_prod = self.wty[j];
+                let wty_j = if self.is_binary { self.wtz[j] } else { self.wty[j] };
+                let mut residuals_prod = wty_j;
                 for i in 0..self.n {
                     residuals_prod -= self.w[[i, j]] * fitted[i];
                 }
@@ -232,12 +274,14 @@ impl BayesRRunner {
             }
             
             // 2. Sample variance components
-            let residuals = &self.y - &fitted;
-            let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
-            
-            let a_e = self.a0_e + (self.n as f64) / 2.0;
-            let b_e = self.b0_e + sse / 2.0;
-            self.sigma2_e = rinvgamma(&mut self.rng, a_e, b_e);
+            if !self.is_binary {
+                let residuals = &self.y - &fitted;
+                let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
+                let a_e = self.a0_e + (self.n as f64) / 2.0;
+                let b_e = self.b0_e + sse / 2.0;
+                self.sigma2_e = rinvgamma(&mut self.rng, a_e, b_e);
+                // sigma2_e stays fixed at 1.0 for binary
+            }
             
             // Tabulate component counts
             let n_counts = tabulate(&self.gamma, 4);
@@ -283,6 +327,12 @@ impl BayesRRunner {
                 for k in 0..4 {
                     pi_samples[[save_idx, k]] = self.pi_vec[k];
                 }
+                // Store latent liability if binary
+                if let Some(ref mut zs) = z_samples {
+                    for i in 0..self.n {
+                        zs[[save_idx, i]] = self.z[i];
+                    }
+                }
                 save_idx += 1;
             }
             
@@ -324,6 +374,7 @@ impl BayesRRunner {
             .sum::<f64>() / (self.n as f64 - 1.0);
 
         let h2 = sigma2_g / (sigma2_g + sigma2_e_hat);
+        let z_hat = z_samples.map(|zs| zs.mean_axis(ndarray::Axis(0)).unwrap());
 
         eprintln!("[Fold {}] σ²_g = {:.6} | h² = {:.4}", self.fold_id, sigma2_g, h2);
         
@@ -342,6 +393,7 @@ impl BayesRRunner {
             pred_train,
             sigma2_g,
             h2,
+            z_hat,
         }
     }
 }

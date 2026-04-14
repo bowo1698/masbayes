@@ -137,3 +137,43 @@ pub fn tabulate(gamma: &Array1<usize>, nbins: usize) -> Vec<usize> {
     }
     counts
 }
+
+/// Sample from truncated normal distribution (lower truncation)
+/// Samples from N(mean, 1) truncated to (lower, +inf)
+/// Used for Albert-Chib data augmentation when y = 1
+pub fn rtruncnorm_lower<R: Rng>(rng: &mut R, mean: f64, lower: f64) -> f64 {
+    // Inverse CDF method
+    // P(Z > lower) where Z ~ N(mean, 1)
+    use std::f64::consts::SQRT_2;
+    
+    let alpha = (lower - mean) / 1.0;  // standardize
+    
+    // CDF of standard normal at alpha
+    let phi_alpha = 0.5 * (1.0 + libm::erf(alpha / SQRT_2));
+    
+    // Sample u ~ Uniform(phi_alpha, 1)
+    let u: f64 = rng.gen::<f64>() * (1.0 - phi_alpha) + phi_alpha;
+    let u = u.clamp(phi_alpha + 1e-10, 1.0 - 1e-10);
+    
+    // Inverse CDF: mean + sqrt(2) * erfinv(2u - 1)
+    mean + SQRT_2 * erfinv(2.0 * u - 1.0)
+}
+
+/// Sample from truncated normal distribution (upper truncation)
+/// Samples from N(mean, 1) truncated to (-inf, upper)
+/// Used for Albert-Chib data augmentation when y = 0
+pub fn rtruncnorm_upper<R: Rng>(rng: &mut R, mean: f64, upper: f64) -> f64 {
+    // Mirror: sample from lower truncation of -N(-mean, 1) at -upper
+    -rtruncnorm_lower(rng, -mean, -upper)
+}
+
+/// Inverse error function (erfinv) approximation
+/// Accurate to ~1e-7 for |x| < 1
+fn erfinv(x: f64) -> f64 {
+    // Winitzki approximation
+    let a = 0.147;
+    let ln_term = libm::log(1.0 - x * x);
+    let c = 2.0 / (std::f64::consts::PI * a) + ln_term / 2.0;
+    let sign = if x >= 0.0 { 1.0 } else { -1.0 };
+    sign * (((c * c - ln_term / a).sqrt() - c).sqrt())
+}

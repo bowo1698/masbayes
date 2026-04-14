@@ -249,6 +249,7 @@ fn run_bayesr_mcmc(
     prior_params: List,
     mcmc_params: List,
     fold_id: i32,
+    is_binary: bool, 
 ) -> List {
     
     // Extract MCMC parameters
@@ -287,10 +288,16 @@ fn run_bayesr_mcmc(
         n_thin,
         seed,
         fold_id,
+        is_binary,
     );
     
     // Run MCMC
     let results = runner.run();
+
+    let z_hat_r = match results.z_hat {
+        Some(ref z) => array1_to_vec(z).into_robj(),
+        None => ().into_robj(),
+    };
     
     // Convert ndarray results to R objects
     list!(
@@ -307,7 +314,8 @@ fn run_bayesr_mcmc(
         sigma2_e_hat = results.sigma2_e_hat,
         pred_train = array1_to_vec(&results.pred_train),
         sigma2_g = results.sigma2_g,
-        h2 = results.h2
+        h2 = results.h2,
+        z_hat = z_hat_r
     )
 }
 
@@ -335,6 +343,7 @@ fn run_bayesa_mcmc(
     prior_params: List,
     mcmc_params: List,
     fold_id: i32,
+    is_binary: bool,
 ) -> List {
     // Extract MCMC parameters
     let n_iter = mcmc_params.dollar("n_iter").unwrap().as_integer().unwrap() as usize;
@@ -344,7 +353,10 @@ fn run_bayesa_mcmc(
     
     // Extract prior parameters
     let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
-    let b0_e = prior_params.dollar("b0_e").unwrap().as_real().unwrap();
+    let b0_e = prior_params.dollar("b0_e")
+        .ok()
+        .and_then(|r| r.as_real())
+        .unwrap_or(0.0); 
     
     // Convert R matrix to ndarray
     let w_array = utils::rmatrix_to_array2(&w);
@@ -365,10 +377,16 @@ fn run_bayesa_mcmc(
         n_thin,
         seed,
         fold_id,
+        is_binary,
     );
     
     // Run MCMC
     let results = runner.run();
+
+    let z_hat_r = match results.z_hat {
+        Some(ref z) => array1_to_vec(z).into_robj(),
+        None => ().into_robj(),
+    };
     
     // Convert ndarray results to R objects
     list!(
@@ -382,7 +400,8 @@ fn run_bayesa_mcmc(
         sigma2_j_hat = array1_to_vec(&results.sigma2_j_hat),
         pred_train = array1_to_vec(&results.pred_train),
         sigma2_g = results.sigma2_g,
-        h2 = results.h2
+        h2 = results.h2,
+        z_hat = z_hat_r
     )
 }
 

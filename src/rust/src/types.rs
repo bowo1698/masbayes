@@ -18,6 +18,7 @@ pub struct BayesRResults {
     pub pred_train: Array1<f64>,
     pub sigma2_g: f64,
     pub h2: f64,
+    pub z_hat: Option<Array1<f64>>,
 }
 
 /// Results from BayesA 
@@ -35,4 +36,5 @@ pub struct BayesAResults {
     pub pred_train: Array1<f64>,
     pub sigma2_g: f64,
     pub h2: f64,
+    pub z_hat: Option<Array1<f64>>,
 }

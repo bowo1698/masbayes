@@ -25,9 +25,16 @@ run_bayesr <- function(w, y, wtw_diag, wty,
                        mcmc_params = NULL,
                        em_params = NULL,
                        method = c("mcmc", "em"),
+                       response_type = c("gaussian", "binary"),
                        fold_id = 0L) {
   
   method <- match.arg(method)
+  response_type <- match.arg(response_type)
+  is_binary     <- response_type == "binary"
+
+  if (is_binary && method == "em") {
+    stop("response_type = 'binary' is only supported for method = 'mcmc'")
+  }
   
   if (method == "mcmc") {
     if (is.null(sigma2_ah)) stop("sigma2_ah required for MCMC")
@@ -53,7 +60,7 @@ run_bayesr <- function(w, y, wtw_diag, wty,
                         prior_params$a0_g / (1 - pi_vec[1])
     run_bayesr_mcmc(w, y, wtw_diag, wty, pi_vec, 
                     sigma2_e_init, sigma2_ah, prior_params, 
-                    mcmc_params, fold_id)
+                    mcmc_params, fold_id, is_binary)
   } else {
     if (is.null(sigma2_ah)) stop("sigma2_ah required for EM")
     

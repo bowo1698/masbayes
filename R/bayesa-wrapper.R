@@ -22,9 +22,16 @@ run_bayesa <- function(w, y, wtw_diag, wty,
                        mcmc_params = NULL,
                        em_params = NULL,
                        method = c("mcmc", "em"),
+                       response_type = c("gaussian", "binary"),
                        fold_id = 0L) {
   
-  method <- match.arg(method)
+  method        <- match.arg(method)
+  response_type <- match.arg(response_type)
+  is_binary     <- response_type == "binary"
+
+  if (is_binary && method == "em") {
+    stop("response_type = 'binary' is only supported for method = 'mcmc'")
+  }
   
   sum_2pq   <- sum(apply(w, 2, var))
   s_squared <- sigma2_g * (nu - 2) / (nu * sum_2pq)
@@ -41,7 +48,7 @@ run_bayesa <- function(w, y, wtw_diag, wty,
     )
     prior_params$b0_e <- sigma2_e_init * (prior_params$a0_e - 1)
     run_bayesa_mcmc(w, y, wtw_diag, wty, nu, s_squared, 
-                    sigma2_e_init, prior_params, mcmc_params, fold_id)
+                    sigma2_e_init, prior_params, mcmc_params, fold_id, is_binary)
   } else {
     em_params <- modifyList(
       list(max_iter = 500L, tol = 1e-6),

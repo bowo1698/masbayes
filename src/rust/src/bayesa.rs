@@ -1,5 +1,6 @@
 use ndarray::{Array1, Array2};
 use rand::SeedableRng;
+use rand::Rng;
 use rand_pcg::Pcg64;
 use crate::utils::{rinvgamma, rnorm};
 use crate::types::BayesAResults;
@@ -38,6 +39,11 @@ pub struct BayesARunner {
     sigma2_e_a: f64,
     mu: f64,
     fold_id: i32,
+
+    // Albert-Chib
+    is_binary: bool,
+    z: Array1<f64>,
+    wtz: Array1<f64>,
 }
 
 impl BayesARunner {
@@ -56,17 +62,22 @@ impl BayesARunner {
         n_thin: usize,
         seed: u64,
         fold_id: i32,
+        is_binary: bool,
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
-        
         let rng = Pcg64::seed_from_u64(seed);
+
+        let y_arr = Array1::from_vec(y.clone());
+        let wty_arr = Array1::from_vec(wty.clone());
+        let z_init = y_arr.clone();
+        let wtz_init = wty_arr.clone();
         
         Self {
             w,
-            y: Array1::from_vec(y),
+            y: y_arr,
             wtw_diag: Array1::from_vec(wtw_diag),
-            wty: Array1::from_vec(wty),
+            wty: wty_arr,
             n,
             n_alleles,
             nu,
@@ -82,6 +93,9 @@ impl BayesARunner {
             sigma2_e_a: sigma2_e_init,
             mu: 0.0,
             fold_id,
+            is_binary,
+            z: z_init,
+            wtz: wtz_init,
         }
     }
     
@@ -93,6 +107,11 @@ impl BayesARunner {
         let mut sigma2_j_samples = Array2::<f64>::zeros((n_save, self.n_alleles));
         let mut sigma2_e_samples = Array1::<f64>::zeros(n_save);
         let mut mu_samples = Array1::<f64>::zeros(n_save);
+        let mut z_samples: Option<Array2<f64>> = if self.is_binary {
+            Some(Array2::<f64>::zeros((n_save, self.n)))
+        } else {
+            None
+        };
         
         let mut save_idx = 0;
         
@@ -103,15 +122,34 @@ impl BayesARunner {
         
         // MCMC loop
         for iter in 0..self.n_iter {
-            // Sample beta_j
+
+            // Albert-Chib data augmentation
+            if self.is_binary {
+                let fitted_z = self.w.dot(&self.beta_a);
+                for i in 0..self.n {
+                    let mu_i = fitted_z[i] + self.mu;
+                    self.z[i] = if self.y[i] > 0.5 {
+                        utils::rtruncnorm_lower(&mut self.rng, mu_i, 0.0)
+                    } else {
+                        utils::rtruncnorm_upper(&mut self.rng, mu_i, 0.0)
+                    };
+                }
+                self.wtz = self.w.t().dot(&self.z);
+                self.sigma2_e_a = 1.0;  // fixed for identifiability
+            }
+
+            // Sample beta_j — use z if binary
+            let response = if self.is_binary { &self.z } else { &self.y };
             let w_beta = self.w.dot(&self.beta_a);
+
             // Sampling mu dari residual y - W*beta (tanpa mu)
             let resid_sum: f64 = (0..self.n)
-                .map(|i| self.y[i] - w_beta[i])
+                .map(|i| response[i] - w_beta[i])
                 .sum();
             let mu_mean = resid_sum / self.n as f64;
             let mu_var = self.sigma2_e_a / self.n as f64;
             self.mu = rnorm(&mut self.rng, mu_mean, mu_var.sqrt());
+
             // fitted = W*beta + mu_BARU
             let mut fitted = w_beta;
             fitted.mapv_inplace(|v| v + self.mu);
@@ -126,7 +164,8 @@ impl BayesARunner {
                 self.sigma2_j[j] = rinvgamma(&mut self.rng, shape_j, scale_j);
                 
                 // Sample beta_j | sigma2_j_new 
-                let mut residuals_prod = self.wty[j];
+                let wty_j = if self.is_binary { self.wtz[j] } else { self.wty[j] };
+                let mut residuals_prod = wty_j;
                 for i in 0..self.n {
                     residuals_prod -= self.w[[i, j]] * fitted[i];
                 }
@@ -158,20 +197,22 @@ impl BayesARunner {
             if iter == 1000 {
                 let mean_abs_beta = self.beta_a.iter().map(|x| x.abs()).sum::<f64>() / self.n_alleles as f64;
                 let fitted_check = self.w.dot(&self.beta_a);
-                let sse_check: f64 = self.y.iter().zip(fitted_check.iter())
-                    .map(|(y, f)| (y - f - self.mu).powi(2))
+                let response = if self.is_binary { &self.z } else { &self.y };
+                let sse_check: f64 = response.iter().zip(fitted_check.iter())
+                    .map(|(r, f)| (r - f - self.mu).powi(2))
                     .sum();
                 eprintln!("[Fold {}] iter1000: mean|beta|={:.4} | SSE={:.2} | mu={:.4}", 
                     self.fold_id, mean_abs_beta, sse_check, self.mu);
             }
             
             // Sample sigma2_e
-            let residuals = &self.y - &fitted;
-            let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
-            
-            let a_e = self.a0_e + (self.n as f64) / 2.0;
-            let b_e = self.b0_e + sse / 2.0;
-            self.sigma2_e_a = rinvgamma(&mut self.rng, a_e, b_e);
+            if !self.is_binary {
+                let residuals = &self.y - &fitted;
+                let sse = residuals.iter().map(|r| r.powi(2)).sum::<f64>();
+                let a_e = self.a0_e + (self.n as f64) / 2.0;
+                let b_e = self.b0_e + sse / 2.0;
+                self.sigma2_e_a = rinvgamma(&mut self.rng, a_e, b_e);
+            }
             
             // Store samples
             if iter >= self.n_burn && (iter - self.n_burn) % self.n_thin == 0 {
@@ -181,6 +222,12 @@ impl BayesARunner {
                 }
                 sigma2_e_samples[save_idx] = self.sigma2_e_a;
                 mu_samples[save_idx] = self.mu;
+                // Store latent liability if binary
+                if let Some(ref mut zs) = z_samples {
+                    for i in 0..self.n {
+                        zs[[save_idx, i]] = self.z[i];
+                    }
+                }
                 save_idx += 1;
             }
             
@@ -224,6 +271,7 @@ impl BayesARunner {
             .sum::<f64>() / (self.n as f64 - 1.0);
 
         let h2 = sigma2_g / (sigma2_g + sigma2_e_hat);
+        let z_hat = z_samples.map(|zs| zs.mean_axis(ndarray::Axis(0)).unwrap());
 
         eprintln!("[Fold {}] σ²_g = {:.6} | h² = {:.4}", self.fold_id, sigma2_g, h2);
         
@@ -239,6 +287,7 @@ impl BayesARunner {
             pred_train,
             sigma2_g,
             h2,
+            z_hat,
         }
     }
 }
