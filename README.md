@@ -1,3 +1,4 @@
+<a id="readme-top"></a>
 # MasBayes
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -5,9 +6,63 @@
 [![R](https://img.shields.io/badge/R-4.4+-blue.svg)](https://www.r-project.org/)
 [![Examples](https://img.shields.io/badge/Examples-Click%20Here-blue)](examples/)
 
+<!-- TABLE OF CONTENTS -->
+<details>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li><a href="#masbayes">MasBayes</a></li>
+    <li>
+      <a href="#installation">Installation</a>
+      <ul>
+        <li><a href="#direct-r-binary">Direct R Binary</a></li>
+        <li><a href="#manual-compiling-via-cargo">Manual Compiling via Cargo</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#theoretical-background">Theoretical Background</a>
+      <ul>
+        <li><a href="#w_αh-matrix-construction">W_αh Matrix Construction</a></li>
+        <li>
+          <a href="#bayesr-mixture-model">BayesR Mixture Model</a>
+          <ul>
+            <li><a href="#the-core-idea-categorizing-allele-effects">The Core Idea</a></li>
+            <li><a href="#why-marginalised-gibbs-sampling">Why Marginalised Gibbs Sampling</a></li>
+            <li><a href="#computational-implementation">Computational Implementation</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#bayesa-model">BayesA Model</a>
+          <ul>
+            <li><a href="#hierarchical-model">Hierarchical Model</a></li>
+            <li><a href="#marginalized-gibbs-sampling">Marginalized Gibbs Sampling</a></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li>
+      <a href="#quick-start">Quick Start</a>
+      <ul>
+        <li><a href="#basic-continuous-trait-example">Basic Continuous Trait</a></li>
+        <li><a href="#binary-trait-with-albert-chib">Binary Trait</a></li>
+        <li><a href="#snp-vs-mh-simulation-proof-of-concept">SNP vs MH Simulation</a></li>
+      </ul>
+    </li>
+    <li><a href="#advanced-usage">Advanced Usage</a></li>
+    <li><a href="#want-to-help-us">Contributing</a></li>
+    <li><a href="#license">License</a></li>
+    <li><a href="#contact">Contact</a></li>
+    <li><a href="#acknowledgments">Acknowledgments</a></li>
+    <li><a href="#citation">Citation</a></li>
+  </ol>
+</details>
+
+### Built With
+
+* [![Rust][Rust]][Rust-url]
+
 ## Bayesian genomic prediction for multi-allelic markers
 
-MasBayes supports multi-allelic-based markers for genomic prediction, where markers such as haplotypes or microhaplotypes can be used as predictors directly feeding into prediction models without being decomposed into biallelic markers. We implemented the $W_{\alpha h}$ matrix as described by [Da, Y. (2015)](https://doi.org/10.1186/s12863-015-0301-1) and developed BayesA and BayesR models specifically for multiallelic markers. Both matrix constructions and Bayesian models were built on Rust programming to optimise computational efficiency rather than purely using the R implementation. In addition, we also implemented marginalised Gibbs sampling for Bayesian models to reduce correlation between parameters within the MCMC chain and hasten convergence.
+MasBayes natively supports multi-allelic (and biallelic SNP) markers for genomic prediction. Genetic markers such as haplotypes or microhaplotypes can be used as predictors directly feeding into prediction models without being decomposed into biallelic markers. We implemented the $W_{\alpha h}$ matrix as described by [Da, Y. (2015)](https://doi.org/10.1186/s12863-015-0301-1) and developed BayesA and BayesR models specifically for multiallelic markers. Both matrix constructions and Bayesian models were built on Rust programming to optimise computational efficiency rather than purely using the R implementation. In addition, we also implemented marginalised Gibbs sampling for Bayesian models to reduce correlation between parameters within the MCMC chain and hasten convergence.
 
 Furthermore, to avoid perfect multicollinearity and ensure a full rank for the design matrix, we treated alleles with the highest frequency at each locus as the baseline reference and excluded them from the matrix construction, but their effects are implicitly captured by the model’s intercept.
 
@@ -93,6 +148,8 @@ ls("package:masbayes")
 ?construct_wah_matrix()
 #[1] "construct_wah_matrix"  "run_bayesa"  "run_bayesr"
 ```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---
 
@@ -376,12 +433,16 @@ $$
 
 This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ---
 
 ## Quick start
 - [Basic continuous trait example](examples/01_basic_continuous.R)
 - [Binary trait with Albert-Chib](examples/02_binary_trait.R)  
 - [SNP vs MH simulation proof-of-concept](examples/03_snp_vs_mh_simulation.R)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---
 
@@ -455,6 +516,8 @@ Copyright (c) 2025 Agus Wibowo
 
 - Da, Y. Multi-allelic haplotype model based on genetic partition for genomic prediction and variance component estimation using SNP markers. [BMC Genet. 16, 144 (2015)](https://doi.org/10.1186/s12863-015-0301-1).
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ---
 
 ## Development Team
@@ -479,8 +542,16 @@ If you use `masbayes` in your research, please cite:
 }
 ```
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ---
 
 <p align="center">
   <strong>masbayes</strong> - Making genomic prediction faster and saving your money for genotyping🧬
 </p>
+
+
+<!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+[Rust]: https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white
+[Rust-url]: https://rust-lang.org/
