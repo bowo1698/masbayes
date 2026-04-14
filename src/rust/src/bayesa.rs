@@ -1,6 +1,5 @@
 use ndarray::{Array1, Array2};
 use rand::SeedableRng;
-use rand::Rng;
 use rand_pcg::Pcg64;
 use crate::utils::{rinvgamma, rnorm};
 use crate::types::BayesAResults;

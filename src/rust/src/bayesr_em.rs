@@ -156,6 +156,7 @@ impl BayesREM {
             pred_train,
             sigma2_g,
             h2,
+            z_hat: None,
         }
     }
     
