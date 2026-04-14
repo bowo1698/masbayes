@@ -4,57 +4,29 @@
 \docType{package}
 \title{masbayes: Bayesian Genomic Prediction for Multi-Allelic Markers}
 \description{
-MasBayes supports multi-allelic-based markers for genomic prediction, where markers such as haplotypes
-or microhaplotypes can be used as predictors directly feeding into prediction models without being
-decomposed into biallelic markers. We implemented the W_αh matrix as described by Da, Y. (2015)
-and developed BayesA and BayesR models specifically for multiallelic markers. Both matrix constructions
-and Bayesian models were built on Rust programming to optimise computational efficiency rather than
-purely using the R implementation. In addition, we also implemented marginalised Gibbs sampling
-for Bayesian models to reduce correlation between parameters within the MCMC chain and hasten
-convergence, while baseline allele dropping was also implemented to only estimate informative
-alleles per haplotype block.
+Implements BayesR and BayesA models for genomic prediction using multi-allelic markers
+such as microhaplotypes and SNPs. Built on a Rust backend for computational efficiency, with native
+support for the W_αh matrix coding scheme of Da (2015). Supports both continuous and
+binary traits via Albert-Chib data augmentation.
 }
-\details{
-\strong{Package Overview}
-
-The \pkg{masbayes} package implements Bayesian variable selection methods for genomic 
-prediction using Rust backend. The package is specifically designed 
-for multi-allelic microhaplotype data.
 
 \strong{Main Functions}
 
 \itemize{
-  \item \code{\link{construct_wah_matrix}}: W_αh matrix construction for multi-allelic markers
-  \itemize{
-    \item Allele frequency-based coding scheme
-    \item Optional baseline allele dropping to avoid collinearity
-    \item Training/test set consistency via reference structure
-    \item Handles microhaplotypes and phased SNP blocks
-  }
-
-  \item \code{\link{run_bayesr}}: BayesR with 4-component mixture prior
-  \itemize{
-    \item Zero effect component (markers with no effect)
-    \item Small, medium, and large effect variance components
-    \item Automatic component assignment via MCMC
-    \item Mixture proportions estimated from data
-  }
-  
-  \item \code{\link{run_bayesa
-}}: BayesA with marker-specific variance
-  \itemize{
-    \item Independent variance for each marker
-    \item Scaled inverse chi-squared prior
-    \item Suitable for traits with many small effects
-  }
+  \item \code{\link{construct_wah_matrix}} — construct W_αh matrix from phased haplotype data
+  \item \code{\link{run_bayesr}} — BayesR with 4-component mixture prior
+  \item \code{\link{run_bayesa}} — BayesA with marker-specific variance
 }
 
 \strong{Key Features}
 
 \itemize{
-  \item \strong{Multi-allelic support}: Native handling of microhaplotype blocks
-  \item \strong{Scalability}: Efficient for large-scale genomic data
-  \item \strong{Diagnostics}: Built-in convergence monitoring (ESS, Geweke)
+  \item Multi-allelic native: microhaplotype blocks handled directly without biallelic decomposition
+  \item Universal marker input: accepts both W_αh (Da 2015) and G_snp (VanRaden 2008) matrices
+  \item Binary trait support: Albert-Chib data augmentation via \code{response_type = "binary"}
+  \item Marginalized Gibbs sampling for faster convergence and reduced parameter correlation
+  \item Built-in MCMC diagnostics: ESS and Geweke Z-score
+  \item Cross-generation prediction via consistent block definitions
 }
 
 \strong{Typical Workflow}
