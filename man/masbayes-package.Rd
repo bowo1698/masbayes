@@ -10,16 +10,15 @@ support for the W_αh matrix coding scheme of Da (2015). Supports both continuou
 binary traits via Albert-Chib data augmentation.
 }
 
-\strong{Main Functions}
-
+\section{Main Functions}{
 \itemize{
   \item \code{\link{construct_wah_matrix}} — construct W_αh matrix from phased haplotype data
   \item \code{\link{run_bayesr}} — BayesR with 4-component mixture prior
   \item \code{\link{run_bayesa}} — BayesA with marker-specific variance
 }
+}
 
-\strong{Key Features}
-
+\section{Key Features}{
 \itemize{
   \item Multi-allelic native: microhaplotype blocks handled directly without biallelic decomposition
   \item Universal marker input: accepts both W_αh (Da 2015) and G_snp (VanRaden 2008) matrices
@@ -28,33 +27,31 @@ binary traits via Albert-Chib data augmentation.
   \item Built-in MCMC diagnostics: ESS and Geweke Z-score
   \item Cross-generation prediction via consistent block definitions
 }
+}
 
-\strong{Typical Workflow}
+\section{Typical Workflow}{
+\enumerate{
+  \item Prepare genotype matrix (Wah) and phenotypes (y)
+  \item Calculate summary statistics: WtW diagonal and Wty
+  \item Run MCMC sampling via \code{run_bayesr()} or \code{run_bayesa()}
+  \item Extract posterior means for genomic prediction
+  \item Calculate breeding values: GEBV = W \%*\% beta_hat
+}
+}
 
-1. Prepare genotype matrix (Wah) and phenotypes (y)
-
-2. Calculate summary statistics: WtW diagonal and Wty
-
-3. Run MCMC sampling via \code{run_bayesr()} or \code{run_bayesa()}
-
-4. Extract posterior means for genomic prediction
-
-5. Calculate breeding values: GEBV = W \%*\% beta_hat
-
-\strong{Statistical Background}
-
+\section{Statistical Background}{
 BayesR implements a mixture model:
-\deqn{\beta_j | \gamma_j \sim N(0, \sigma^2_{\gamma_j})}{\beta[j] | \gamma[j] ~ N(0, \sigma^2[\gamma[j]])}
-where \eqn{\gamma_j \in \{0, 1, 2, 3\}}{\gamma[j] in {0,1,2,3}} indicates component membership.
+\deqn{\beta_j | \gamma_j \sim N(0, \sigma^2_{\gamma_j})}
+where \eqn{\gamma_j \in \{0, 1, 2, 3\}} indicates component membership.
 
 BayesA uses marker-specific variances:
-\deqn{\beta_j \sim N(0, \sigma^2_j)}{\beta[j] ~ N(0, \sigma^2[j])}
-\deqn{\sigma^2_j \sim \chi^{-2}(\nu, S^2)}{\sigma^2[j] ~ \chi^{-2}(\nu, S^2)}
+\deqn{\beta_j \sim N(0, \sigma^2_j)}
+\deqn{\sigma^2_j \sim \chi^{-2}(\nu, S^2)}
 
 Both methods use marginalised Gibbs sampling for posterior inference.
+}
 
-\strong{System Requirements}
-
+\section{System Requirements}{
 \itemize{
   \item R >= 4.0.0
   \item Rust >= 1.85.0 (required for installation from source)
