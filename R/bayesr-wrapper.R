@@ -57,7 +57,8 @@ run_bayesr <- function(w, y, wtw_diag, wty,
     # Hitung derived params dari high-level inputs
     prior_params$b0_e <- sigma2_e_init * (prior_params$a0_e - 1)
     prior_params$b0_g <- sigma2_ah * (prior_params$a0_g - 2) / 
-                        prior_params$a0_g / (1 - pi_vec[1])
+                    prior_params$a0_g / (1 - pi_vec[1]) /
+                    sum(apply(w, 2, var))
     run_bayesr_mcmc(w, y, wtw_diag, wty, pi_vec, 
                     sigma2_e_init, sigma2_ah, prior_params, 
                     mcmc_params, fold_id, is_binary)
