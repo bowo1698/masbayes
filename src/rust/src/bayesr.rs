@@ -75,13 +75,6 @@ impl BayesRRunner {
         
         let rng = Pcg64::seed_from_u64(seed);
         
-        // Compute sumvx — total marker variance
-        let sumvx: f64 = (0..w.ncols()).map(|j| {
-            let col = w.column(j);
-            let mean = col.sum() / w.nrows() as f64;
-            col.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / (w.nrows() as f64 - 1.0)
-        }).sum();
-
         // Initialize beta with small random values
         let init_sd = (sigma2_ah / n_alleles as f64).sqrt();
         let mut beta = Array1::<f64>::zeros(n_alleles);
@@ -90,8 +83,8 @@ impl BayesRRunner {
             beta[i] = rnorm(&mut init_rng, 0.0, init_sd);
         }
 
-        // Initial base variance estimate — normalized by sumvx
-        let varg_init = sigma2_ah / ((1.0 - pi_vec[0]) * sumvx);
+        // Initial base variance estimate
+        let varg_init = sigma2_ah / ((1.0 - pi_vec[0]) * n_alleles as f64);
         let sigma2_vec: Vec<f64> = variance_class.iter().map(|&f| f * varg_init).collect();
 
         let y_arr = Array1::from_vec(y.clone());
