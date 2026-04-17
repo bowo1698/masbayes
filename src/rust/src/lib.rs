@@ -12,19 +12,22 @@ use bayesr::BayesRRunner;
 use bayesa::BayesARunner;
 use bayesr_em::BayesREM;
 use bayesa_em::BayesAEM;
-use crate::matrix::{WMatrixBuilder, AlleleFreq, ReferenceStructure};
+use crate::matrix::{WMatrixBuilder, AlleleFreq, ReferenceStructure, DroppedAllele};
 
 /// Convert R list to AlleleFreq vector
 fn parse_allele_freq(freq_df: List) -> Result<Vec<AlleleFreq>> {
     let haplotype = freq_df.dollar("haplotype")?
         .as_string_vector()
         .ok_or_else(|| Error::from("'haplotype' must be character vector"))?;
+    
     let allele = freq_df.dollar("allele")?
         .as_integer_vector()
         .ok_or_else(|| Error::from("'allele' must be integer vector"))?;
+    
     let freq = freq_df.dollar("freq")?
         .as_real_vector()
         .ok_or_else(|| Error::from("'freq' must be numeric vector"))?;
+    
     let mut result = Vec::new();
     for i in 0..haplotype.len() {
         result.push(AlleleFreq {
@@ -33,50 +36,52 @@ fn parse_allele_freq(freq_df: List) -> Result<Vec<AlleleFreq>> {
             freq: freq[i],
         });
     }
+    
     Ok(result)
 }
 
 /// Convert R list to ReferenceStructure
 fn parse_reference_structure(ref_list: List) -> Result<ReferenceStructure> {
     let allele_info = ref_list.dollar("allele_info")?;
+    
     let allele_ids = allele_info.dollar("allele_id")?
         .as_string_vector()
         .ok_or_else(|| Error::from("'allele_id' must be character vector"))?;
+    
     let frequencies = allele_info.dollar("freq")?
         .as_real_vector()
         .ok_or_else(|| Error::from("'freq' must be numeric vector"))?;
-
-    // Parse basis_matrices: list of list(block_name, matrix)
-    let mut basis_matrices: Vec<(String, ndarray::Array2<f64>)> = Vec::new();
-    if let Ok(basis_list) = ref_list.dollar("basis_matrices") {
-        let basis_list: List = basis_list.try_into()
-            .unwrap_or_else(|_| List::new(0));
-        for item in basis_list.iter() {
-            let item_list: List = match item.1.try_into() {
-                Ok(l) => l,
-                Err(_) => continue,
-            };
-            let block_name = match item_list.dollar("block_name")
-                .ok()
-                .and_then(|r| r.as_str().map(|s| s.to_string())) {
-                Some(s) => s,
-                None => continue,
-            };
-            let rmat: RMatrix<f64> = match item_list.dollar("basis")
-                .ok()
-                .and_then(|r| r.try_into().ok()) {
-                Some(m) => m,
-                None => continue,
-            };
-            let arr = utils::rmatrix_to_array2(&rmat);
-            basis_matrices.push((block_name, arr));
+    
+    // Parse dropped alleles if exists
+    let mut dropped = Vec::new();
+    if let Ok(dropped_df) = ref_list.dollar("dropped_alleles") {
+        // Try to parse all three columns, skip if any fails
+        let blocks_opt = dropped_df.dollar("block")
+            .ok()
+            .and_then(|r| r.as_string_vector());
+        let alleles_opt = dropped_df.dollar("allele")
+            .ok()
+            .and_then(|r| r.as_integer_vector());
+        let freqs_opt = dropped_df.dollar("freq")
+            .ok()
+            .and_then(|r| r.as_real_vector());
+        
+        if let (Some(blocks), Some(alleles), Some(freqs)) = 
+            (blocks_opt, alleles_opt, freqs_opt) {
+            for i in 0..blocks.len() {
+                dropped.push(DroppedAllele {
+                    block: blocks[i].to_string(),
+                    allele: alleles[i],
+                    freq: freqs[i],
+                });
+            }
         }
     }
-
+    
     Ok(ReferenceStructure {
         allele_ids: allele_ids.iter().map(|s| s.to_string()).collect(),
         frequencies,
-        basis_matrices,
+        dropped_alleles: dropped,
     })
 }
 
@@ -84,15 +89,15 @@ fn parse_reference_structure(ref_list: List) -> Result<ReferenceStructure> {
 fn array2_to_rmatrix(arr: &ndarray::Array2<f64>) -> RMatrix<f64> {
     let (nrow, ncol) = arr.dim();
     let mut rmat = RMatrix::new(nrow, ncol);
-
+    
     for i in 0..nrow {
         for j in 0..ncol {
             rmat[[i, j]] = arr[[i, j]];
         }
     }
+    
     rmat
 }
-
 
 /// Convert Array1 to Vec
 fn array1_to_vec(arr: &ndarray::Array1<f64>) -> Vec<f64> {
@@ -105,42 +110,56 @@ fn array1_to_vec(arr: &ndarray::Array1<f64>) -> Vec<f64> {
 /// @param colnames Column names for haplotype matrix
 /// @param allele_freq_filtered Dataframe with columns: haplotype, allele, freq
 /// @param reference_structure Optional reference structure for test set (NULL for training)
-/// @return List with W_ah matrix, allele_info dataframe, and basis_matrices
+/// @param drop_baseline Whether to drop most frequent allele as baseline
+/// @return List with W_ah matrix, allele_info dataframe, and dropped_alleles dataframe
 #[extendr]
 fn construct_wah_matrix(
     hap_matrix: RMatrix<i32>,
     colnames: Vec<String>,
     allele_freq_filtered: Nullable<List>,
     reference_structure: Nullable<List>,
+    drop_baseline: bool,
 ) -> List {
+    
+    // Convert to ndarray
     let hap_array = crate::utils::rmatrix_to_array2_i32(&hap_matrix);
-
-    // Test set: pakai reference structure
+    
+    // Check if using reference structure (test set)
     if let NotNull(ref_list) = reference_structure {
         let reference = parse_reference_structure(ref_list)
             .expect("Failed to parse reference structure");
-
+        
         let w_test = WMatrixBuilder::build_with_reference(
             hap_array,
             colnames,
             &reference,
         );
-
+        
+        // Parse block and allele from allele_ids
         let mut blocks = Vec::new();
         let mut alleles = Vec::new();
+        
         for allele_id in &reference.allele_ids {
+            // Parse "hap_1_1_allele3" -> block="hap_1_1", allele=3
             if let Some(pos) = allele_id.rfind("_allele") {
-                blocks.push(allele_id[..pos].to_string());
-                alleles.push(allele_id[pos+7..].parse::<i32>().unwrap_or(0));
+                let block = allele_id[..pos].to_string();
+                let allele_str = &allele_id[pos+7..];  // Skip "_allele"
+                let allele: i32 = allele_str.parse().unwrap_or(0);
+                
+                blocks.push(block);
+                alleles.push(allele);
             } else {
+                // Fallback if parsing fails
                 blocks.push(String::new());
                 alleles.push(0);
             }
         }
-
-        let w_test_rmatrix = array2_to_rmatrix(&w_test);
-
-        // Basis matrices tidak perlu dikembalikan untuk test set
+        
+        // Convert to RMatrix and set column names
+        let mut w_test_rmatrix = array2_to_rmatrix(&w_test);
+        let _ = w_test_rmatrix.set_attrib("dimnames", list!(NULL, reference.allele_ids.clone()));
+        
+        // Return structure matching test set expectations
         return list!(
             W_ah = w_test_rmatrix,
             allele_info = list!(
@@ -149,42 +168,60 @@ fn construct_wah_matrix(
                 allele = alleles,
                 freq = reference.frequencies.clone()
             ),
-            basis_matrices = NULL
+            dropped_alleles = if reference.dropped_alleles.is_empty() {
+                list!()
+            } else {
+                list!(
+                    block = reference.dropped_alleles.iter().map(|d| d.block.clone()).collect::<Vec<_>>(),
+                    allele = reference.dropped_alleles.iter().map(|d| d.allele).collect::<Vec<_>>(),
+                    freq = reference.dropped_alleles.iter().map(|d| d.freq).collect::<Vec<_>>()
+                )
+            }
         );
     }
-
+    
     // Training set: build from scratch
     let allele_freq = if let NotNull(freq_list) = allele_freq_filtered {
         parse_allele_freq(freq_list).expect("Failed to parse allele frequencies")
     } else {
         panic!("allele_freq_filtered required for training set");
     };
-
-    let builder = WMatrixBuilder::new(hap_array, colnames, allele_freq);
+    
+    let builder = WMatrixBuilder::new(
+        hap_array,
+        colnames,
+        allele_freq,
+        drop_baseline,
+    );
+    
     let result = builder.build();
-
-    let w_rmatrix = array2_to_rmatrix(&result.w_ah);
-
-    // Serialize basis_matrices sebagai R list of list(block_name, basis)
-    let basis_r: Vec<Robj> = result.basis_matrices.iter()
-        .map(|(block_name, v)| {
-            let v_rmat = array2_to_rmatrix(v);
-            list!(
-                block_name = block_name.as_str(),
-                basis = v_rmat
-            ).into_robj()
-        })
+    
+    // Convert W_ah to RMatrix and set column names
+    let mut w_rmatrix = array2_to_rmatrix(&result.w_ah);
+    let colnames: Vec<String> = result.allele_info.iter()
+        .map(|a| a.allele_id.clone())
         .collect();
+
+    // Set column names using R's colnames<- function
+    let _ = w_rmatrix.set_attrib("dimnames", list!(NULL, colnames));
 
     list!(
         W_ah = w_rmatrix,
         allele_info = list!(
             allele_id = result.allele_info.iter().map(|a| a.allele_id.clone()).collect::<Vec<_>>(),
-            block     = result.allele_info.iter().map(|a| a.block.clone()).collect::<Vec<_>>(),
-            allele    = result.allele_info.iter().map(|a| a.allele).collect::<Vec<_>>(),
-            freq      = result.allele_info.iter().map(|a| a.freq).collect::<Vec<_>>()
+            block = result.allele_info.iter().map(|a| a.block.clone()).collect::<Vec<_>>(),
+            allele = result.allele_info.iter().map(|a| a.allele).collect::<Vec<_>>(),
+            freq = result.allele_info.iter().map(|a| a.freq).collect::<Vec<_>>()
         ),
-        basis_matrices = basis_r
+        dropped_alleles = if result.dropped_alleles.is_empty() {
+            list!()
+        } else {
+            list!(
+                block = result.dropped_alleles.iter().map(|d| d.block.clone()).collect::<Vec<_>>(),
+                allele = result.dropped_alleles.iter().map(|d| d.allele).collect::<Vec<_>>(),
+                freq = result.dropped_alleles.iter().map(|d| d.freq).collect::<Vec<_>>()
+            )
+        }
     )
 }
 

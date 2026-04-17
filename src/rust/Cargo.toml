@@ -10,7 +10,6 @@ name = "masbayes"
 [dependencies]
 extendr-api = "0.7"
 ndarray = { version = "0.16", features = ["rayon"] }
-nalgebra = "0.33"
 rand = "0.8"
 rand_distr = "0.4"
 rand_pcg = "0.3"
