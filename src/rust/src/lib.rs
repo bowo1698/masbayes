@@ -163,7 +163,7 @@ fn construct_wah_matrix(
     let builder = WMatrixBuilder::new(hap_array, colnames, allele_freq);
     let result = builder.build();
 
-    let mut w_rmatrix = array2_to_rmatrix(&result.w_ah);
+    let w_rmatrix = array2_to_rmatrix(&result.w_ah);
 
     // Serialize basis_matrices sebagai R list of list(block_name, basis)
     let basis_r: Vec<Robj> = result.basis_matrices.iter()
