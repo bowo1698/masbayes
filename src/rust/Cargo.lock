@@ -117,6 +117,8 @@ name = "masbayes"
 version = "1.1.0"
 dependencies = [
  "extendr-api",
+ "libm",
+ "nalgebra 0.33.3",
  "ndarray",
  "rand",
  "rand_distr",
@@ -148,7 +150,23 @@ dependencies = [
  "num-traits",
  "rand",
  "rand_distr",
- "simba",
+ "simba 0.8.1",
+ "typenum",
+]
+
+[[package]]
+name = "nalgebra"
+version = "0.33.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d43ddcacf343185dfd6de2ee786d9e8b1c2301622afab66b6c73baf9882abfd"
+dependencies = [
+ "approx",
+ "matrixmultiply",
+ "nalgebra-macros",
+ "num-complex",
+ "num-rational",
+ "num-traits",
+ "simba 0.9.1",
  "typenum",
 ]
 
@@ -180,6 +198,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-bigint"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
+dependencies = [
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "num-complex"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -203,6 +231,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f83d14da390562dca69fc84082e73e548e1ad308d24accdedd2720017cb37824"
 dependencies = [
+ "num-bigint",
  "num-integer",
  "num-traits",
 ]
@@ -369,13 +398,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "simba"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c99284beb21666094ba2b75bbceda012e610f5479dfcc2d6e2426f53197ffd95"
+dependencies = [
+ "approx",
+ "num-complex",
+ "num-traits",
+ "paste",
+ "wide",
+]
+
+[[package]]
 name = "statrs"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f697a07e4606a0a25c044de247e583a330dbb1731d11bc7350b81f48ad567255"
 dependencies = [
  "approx",
- "nalgebra",
+ "nalgebra 0.32.6",
  "num-traits",
  "rand",
 ]
