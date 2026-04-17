@@ -138,8 +138,7 @@ fn construct_wah_matrix(
             }
         }
 
-        let mut w_test_rmatrix = array2_to_rmatrix(&w_test);
-        let _ = w_test_rmatrix.set_attrib("dimnames", list!(NULL, reference.allele_ids.clone()));
+        let w_test_rmatrix = array2_to_rmatrix(&w_test);
 
         // Basis matrices tidak perlu dikembalikan untuk test set
         return list!(
@@ -164,11 +163,7 @@ fn construct_wah_matrix(
     let builder = WMatrixBuilder::new(hap_array, colnames, allele_freq);
     let result = builder.build();
 
-    let colnames_out: Vec<String> = result.allele_info.iter()
-        .map(|a| a.allele_id.clone())
-        .collect();
     let mut w_rmatrix = array2_to_rmatrix(&result.w_ah);
-    let _ = w_rmatrix.set_attrib("dimnames", list!(NULL, colnames_out));
 
     // Serialize basis_matrices sebagai R list of list(block_name, basis)
     let basis_r: Vec<Robj> = result.basis_matrices.iter()
