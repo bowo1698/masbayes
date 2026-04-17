@@ -3,6 +3,22 @@
 use ndarray::Array2;
 use std::collections::HashMap;
 
+fn project_sum_to_zero(w_block: &mut Array2<f64>, freqs: &[(i32, f64)]) {
+    let n_ind = w_block.nrows();
+    let n_alleles = w_block.ncols();
+    let freq_vals: Vec<f64> = freqs.iter().map(|(_, f)| *f).collect();
+    let freq_sum: f64 = freq_vals.iter().sum();
+    if freq_sum < 1e-10 { return; }
+    for i in 0..n_ind {
+        let weighted_sum: f64 = (0..n_alleles)
+            .map(|k| freq_vals[k] * w_block[[i, k]])
+            .sum();
+        for k in 0..n_alleles {
+            w_block[[i, k]] -= freq_vals[k] * weighted_sum / freq_sum;
+        }
+    }
+}
+
 /// Allele frequency 
 #[derive(Debug, Clone)]
 pub struct AlleleFreq {
@@ -182,6 +198,7 @@ impl WMatrixBuilder {
                 });
             }
             
+            project_sum_to_zero(&mut w_block, &informative_alleles);
             w_blocks.push(w_block);
         }
         
@@ -271,6 +288,28 @@ impl WMatrixBuilder {
             }
         }
         
+        // Project per block ke sum-to-zero constraint
+        let mut block_map: HashMap<String, Vec<(usize, f64)>> = HashMap::new();
+        for (col_idx, allele_id) in reference.allele_ids.iter().enumerate() {
+            if let Some(pos) = allele_id.rfind("_allele") {
+                let block_name = allele_id[..pos].to_string();
+                let p_k = reference.frequencies[col_idx];
+                block_map.entry(block_name).or_default().push((col_idx, p_k));
+            }
+        }
+        for (_block_name, col_freq_pairs) in &block_map {
+            let freq_sum: f64 = col_freq_pairs.iter().map(|(_, f)| f).sum();
+            if freq_sum < 1e-10 { continue; }
+            for i in 0..n_individuals {
+                let weighted_sum: f64 = col_freq_pairs.iter()
+                    .map(|(col, freq)| freq * w_ah[[i, *col]])
+                    .sum();
+                for (col, freq) in col_freq_pairs {
+                    w_ah[[i, *col]] -= freq * weighted_sum / freq_sum;
+                }
+            }
+        }
+
         w_ah
     }
 }
