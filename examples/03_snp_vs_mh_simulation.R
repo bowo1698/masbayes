@@ -208,7 +208,7 @@ mcmc_p <- config$mcmc
 
 run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
                          marker_label, trait_type = "continuous") {
-  y_train <- y_tr   # sudah di-assign dengan benar dari caller
+  y_train <- y_tr
   y_test  <- y_te
   resp    <- if (trait_type == "binary") "binary" else "gaussian"
 
