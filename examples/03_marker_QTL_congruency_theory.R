@@ -1,32 +1,24 @@
-# examples/03_snp_vs_mh_simulation.R
+# examples/03_marker_QTL_congruency_theory.R
 #
 # Simulation proof-of-concept: SNP vs MH under two QTL architecture scenarios
 #
-# Demonstrates the Marker-QTL Unit Congruence Theory:
-# prediction accuracy is maximized when marker unit aligns with the biological QTL unit.
+# Demonstrates the Marker-QTL Unit Congruence Theory
+# Hypothesis: Prediction accuracy is maximized when marker unit aligns with the biological QTL unit.
 #
 # Two QTL scenarios are contrasted:
-#   QTL@SNP — true genetic effects defined at individual SNP level (Scenario 1b)
-#   QTL@MH  — true genetic effects defined at haplotype block level (Scenario 2b)
+#   QTL@SNP — true genetic effects defined at individual SNP level
+#   QTL@MH  — true genetic effects defined at haplotype block level
 #
-# In both scenarios, MH markers are derived from the same SNP data via phasing
+# In both scenarios, microhaplotype markers are derived from the same SNP data via phasing
 # and haplotype encoding, ensuring a fair comparison where the only difference
 # is the marker representation, not the underlying genotype data.
-#
-# Key findings:
-#   - When QTL@MH: MH substantially outperforms SNP (gap ~0.20-0.26 in r_test_g)
-#   - When QTL@SNP: SNP outperforms MH only marginally (gap ~0.04-0.25 in r_test_g)
-#   - This asymmetry reflects MH ⊃ SNP informationally:
-#     MH can partially recover SNP-level signals via haplotype encoding,
-#     but SNP cannot recover combinatorial haplotype effects
-#   - Pattern is consistent across continuous and binary traits,
-#     BayesR and BayesA, and all evaluation metrics (r_test_g, AUC, bias)
 #
 # Models evaluated:
 #   - BayesR (4-component mixture prior, variable selection)
 #   - BayesA (marker-specific variance, no variable selection)
+#   - GBLUP and GWABLUP
 #   x SNP (VanRaden 2008 coding)
-#   x MH  (Da 2015 W_ah coding via construct_wah_matrix)
+#   x Microhaplotype (Da 2015 W_ah coding via construct_wah_matrix)
 #   x Continuous and binary trait
 #   x Train/test split (n_train=200, n_test=100)
 #
@@ -38,10 +30,11 @@
 #   h2_post  : posterior heritability estimate
 #   AUC      : area under ROC curve (binary trait only)
 #
-# Requirements: masbayes, pROC
-# Usage: source("examples/03_snp_vs_mh_simulation.R")
+# Requirements: masbayes, masreml
+# Usage: source("examples/03_marker_QTL_congruency_theory.R")
 
 library(masbayes)
+library(masreml)
 
 # ── CONFIG ───────────────────────────────────────────────────────────────────
 config <- list(
@@ -297,6 +290,199 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
   do.call(rbind, rows)
 }
 
+# ── 7b. GBLUP via masreml ────────────────────────────────────────────────────
+
+# SNP: via build_G_snp with ref_W
+rownames(geno_snp_all) <- as.character(1:n_total)
+G_snp_full <- build_G_snp(geno_snp_all, ref_W = geno_snp_all[idx_train, ])
+
+# MH: via build_G_mh with hap_matrix mode
+rownames(hap_block_all) <- as.character(1:n_total)
+G_mh_full <- build_G_mh(
+  mh_list = hap_block_all,
+  ref_mh  = hap_block_all[idx_train, ],
+  ids     = as.character(1:n_total)
+)
+train_ids_ch <- as.character(idx_train)
+test_ids_ch  <- as.character(idx_test)
+
+run_gblup_scenario <- function(sc, marker_label, G_full, y_tr, y_te, g_te,
+                                trait_type = "continuous") {
+  G_tr <- G_full[train_ids_ch, train_ids_ch]
+
+  y_named <- setNames(y_tr, train_ids_ch)
+
+  fit <- tryCatch(
+    masreml(y = y_named, G = list(g = G_tr),
+            trait = trait_type, method = "auto"),
+    error = function(e) NULL
+  )
+  if (is.null(fit)) {
+    return(data.frame(Trait=trait_type, Marker=marker_label, Model="GBLUP",
+                      Status="ERROR", r_train=NA, r_test_y=NA, r_test_g=NA,
+                      bias=NA, h2_post=NA, AUC=NA, p=NA, stringsAsFactors=FALSE))
+  }
+
+  pred <- predict(fit, G_full = list(g = G_full),
+                  train_ids = train_ids_ch, test_ids = test_ids_ch)
+
+  gebv_tr  <- fit$total_gebv + fit$fixed_effects[1]
+  gebv_te  <- pred$total_gebv + fit$fixed_effects[1]
+
+  h2_post  <- as.numeric(fit$varcomp$h2["g"])
+  ev       <- evaluate_prediction(
+                gebv        = gebv_te,
+                y           = y_te,
+                h2          = h2_post,
+                tbv         = g_te,
+                fitted_prob = if (trait_type == "binary") pred$fitted else NULL
+              )
+  r_train  <- cor(gebv_tr, y_tr)
+  r_test_y <- ev$r_test_y
+  r_test_g <- ev$r_test_g
+  bias     <- ev$bias
+  auc      <- ev$AUC
+
+  data.frame(Trait=trait_type, Marker=marker_label, Model="GBLUP",
+             Status="OK",
+             r_train=round(r_train,3), r_test_y=round(r_test_y,3),
+             r_test_g=round(r_test_g,3), bias=round(bias,3),
+             h2_post=round(h2_post,3), AUC=round(auc,3),
+             p=nrow(G_tr), stringsAsFactors=FALSE)
+}
+
+gblup_results <- list()
+for (sc_name in c("QTL@SNP", "QTL@MH")) {
+  sc   <- if (sc_name == "QTL@SNP") sc_snp else sc_mh
+  g_te <- sc$g[idx_test]
+  for (trait in c("continuous", "binary")) {
+    y_tr <- if (trait == "binary") sc$y_bin[idx_train] else sc$y_cont[idx_train]
+    y_te <- if (trait == "binary") sc$y_bin[idx_test]  else sc$y_cont[idx_test]
+    r_snp <- run_gblup_scenario(sc, "SNP", G_snp_full, y_tr, y_te, g_te, trait)
+    r_mh  <- run_gblup_scenario(sc, "MH",  G_mh_full,  y_tr, y_te, g_te, trait)
+    r_snp$Scenario <- r_mh$Scenario <- sc_name
+    gblup_results[[paste(sc_name, trait)]] <- rbind(r_snp, r_mh)
+  }
+}
+
+gblup_final <- do.call(rbind, gblup_results)
+gblup_final <- gblup_final[, c("Scenario","Trait","Marker","Model",
+                                "r_train","r_test_y","r_test_g",
+                                "bias","h2_post","AUC","p","Status")]
+
+# ── 7c. GWABLUP via masreml ──────────────────────────────────────────────────
+
+run_gwablup_scenario <- function(sc, marker_type, y_tr, y_te, g_te,
+                                  G_full, geno_train, geno_all,
+                                  trait_type = "continuous") {
+  train_ids <- train_ids_ch
+  test_ids  <- test_ids_ch
+  y_named   <- setNames(y_tr, train_ids)
+  G_tr      <- G_full[train_ids, train_ids]
+
+  comp_name <- if (marker_type == "SNP") "snp_add" else "mh_add"
+
+  result <- tryCatch({
+    # Step 1: fit GBLUP on training
+    fit_tr <- masreml(y = y_named, G = list(g = G_tr),
+                      trait = trait_type, method = "auto")
+
+    # Step 2: GWAS on training with ref_markers
+    if (marker_type == "SNP") {
+      markers_tr  <- list(snp_add = geno_train)
+      ref_markers <- list(snp_add = geno_train)
+    } else {
+      # MH: uses direct hap_block_all — masreml handles re-encoding internal
+      hap_tr      <- hap_block_all[idx_train, ]
+      rownames(hap_tr) <- train_ids
+      markers_tr  <- list(mh_add = hap_tr)
+      ref_markers <- list(mh_add = hap_tr)
+    }
+
+    gwas_tr <- run_gwas(
+      markers     = markers_tr,
+      y           = y_named,
+      masreml_fit = fit_tr,
+      ref_markers = ref_markers
+    )
+
+    # Step 3: GWABLUP on training
+    fit_wa <- gwablup(
+      y           = y_named,
+      markers     = markers_tr,
+      gwas_result = gwas_tr,
+      trait       = trait_type,
+      ref_markers = ref_markers
+    )
+
+    # Step 4: predicts test via G_full
+    g_full_named        <- list(G_full)
+    names(g_full_named) <- comp_name
+    pred <- predict(fit_wa,
+                    G_full    = g_full_named,
+                    train_ids = train_ids,
+                    test_ids  = test_ids)
+
+    gebv_tr <- fit_wa$total_gebv + fit_wa$fixed_effects[1]
+    gebv_te <- pred$total_gebv  + fit_wa$fixed_effects[1]
+
+    h2_post   <- as.numeric(fit_wa$varcomp$h2[comp_name])
+    ev      <- evaluate_prediction(
+                 gebv        = gebv_te,
+                 y           = y_te,
+                 h2          = h2_post,
+                 tbv         = g_te,
+                 fitted_prob = if (trait_type == "binary") pred$fitted else NULL
+               )
+
+    list(status="OK",
+         r_train  = round(cor(gebv_tr, y_tr), 3),
+         r_test_y = ev$r_test_y,
+         r_test_g = ev$r_test_g,
+         bias     = ev$bias,
+         h2_post  = round(h2_post, 3),
+         auc      = ev$AUC,
+         p        = length(fit_wa$total_gebv))
+
+  }, error = function(e)
+    list(status=paste("ERROR:", conditionMessage(e)),
+         r_train=NA, r_test_y=NA, r_test_g=NA,
+         bias=NA, h2_post=NA, auc=NA, p=NA))
+
+  data.frame(Trait=trait_type, Marker=marker_type, Model="GWABLUP",
+             Status=result$status,
+             r_train=result$r_train, r_test_y=result$r_test_y,
+             r_test_g=result$r_test_g, bias=result$bias,
+             h2_post=result$h2_post, AUC=result$auc,
+             p=result$p, stringsAsFactors=FALSE)
+}
+
+# Prepare geno_train with rownames for masreml
+geno_train <- geno_snp_all[idx_train, ]
+rownames(geno_train) <- train_ids_ch
+storage.mode(geno_train) <- "double"
+
+gwablup_results <- list()
+for (sc_name in c("QTL@SNP", "QTL@MH")) {
+  sc   <- if (sc_name == "QTL@SNP") sc_snp else sc_mh
+  g_te <- sc$g[idx_test]
+  for (trait in c("continuous", "binary")) {
+    y_tr <- if (trait == "binary") sc$y_bin[idx_train] else sc$y_cont[idx_train]
+    y_te <- if (trait == "binary") sc$y_bin[idx_test]  else sc$y_cont[idx_test]
+    r_snp <- run_gwablup_scenario(sc, "SNP", y_tr, y_te, g_te,
+                                   G_snp_full, geno_train, geno_snp_all, trait)
+    r_mh  <- run_gwablup_scenario(sc, "MH",  y_tr, y_te, g_te,
+                                   G_mh_full,  geno_train, geno_snp_all, trait)
+    r_snp$Scenario <- r_mh$Scenario <- sc_name
+    gwablup_results[[paste(sc_name, trait)]] <- rbind(r_snp, r_mh)
+  }
+}
+
+gwablup_final <- do.call(rbind, gwablup_results)
+gwablup_final <- gwablup_final[, c("Scenario","Trait","Marker","Model",
+                                    "r_train","r_test_y","r_test_g",
+                                    "bias","h2_post","AUC","p","Status")]
+
 # ── 8. Run all combinations ──────────────────────────────────────────────────
 all_results <- list()
 
@@ -324,10 +510,11 @@ for (sc_name in c("QTL@SNP", "QTL@MH")) {
 }
 
 # ── 9. Combined results ──────────────────────────────────────────────────────
-final <- do.call(rbind, all_results)
+final <- rbind(do.call(rbind, all_results), gblup_final, gwablup_final)
 final <- final[, c("Scenario","Trait","Marker","Model",
                    "r_train","r_test_y","r_test_g",
                    "bias","h2_post","AUC","p","Status")]
+final <- final[order(final$Scenario, final$Trait, final$Marker, final$Model), ]
 
 cat("\n\n=== COMBINED RESULTS ===\n")
 cat(sprintf("n_train=%d | n_test=%d | n_blocks=%d | n_snp_per_block=%d | h2=%.2f | n_qtl=%d\n\n",
