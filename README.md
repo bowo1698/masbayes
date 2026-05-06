@@ -500,17 +500,17 @@ Copyright (c) 2025 Agus Wibowo
 
 ### References
 
-- Meuwissen, T. H. E. et al. Prediction of total genetic value using genome-wide dense marker maps. [Genetics 157, 1819–1829 (2001)](https://doi.org/10.1093/genetics/157.4.1819).
+- Meuwissen, T. H. E. et al. Prediction of total genetic value using genome-wide dense marker maps. [Genetics 157, 1819–1829 (2001)](https://doi.org/10.1093/genetics/157.4.1819)
 
 - Sorensen, D. and Gianola, D. Likelihood, Bayesian, and MCMC methods in quantitative genetics. [Springer Science & Business Media. (2002)](https://link.springer.com/book/10.1007/b98952)
 
-- Gianola, D. et al. Additive genetic variability and the Bayesian alphabet. [Genetics. 1, 183 (2009)](https://academic.oup.com/genetics/article-abstract/183/1/347/6063216?redirectedFrom=fulltext).
+- Gianola, D. et al. Additive genetic variability and the Bayesian alphabet. [Genetics. 1, 183 (2009)](https://academic.oup.com/genetics/article-abstract/183/1/347/6063216?redirectedFrom=fulltext)
 
-- Erbe, M. et al. Improving accuracy of genomic predictions within and between dairy cattle breeds with imputed high-density single nucleotide polymorphism panels. [J. Dairy Sci. 95, 4114–4129 (2012)](https://doi.org/10.3168/jds.2011-5019).
+- Erbe, M. et al. Improving accuracy of genomic predictions within and between dairy cattle breeds with imputed high-density single nucleotide polymorphism panels. [J. Dairy Sci. 95, 4114–4129 (2012)](https://doi.org/10.3168/jds.2011-5019)
 
-- Moser, G. et al. Simultaneous discovery, estimation and prediction analysis of complex traits using a Bayesian mixture model. [PLoS Genet. 11, e1004969 (2015)](https://doi.org/10.1371/journal.pgen.1004969).
+- Moser, G. et al. Simultaneous discovery, estimation and prediction analysis of complex traits using a Bayesian mixture model. [PLoS Genet. 11, e1004969 (2015)](https://doi.org/10.1371/journal.pgen.1004969)
 
-- Da, Y. Multi-allelic haplotype model based on genetic partition for genomic prediction and variance component estimation using SNP markers. [BMC Genet. 16, 144 (2015)](https://doi.org/10.1186/s12863-015-0301-1).
+- Da, Y. Multi-allelic haplotype model based on genetic partition for genomic prediction and variance component estimation using SNP markers. [BMC Genet. 16, 144 (2015)](https://doi.org/10.1186/s12863-015-0301-1)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
