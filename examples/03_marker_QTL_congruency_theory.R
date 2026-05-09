@@ -141,14 +141,13 @@ ref_struct  <- list(allele_info=wah_train$allele_info,
 W_mh_test  <- construct_wah_matrix(
   hap_block_all[idx_test,], colnames_block, NULL, ref_struct, TRUE)$W_ah
 
-p_snp_tr    <- colMeans(geno_snp_all[idx_train,]) / 2
-W_snp_train <- sweep(geno_snp_all[idx_train,], 2, 2*p_snp_tr, "-")
-W_snp_test  <- sweep(geno_snp_all[idx_test, ], 2, 2*p_snp_tr, "-")
-storage.mode(W_snp_train) <- "double"
-storage.mode(W_snp_test)  <- "double"
-
-W_snp_all <- sweep(geno_snp_all, 2, 2*p_snp_tr, "-")
-storage.mode(W_snp_all) <- "double"
+# SNP matrix via construct_snp_matrix() — VanRaden 2008 centering
+snp_tr      <- construct_snp_matrix(geno_snp_all[idx_train, ])
+W_snp_train <- snp_tr$W
+W_snp_test  <- construct_snp_matrix(geno_snp_all[idx_test, ],
+                                    ref_freq = snp_tr$freq)$W
+W_snp_all   <- construct_snp_matrix(geno_snp_all,
+                                    ref_freq = snp_tr$freq)$W
 
 wah_all    <- construct_wah_matrix(
   hap_block_all, colnames_block, allele_freq_list, NULL, TRUE)
@@ -206,7 +205,6 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
   resp    <- if (trait_type == "binary") "binary" else "gaussian"
 
   wtw <- colSums(W_tr^2)
-  wty <- as.vector(crossprod(W_tr, y_train))
   rows <- list()
 
   # sigma2_e_init: for binary use 1.0 (liability scale), for continuous use sc value
@@ -217,7 +215,7 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
     result <- tryCatch({
       if (model == "BayesR") {
         res <- run_bayesr(
-          w=W_tr, y=y_train, wtw_diag=wtw, wty=wty,
+          w=W_tr, y=y_train, wtw_diag=wtw,
           pi_vec        = config$bayesr$pi_vec,
           sigma2_e_init = se_init,
           sigma2_ah     = sg_init,
@@ -229,10 +227,12 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
           mcmc_params   = mcmc_p,
           method        = "mcmc",
           response_type = resp,
-          fold_id       = 0L)
+          fold_id       = 0L,
+          save_rds      = FALSE,
+          verbose       = FALSE)
       } else {
         res <- run_bayesa(
-          w=W_tr, y=y_train, wtw_diag=wtw, wty=wty,
+          w=W_tr, y=y_train, wtw_diag=wtw,
           nu            = config$bayesa$nu,
           sigma2_g      = sg_init,
           sigma2_e_init = se_init,
@@ -240,14 +240,18 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
           mcmc_params   = mcmc_p,
           method        = "mcmc",
           response_type = resp,
-          fold_id       = 0L)
+          fold_id       = 0L,
+          save_rds      = FALSE,
+          verbose       = FALSE)
       }
 
-      beta_post     <- colMeans(res$beta_samples)
-      gebv_tr       <- as.vector(W_tr %*% beta_post) + res$mu_hat
-      gebv_te       <- as.vector(W_te %*% beta_post) + res$mu_hat
-      r_test_y      <- cor(gebv_te, y_test)   # observed scale, both traits
-      r_test_g      <- cor(gebv_te, g_te)     # vs true BV, both traits
+      # Use the new predict() S3 method to get test GEBV + metrics in one call.
+      # res$GEBV gives training GEBV directly (= W_tr %*% beta_hat + mu_hat).
+      gebv_tr  <- res$GEBV
+      pred_te  <- predict(res, W_te, y_test)
+      gebv_te  <- pred_te$GEBV
+      r_test_y <- cor(gebv_te, y_test)   # observed scale, both traits
+      r_test_g <- cor(gebv_te, g_te)     # vs true BV, both traits
 
       if (trait_type == "binary" && !is.null(res$z_hat) && is.numeric(res$z_hat)) {
         # Binary: training metrics on liability scale
@@ -259,17 +263,12 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
       } else {
         # Continuous: training metrics on observed scale
         r_train       <- cor(gebv_tr, y_train)
-        bias_test     <- coef(lm(y_test ~ gebv_te))[2]
-        sigma2_g_post <- var(gebv_tr)
-        sigma2_e_post <- mean(res$sigma2_e_samples)
-        h2_post       <- sigma2_g_post / (sigma2_g_post + sigma2_e_post)
+        bias_test     <- pred_te$metrics$bias
+        h2_post       <- res$h2
       }
 
-      # AUC for binary
-      auc <- if (trait_type == "binary") {
-        tryCatch(as.numeric(pROC::auc(pROC::roc(y_test, gebv_te, quiet=TRUE))),
-                 error = function(e) NA)
-      } else NA
+      # AUC for binary — already computed by predict() when y_new is supplied
+      auc <- if (trait_type == "binary") pred_te$metrics$AUC else NA
 
       list(status="OK", r_train=round(r_train,3),
            r_test_y=round(r_test_y,3), r_test_g=round(r_test_g,3),

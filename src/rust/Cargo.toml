@@ -1,6 +1,6 @@
 [package]
 name = "masbayes"
-version = "1.1.0"
+version = "1.3.0"
 edition = "2021"
 
 [lib]
@@ -18,5 +18,8 @@ statrs = "0.17"
 
 [profile.release]
 opt-level = 3
-lto = true
+lto = "fat"
 codegen-units = 1
+strip = true
+# Note: panic = "abort" was tested but reverted because it kills the R session
+# on a Rust panic (no graceful recovery). Default "unwind" lets R report the error.

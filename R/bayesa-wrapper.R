@@ -1,30 +1,178 @@
 # R/bayesa-wrapper.R
 
-#' Run BayesA with choice of algorithm
-#' 
-#' @param w Design matrix
-#' @param y Phenotype vector
-#' @param wtw_diag Diagonal of W'W
-#' @param wty W'y vector
-#' @param nu Degrees of freedom
-#' @param sigma2_g Initial genetic variance
-#' @param sigma2_e_init Initial residual variance
-#' @param prior_params Prior hyperparameters (for MCMC)
-#' @param mcmc_params MCMC parameters (for method="mcmc")
-#' @param em_params EM parameters (for method="em")
-#' @param method Either "mcmc" or "em"
-#' @param fold_id Fold identifier
+#' Fit a BayesA Marker-Specific Variance Model (MCMC or stochastic EM)
+#'
+#' BayesA (Meuwissen et al., 2001) places a scaled inverse chi-squared
+#' prior on each allele's effect variance, allowing heavier-tailed
+#' effect-size distributions than ridge regression. Use \code{method =
+#' "mcmc"} for full posterior inference or \code{method = "em"} for fast
+#' stochastic-EM point estimates (Gaussian only).
+#'
+#' @details
+#' \strong{Algorithm choice.} MCMC uses marginalised Gibbs sampling and
+#' returns full posterior chains. EM is much faster but provides no
+#' uncertainty quantification and does not support \code{response_type =
+#' "binary"}.
+#'
+#' \strong{Auto-save.} By default the returned fit is saved to
+#' \code{results_bayesa.Rds} in \code{getwd()}. Set \code{save_rds = FALSE}
+#' for CV loops.
+#'
+#' \strong{Three usage scenarios.} \code{run_bayesa()} +
+#' \code{summary()} + \code{predict()} support full-data fits,
+#' train-test splits, and k-fold CV uniformly. See
+#' \code{\link{run_bayesr}} for example loops.
+#'
+#' \strong{Derived parameter.} The wrapper computes
+#' \code{s_squared = sigma2_g * (nu - 2) / (nu * sum(apply(w, 2, var)))}
+#' so the prior expectation of each marker variance equals
+#' \code{sigma2_g / sum_2pq}.
+#'
+#' @param w Numeric design matrix (\code{n x p}). Typically the
+#'   \code{$W_ah} element returned by \code{\link{construct_wah_matrix}}.
+#' @param y Phenotype vector (length \code{n}). Use 0/1 for binary traits.
+#' @param wtw_diag Pre-computed \code{colSums(w^2)}.
+#' @param X Optional fixed-effects design matrix (\code{n x q}). When
+#'   supplied, the model is \eqn{y = X\alpha + W\beta + \mu + \epsilon}
+#'   with a flat prior on \eqn{\alpha}. Do \strong{not} include a column
+#'   of ones for the intercept; \eqn{\mu} is sampled separately.
+#' @param nu Degrees of freedom for the scaled inverse chi-squared prior on
+#'   marker variances. Smaller values allow heavier tails. Must be > 2.
+#'   Default \code{4.5}.
+#' @param sigma2_g Prior total genetic variance. Typically
+#'   \code{var(y) * 0.5}; for binary traits use \code{1.0}.
+#' @param sigma2_e_init Initial residual variance. For binary traits fix
+#'   at \code{1.0}.
+#' @param prior_params Optional named list. Only \code{a0_e} (default 10)
+#'   is used; \code{b0_e} is derived as \code{sigma2_e_init * (a0_e - 1)}.
+#' @param mcmc_params Optional named list: \code{n_iter} (40000),
+#'   \code{n_burn} (20000), \code{n_thin} (10), \code{seed} (123).
+#' @param em_params Optional named list: \code{max_iter} (500), \code{tol}
+#'   (\code{1e-6}).
+#' @param method Either \code{"mcmc"} (default) or \code{"em"}.
+#' @param response_type \code{"gaussian"} (default) or \code{"binary"}.
+#'   Binary requires \code{method = "mcmc"}.
+#' @param fold_id Integer label for progress messages.
+#' @param save_rds If \code{TRUE} (default), the fit object is saved to
+#'   disk as an RDS file. Set \code{FALSE} for CV loops.
+#' @param save_path Optional explicit RDS path. If \code{NULL} (default),
+#'   defaults to \code{"results_bayesa.Rds"} in the current working
+#'   directory.
+#' @param verbose If \code{TRUE} (default) a brief post-fit summary is
+#'   printed.
+#'
+#' @return An object of class \code{c("masbayes_bayesa", "masbayes")} — a
+#'   list with the following key fields:
+#' \describe{
+#'   \item{\code{beta_hat, mu_hat, sigma2_e_hat, sigma2_j_hat}}{Posterior
+#'     point estimates (intercept, allele effects, residual variance,
+#'     per-marker variances).}
+#'   \item{\code{beta_samples, sigma2_j_samples, sigma2_e_samples,
+#'     mu_samples}}{Posterior chains (single-row matrices for EM).}
+#'   \item{\code{GEBV / pred_train, h2, sigma2_g, sigma2_e}}{Training
+#'     GEBVs, heritability, and total variance components.}
+#'   \item{\code{runtime}}{Elapsed seconds.}
+#'   \item{\code{training_metrics}}{\code{R2, RMSE, accuracy} (or
+#'     \code{AUC} for binary), \code{bias}.}
+#'   \item{\code{diagnostics}}{ESS / Geweke Z (MCMC only).}
+#'   \item{\code{variance_components}}{Per-marker variances binned into
+#'     tertiles (small / medium / large) reporting mean, range, and
+#'     marker count.}
+#'   \item{\code{rds_path}}{Path of the saved RDS file, or \code{NULL}.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' set.seed(42)
+#' n     <- 200
+#' mcmc  <- list(n_iter = 2000L, n_burn = 1000L, n_thin = 5L, seed = 123L)
+#' X_cov <- cbind(sex = rbinom(n, 1, 0.5), batch = rnorm(n))  # optional
+#'
+#' # ---- (A) SNP path ------------------------------------------------------
+#' n_snp <- 100
+#' X     <- matrix(rbinom(n * n_snp, 2, prob = runif(n_snp, 0.1, 0.5)),
+#'                 n, n_snp)
+#' W_snp <- construct_snp_matrix(X)$W
+#' y     <- W_snp[, 1:5] %*% rnorm(5, 0, 0.5) + rnorm(n, 0, 1)
+#'
+#' fit_snp <- run_bayesa(
+#'   w             = W_snp,
+#'   y             = y,
+#'   wtw_diag      = colSums(W_snp^2),
+#'   X             = X_cov,           # optional
+#'   nu            = 4.5,
+#'   sigma2_g      = var(y) * 0.5,
+#'   sigma2_e_init = var(y) * 0.5,
+#'   mcmc_params   = mcmc
+#' )
+#' summary(fit_snp)
+#'
+#' # ---- (B) Microhaplotype path ------------------------------------------
+#' n_block <- 50
+#' hap <- matrix(sample.int(3, n * n_block * 2, replace = TRUE), nrow = n)
+#' colnames(hap) <- paste0("hap_", rep(seq_len(n_block), each = 2))
+#' freq <- data.frame(
+#'   haplotype = paste0("hap_", rep(seq_len(n_block), each = 3)),
+#'   allele    = rep(1:3, n_block),
+#'   freq      = rep(c(0.5, 0.3, 0.2), n_block)
+#' )
+#' W_mh <- construct_wah_matrix(hap, colnames(hap), freq)$W_ah
+#' y_mh <- W_mh[, 1:5] %*% rnorm(5, 0, 0.5) + rnorm(n, 0, 1)
+#'
+#' fit_mh <- run_bayesa(
+#'   w             = W_mh,
+#'   y             = y_mh,
+#'   wtw_diag      = colSums(W_mh^2),
+#'   X             = X_cov,           # optional
+#'   nu            = 4.5,
+#'   sigma2_g      = var(y_mh) * 0.5,
+#'   sigma2_e_init = var(y_mh) * 0.5,
+#'   mcmc_params   = mcmc
+#' )
+#' summary(fit_mh)
+#'
+#' # ---- Predict on a held-out test set -----------------------------------
+#' idx  <- sample(n, 0.8 * n)
+#' W_tr <- W_snp[idx, ]
+#' y_tr <- y[idx]
+#' fit  <- run_bayesa(
+#'   w             = W_tr,
+#'   y             = y_tr,
+#'   wtw_diag      = colSums(W_tr^2),
+#'   nu            = 4.5,
+#'   sigma2_g      = var(y_tr) * 0.5,
+#'   sigma2_e_init = var(y_tr) * 0.5,
+#'   mcmc_params   = mcmc
+#' )
+#' pred <- predict(fit, W_snp[-idx, ], y[-idx])
+#' pred$metrics$accuracy
+#' }
+#'
+#' @seealso \code{\link{run_bayesr}}, \code{\link{construct_wah_matrix}},
+#'   \code{\link{summary.masbayes_bayesa}},
+#'   \code{\link{predict.masbayes_bayesa}}
+#' @references
+#' Meuwissen, T. H. E., Hayes, B. J., \& Goddard, M. E. (2001).
+#' Prediction of total genetic value using genome-wide dense marker
+#' maps. \emph{Genetics}, 157(4), 1819-1829.
+#' \doi{10.1093/genetics/157.4.1819}
+#'
 #' @export
-run_bayesa <- function(w, y, wtw_diag, wty,
-                       nu = 4.5,
+run_bayesa <- function(w, y, wtw_diag,
+                       X             = NULL,
+                       nu            = 4.5,
                        sigma2_g, sigma2_e_init,
-                       prior_params = NULL,
-                       mcmc_params = NULL,
-                       em_params = NULL,
-                       method = c("mcmc", "em"),
+                       prior_params  = NULL,
+                       mcmc_params   = NULL,
+                       em_params     = NULL,
+                       method        = c("mcmc", "em"),
                        response_type = c("gaussian", "binary"),
-                       fold_id = 0L) {
-  
+                       fold_id       = 0L,
+                       save_rds      = TRUE,
+                       save_path     = NULL,
+                       verbose       = TRUE) {
+
+  call          <- match.call()
   method        <- match.arg(method)
   response_type <- match.arg(response_type)
   is_binary     <- response_type == "binary"
@@ -32,29 +180,64 @@ run_bayesa <- function(w, y, wtw_diag, wty,
   if (is_binary && method == "em") {
     stop("response_type = 'binary' is only supported for method = 'mcmc'")
   }
-  
+
+  if (!is.null(X)) {
+    if (!is.matrix(X)) X <- as.matrix(X)
+    storage.mode(X) <- "double"
+    if (nrow(X) != length(y))
+      stop(sprintf("nrow(X) = %d does not match length(y) = %d",
+                   nrow(X), length(y)))
+    if (ncol(X) == 0L) X <- NULL
+  }
+
   sum_2pq   <- sum(apply(w, 2, var))
   s_squared <- sigma2_g * (nu - 2) / (nu * sum_2pq)
-  
+
   if (method == "mcmc") {
     mcmc_params <- modifyList(
       list(n_iter = 40000L, n_burn = 20000L, n_thin = 10L, seed = 123L),
       mcmc_params %||% list()
     )
-    # Default prior params
     prior_params <- modifyList(
       list(a0_e = 10),
       prior_params %||% list()
     )
     prior_params$b0_e <- sigma2_e_init * (prior_params$a0_e - 1)
-    run_bayesa_mcmc(w, y, wtw_diag, wty, nu, s_squared, 
-                    sigma2_e_init, prior_params, mcmc_params, fold_id, is_binary)
+
+    timing <- system.time({
+      raw <- run_bayesa_mcmc(w, y, wtw_diag, X, nu, s_squared,
+                             sigma2_e_init, prior_params, mcmc_params,
+                             fold_id, is_binary)
+    })
   } else {
     em_params <- modifyList(
       list(max_iter = 500L, tol = 1e-6),
       em_params %||% list()
     )
-    run_bayesa_em(w, y, wtw_diag, wty, nu, s_squared,
-                  sigma2_e_init, em_params, fold_id)
+
+    timing <- system.time({
+      raw <- run_bayesa_em(w, y, wtw_diag, X, nu, s_squared,
+                           sigma2_e_init, em_params, fold_id)
+    })
   }
+
+  fit <- finalise_fit(
+    raw           = raw,
+    w             = w,
+    y             = y,
+    model_type    = "bayesa",
+    method        = method,
+    response_type = response_type,
+    fold_id       = fold_id,
+    runtime       = timing["elapsed"],
+    mcmc_params   = if (method == "mcmc") mcmc_params else NULL,
+    em_params     = if (method == "em")   em_params   else NULL,
+    call          = call
+  )
+
+  fit$rds_path <- maybe_save_rds(fit, save_rds, save_path)
+
+  if (isTRUE(verbose)) print_run_summary(fit)
+
+  fit
 }

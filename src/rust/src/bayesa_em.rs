@@ -8,20 +8,27 @@ pub struct BayesAEM {
     y: Array1<f64>,
     wtw_diag: Array1<f64>,
     wty: Array1<f64>,
-    
+
     n: usize,
     n_alleles: usize,
-    
+
     nu: f64,
     s_squared: f64,
-    
+
     max_iter: usize,
     tol: f64,
-    
+
     beta: Array1<f64>,
     sigma2_j: Array1<f64>,
     sigma2_e: f64,
     fold_id: i32,
+
+    // Fixed effects (optional)
+    x: Option<Array2<f64>>,
+    alpha: Array1<f64>,
+    xtx_diag: Array1<f64>,
+    xty: Array1<f64>,
+    n_fixed: usize,
 }
 
 impl BayesAEM {
@@ -29,7 +36,7 @@ impl BayesAEM {
         w: Array2<f64>,
         y: Vec<f64>,
         wtw_diag: Vec<f64>,
-        wty: Vec<f64>,
+        x: Option<Array2<f64>>,
         nu: f64,
         s_squared: f64,
         sigma2_e_init: f64,
@@ -39,12 +46,28 @@ impl BayesAEM {
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
-        
+        let y_arr = Array1::from_vec(y);
+        let wty_arr = w.t().dot(&y_arr);
+
+        let n_fixed = x.as_ref().map(|m| m.ncols()).unwrap_or(0);
+        let alpha = Array1::<f64>::zeros(n_fixed);
+        let (xtx_diag, xty) = if let Some(ref xm) = x {
+            let xtx = Array1::from_vec(
+                (0..n_fixed)
+                    .map(|k| xm.column(k).iter().map(|v| v * v).sum::<f64>())
+                    .collect(),
+            );
+            let xty = xm.t().dot(&y_arr);
+            (xtx, xty)
+        } else {
+            (Array1::<f64>::zeros(0), Array1::<f64>::zeros(0))
+        };
+
         Self {
             w,
-            y: Array1::from_vec(y),
+            y: y_arr,
             wtw_diag: Array1::from_vec(wtw_diag),
-            wty: Array1::from_vec(wty),
+            wty: wty_arr,
             n,
             n_alleles,
             nu,
@@ -55,6 +78,11 @@ impl BayesAEM {
             sigma2_j: Array1::<f64>::from_elem(n_alleles, s_squared),
             sigma2_e: sigma2_e_init,
             fold_id,
+            x,
+            alpha,
+            xtx_diag,
+            xty,
+            n_fixed,
         }
     }
     
@@ -118,8 +146,19 @@ impl BayesAEM {
         let mu_hat = 0.0;
         let sigma2_e_hat = self.sigma2_e;
         let sigma2_j_hat = self.sigma2_j.clone();
+        let alpha_hat: Option<Array1<f64>> = if self.n_fixed > 0 {
+            Some(self.alpha.clone())
+        } else {
+            None
+        };
+        let alpha_samples_out: Option<Array2<f64>> = alpha_hat.as_ref()
+            .map(|ah| Array2::from_shape_fn((1, self.n_fixed), |(_, k)| ah[k]));
 
         let mut pred_train = self.w.dot(&beta_hat);
+        if let (Some(x_mat), Some(ah)) = (self.x.as_ref(), alpha_hat.as_ref()) {
+            let xa = x_mat.dot(ah);
+            for i in 0..self.n { pred_train[i] += xa[i]; }
+        }
         pred_train.mapv_inplace(|v| v + mu_hat);
 
         let gebv_mean = pred_train.mean().unwrap();
@@ -133,10 +172,12 @@ impl BayesAEM {
             sigma2_j_samples,
             sigma2_e_samples: Array1::from_vec(vec![self.sigma2_e]),
             mu_samples: Array1::from_vec(vec![0.0]),
+            alpha_samples: alpha_samples_out,
             beta_hat,
             mu_hat,
             sigma2_e_hat,
             sigma2_j_hat,
+            alpha_hat,
             pred_train,
             sigma2_g,
             h2,
@@ -157,12 +198,39 @@ impl BayesAEM {
     }
     
     fn m_step(&mut self, expected_inv_sigma2: &Array1<f64>) {
+        // fitted = W*beta + X*alpha
         let mut fitted = self.w.dot(&self.beta);
+        if let Some(ref x_mat) = self.x {
+            let xa = x_mat.dot(&self.alpha);
+            for i in 0..self.n { fitted[i] += xa[i]; }
+        }
         let inv_sigma2_e = 1.0 / self.sigma2_e;
-        
+
+        // Update fixed-effect coefficients alpha (closed-form coordinate descent)
+        if let Some(ref x_mat) = self.x {
+            for k in 0..self.n_fixed {
+                let l_k = self.xtx_diag[k];
+                if l_k < 1e-10 { continue; }
+                let alpha_old = self.alpha[k];
+                let x_k = x_mat.column(k);
+                let mut residuals_prod = self.xty[k];
+                for i in 0..self.n {
+                    residuals_prod -= x_k[i] * fitted[i];
+                }
+                let rhs = residuals_prod + l_k * alpha_old;
+                self.alpha[k] = rhs / l_k;
+                let delta = self.alpha[k] - alpha_old;
+                if delta != 0.0 {
+                    for i in 0..self.n {
+                        fitted[i] += x_k[i] * delta;
+                    }
+                }
+            }
+        }
+
         // Storage for posterior variances
         let mut var_post_vec = Array1::<f64>::zeros(self.n_alleles);
-        
+
         // Update beta
         for j in 0..self.n_alleles {
             let l_j = self.wtw_diag[j];

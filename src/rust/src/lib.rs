@@ -104,7 +104,10 @@ fn array1_to_vec(arr: &ndarray::Array1<f64>) -> Vec<f64> {
     arr.to_vec()
 }
 
-/// Construct W matrix from haplotype genotypes
+/// Construct W matrix from haplotype genotypes (low-level binding)
+///
+/// Internal Rust binding. End users should call the R wrapper
+/// `construct_wah_matrix()` defined in `R/matrix-wrapper.R`.
 ///
 /// @param hap_matrix Matrix of haplotype genotypes (n x 2*blocks)
 /// @param colnames Column names for haplotype matrix
@@ -112,6 +115,7 @@ fn array1_to_vec(arr: &ndarray::Array1<f64>) -> Vec<f64> {
 /// @param reference_structure Optional reference structure for test set (NULL for training)
 /// @param drop_baseline Whether to drop most frequent allele as baseline
 /// @return List with W_ah matrix, allele_info dataframe, and dropped_alleles dataframe
+/// @keywords internal
 #[extendr]
 fn construct_wah_matrix(
     hap_matrix: RMatrix<i32>,
@@ -225,7 +229,10 @@ fn construct_wah_matrix(
     )
 }
 
-/// Run BayesR MCMC sampling
+/// Run BayesR MCMC sampling (low-level binding)
+///
+/// Internal Rust binding. End users should call `run_bayesr()` (R wrapper in
+/// `R/bayesr-wrapper.R`), which sets defaults and post-processing.
 ///
 /// @param W Training genotype matrix (n x p)
 /// @param y Phenotype vector (n)
@@ -237,19 +244,20 @@ fn construct_wah_matrix(
 /// @param prior_params List of prior hyperparameters
 /// @param mcmc_params List of MCMC parameters
 /// @return List containing posterior samples and diagnostics
+/// @keywords internal
 #[extendr]
 fn run_bayesr_mcmc(
     w: RMatrix<f64>,
     y: Vec<f64>,
     wtw_diag: Vec<f64>,
-    wty: Vec<f64>,
+    x: Nullable<RMatrix<f64>>,
     pi_vec: Vec<f64>,
     sigma2_e_init: f64,
     sigma2_ah: f64,
     prior_params: List,
     mcmc_params: List,
     fold_id: i32,
-    is_binary: bool, 
+    is_binary: bool,
 ) -> List {
     
     // Extract MCMC parameters
@@ -264,7 +272,11 @@ fn run_bayesr_mcmc(
     
     // Convert R matrix to ndarray
     let w_array = utils::rmatrix_to_array2(&w);
-    
+    let x_array = match x {
+        NotNull(xm) => Some(utils::rmatrix_to_array2(&xm)),
+        Null => None,
+    };
+
     let variance_class = prior_params.dollar("variance_class").unwrap()
         .as_real_vector()
         .expect("'variance_class' must be numeric vector");
@@ -276,7 +288,7 @@ fn run_bayesr_mcmc(
         w_array,
         y,
         wtw_diag,
-        wty,
+        x_array,
         pi_vec,
         variance_class,
         sigma2_e_init,
@@ -298,7 +310,15 @@ fn run_bayesr_mcmc(
         Some(ref z) => array1_to_vec(z).into_robj(),
         None => ().into_robj(),
     };
-    
+    let alpha_samples_r = match results.alpha_samples {
+        Some(ref a) => array2_to_rmatrix(a).into_robj(),
+        None => ().into_robj(),
+    };
+    let alpha_hat_r = match results.alpha_hat {
+        Some(ref a) => array1_to_vec(a).into_robj(),
+        None => ().into_robj(),
+    };
+
     // Convert ndarray results to R objects
     list!(
         beta_samples = array2_to_rmatrix(&results.beta_samples),
@@ -309,9 +329,11 @@ fn run_bayesr_mcmc(
         sigma2_large_samples = array1_to_vec(&results.sigma2_large_samples),
         pi_samples = array2_to_rmatrix(&results.pi_samples),
         mu_samples = array1_to_vec(&results.mu_samples),
+        alpha_samples = alpha_samples_r,
         beta_hat = array1_to_vec(&results.beta_hat),
         mu_hat = results.mu_hat,
         sigma2_e_hat = results.sigma2_e_hat,
+        alpha_hat = alpha_hat_r,
         pred_train = array1_to_vec(&results.pred_train),
         sigma2_g = results.sigma2_g,
         h2 = results.h2,
@@ -319,7 +341,10 @@ fn run_bayesr_mcmc(
     )
 }
 
-/// Run BayesA MCMC sampling
+/// Run BayesA MCMC sampling (low-level binding)
+///
+/// Internal Rust binding. End users should call `run_bayesa()` (R wrapper in
+/// `R/bayesa-wrapper.R`), which sets defaults and post-processing.
 ///
 /// @param W Training genotype matrix (n x p)
 /// @param y Phenotype vector (n)
@@ -331,12 +356,13 @@ fn run_bayesr_mcmc(
 /// @param prior_params List of prior hyperparameters
 /// @param mcmc_params List of MCMC parameters
 /// @return List containing posterior samples and diagnostics
+/// @keywords internal
 #[extendr]
 fn run_bayesa_mcmc(
     w: RMatrix<f64>,
     y: Vec<f64>,
     wtw_diag: Vec<f64>,
-    wty: Vec<f64>,
+    x: Nullable<RMatrix<f64>>,
     nu: f64,
     s_squared: f64,
     sigma2_e_init: f64,
@@ -360,13 +386,17 @@ fn run_bayesa_mcmc(
     
     // Convert R matrix to ndarray
     let w_array = utils::rmatrix_to_array2(&w);
-    
+    let x_array = match x {
+        NotNull(xm) => Some(utils::rmatrix_to_array2(&xm)),
+        Null => None,
+    };
+
     // Create runner
     let mut runner = BayesARunner::new(
         w_array,
         y,
         wtw_diag,
-        wty,
+        x_array,
         nu,
         s_squared,
         sigma2_e_init,
@@ -387,17 +417,27 @@ fn run_bayesa_mcmc(
         Some(ref z) => array1_to_vec(z).into_robj(),
         None => ().into_robj(),
     };
-    
+    let alpha_samples_r = match results.alpha_samples {
+        Some(ref a) => array2_to_rmatrix(a).into_robj(),
+        None => ().into_robj(),
+    };
+    let alpha_hat_r = match results.alpha_hat {
+        Some(ref a) => array1_to_vec(a).into_robj(),
+        None => ().into_robj(),
+    };
+
     // Convert ndarray results to R objects
     list!(
         beta_samples = array2_to_rmatrix(&results.beta_samples),
         sigma2_j_samples = array2_to_rmatrix(&results.sigma2_j_samples),
         sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
         mu_samples = array1_to_vec(&results.mu_samples),
+        alpha_samples = alpha_samples_r,
         beta_hat = array1_to_vec(&results.beta_hat),
         mu_hat = results.mu_hat,
         sigma2_e_hat = results.sigma2_e_hat,
         sigma2_j_hat = array1_to_vec(&results.sigma2_j_hat),
+        alpha_hat = alpha_hat_r,
         pred_train = array1_to_vec(&results.pred_train),
         sigma2_g = results.sigma2_g,
         h2 = results.h2,
@@ -405,12 +445,17 @@ fn run_bayesa_mcmc(
     )
 }
 
+/// Run BayesR stochastic EM (low-level binding)
+///
+/// Internal Rust binding. End users should call `run_bayesr(method = "em")`.
+///
+/// @keywords internal
 #[extendr]
 fn run_bayesr_em(
     w: RMatrix<f64>,
     y: Vec<f64>,
     wtw_diag: Vec<f64>,
-    wty: Vec<f64>,
+    x: Nullable<RMatrix<f64>>,
     pi_vec: Vec<f64>,
     sigma2_vec: Vec<f64>,
     sigma2_e_init: f64,
@@ -419,21 +464,30 @@ fn run_bayesr_em(
 ) -> List {
     let max_iter = em_params.dollar("max_iter").unwrap().as_integer().unwrap() as usize;
     let tol = em_params.dollar("tol").unwrap().as_real().unwrap();
-    //let seed = em_params.dollar("seed")
-    //    .ok()                           
-    //    .and_then(|s| s.as_integer())   
-    //    .unwrap_or(123) as u64;
-    
+
     let w_array = utils::rmatrix_to_array2(&w);
-    
+    let x_array = match x {
+        NotNull(xm) => Some(utils::rmatrix_to_array2(&xm)),
+        Null => None,
+    };
+
     let mut runner = BayesREM::new(
-        w_array, y, wtw_diag, wty,
+        w_array, y, wtw_diag, x_array,
         pi_vec, sigma2_vec, sigma2_e_init,
-        max_iter, tol, fold_id, // seed,
+        max_iter, tol, fold_id,
     );
-    
+
     let results = runner.run();
-    
+
+    let alpha_samples_r = match results.alpha_samples {
+        Some(ref a) => array2_to_rmatrix(a).into_robj(),
+        None => ().into_robj(),
+    };
+    let alpha_hat_r = match results.alpha_hat {
+        Some(ref a) => array1_to_vec(a).into_robj(),
+        None => ().into_robj(),
+    };
+
     list!(
         beta_samples = array2_to_rmatrix(&results.beta_samples),
         gamma_samples = array2_to_rmatrix(&results.gamma_samples),
@@ -443,21 +497,28 @@ fn run_bayesr_em(
         sigma2_large_samples = array1_to_vec(&results.sigma2_large_samples),
         pi_samples = array2_to_rmatrix(&results.pi_samples),
         mu_samples = array1_to_vec(&results.mu_samples),
+        alpha_samples = alpha_samples_r,
         beta_hat = array1_to_vec(&results.beta_hat),
         mu_hat = results.mu_hat,
         sigma2_e_hat = results.sigma2_e_hat,
+        alpha_hat = alpha_hat_r,
         pred_train = array1_to_vec(&results.pred_train),
         sigma2_g = results.sigma2_g,
         h2 = results.h2
     )
 }
 
+/// Run BayesA stochastic EM (low-level binding)
+///
+/// Internal Rust binding. End users should call `run_bayesa(method = "em")`.
+///
+/// @keywords internal
 #[extendr]
 fn run_bayesa_em(
     w: RMatrix<f64>,
     y: Vec<f64>,
     wtw_diag: Vec<f64>,
-    wty: Vec<f64>,
+    x: Nullable<RMatrix<f64>>,
     nu: f64,
     s_squared: f64,
     sigma2_e_init: f64,
@@ -466,26 +527,41 @@ fn run_bayesa_em(
 ) -> List {
     let max_iter = em_params.dollar("max_iter").unwrap().as_integer().unwrap() as usize;
     let tol = em_params.dollar("tol").unwrap().as_real().unwrap();
-    
+
     let w_array = utils::rmatrix_to_array2(&w);
-    
+    let x_array = match x {
+        NotNull(xm) => Some(utils::rmatrix_to_array2(&xm)),
+        Null => None,
+    };
+
     let mut runner = BayesAEM::new(
-        w_array, y, wtw_diag, wty,
+        w_array, y, wtw_diag, x_array,
         nu, s_squared, sigma2_e_init,
         max_iter, tol, fold_id,
     );
     
     let results = runner.run();
-    
+
+    let alpha_samples_r = match results.alpha_samples {
+        Some(ref a) => array2_to_rmatrix(a).into_robj(),
+        None => ().into_robj(),
+    };
+    let alpha_hat_r = match results.alpha_hat {
+        Some(ref a) => array1_to_vec(a).into_robj(),
+        None => ().into_robj(),
+    };
+
     list!(
         beta_samples = array2_to_rmatrix(&results.beta_samples),
         sigma2_j_samples = array2_to_rmatrix(&results.sigma2_j_samples),
         sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
         mu_samples = array1_to_vec(&results.mu_samples),
+        alpha_samples = alpha_samples_r,
         beta_hat = array1_to_vec(&results.beta_hat),
         mu_hat = results.mu_hat,
         sigma2_e_hat = results.sigma2_e_hat,
         sigma2_j_hat = array1_to_vec(&results.sigma2_j_hat),
+        alpha_hat = alpha_hat_r,
         pred_train = array1_to_vec(&results.pred_train),
         sigma2_g = results.sigma2_g,
         h2 = results.h2

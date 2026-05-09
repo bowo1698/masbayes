@@ -53,6 +53,7 @@
     <li><a href="#contact">Contact</a></li>
     <li><a href="#acknowledgments">Acknowledgments</a></li>
     <li><a href="#citation">Citation</a></li>
+    <li><a href="#vesion-update">Vesion Update</a></li>
   </ol>
 </details>
 
@@ -537,6 +538,16 @@ If you use `masbayes` in your research, please cite:
   note = {R package version 4.4.0}
 }
 ```
+
+---
+
+## Vesion Update
+
+- **v1.3.0**: Add fixed-effects support (`X` parameter); `predict()` accepts `X_new`; backward-compatible (X=NULL bitwise-identical to v1.2.0).
+- **v1.2.0**: Drop public-facing `wty` parameter; `yadj` refactor saves 2 mat-vec products per MCMC iteration (~30% speedup).
+- **v1.1.0**: Add S3 class system, `summary()`/`predict()` methods, auto-save RDS, `construct_snp_matrix()`, post-fit metrics.
+
+---
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

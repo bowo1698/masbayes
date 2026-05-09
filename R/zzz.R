@@ -1,11 +1,10 @@
 .onLoad <- function(libname, pkgname) {
-  library.dynam("masbayes", pkgname, libname)
   options(help_type = "html")
 }
 
 .onAttach <- function(libname, pkgname) {
   version <- utils::packageVersion("masbayes")
-  
+
   packageStartupMessage(
     "\n===============================================================\n",
     " masbayes v", version, "\n",
@@ -23,8 +22,4 @@
     " Report bugs:    github.com/bowo1698/masbayes/issues\n",
     "===============================================================\n"
   )
-}
-
-.onUnload <- function(libpath) {
-  library.dynam.unload("masbayes", libpath)
 }
