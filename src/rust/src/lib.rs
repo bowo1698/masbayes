@@ -258,14 +258,15 @@ fn run_bayesr_mcmc(
     mcmc_params: List,
     fold_id: i32,
     is_binary: bool,
+    verbose: bool,
 ) -> List {
-    
+
     // Extract MCMC parameters
     let n_iter = mcmc_params.dollar("n_iter").unwrap().as_integer().unwrap() as usize;
     let n_burn = mcmc_params.dollar("n_burn").unwrap().as_integer().unwrap() as usize;
     let n_thin = mcmc_params.dollar("n_thin").unwrap().as_integer().unwrap() as usize;
     let seed = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
-    
+
     // Extract prior parameters
     let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
     let b0_e = prior_params.dollar("b0_e").unwrap().as_real().unwrap();
@@ -301,8 +302,9 @@ fn run_bayesr_mcmc(
         seed,
         fold_id,
         is_binary,
+        verbose,
     );
-    
+
     // Run MCMC
     let results = runner.run();
 
@@ -370,6 +372,7 @@ fn run_bayesa_mcmc(
     mcmc_params: List,
     fold_id: i32,
     is_binary: bool,
+    verbose: bool,
 ) -> List {
     // Extract MCMC parameters
     let n_iter = mcmc_params.dollar("n_iter").unwrap().as_integer().unwrap() as usize;
@@ -408,6 +411,7 @@ fn run_bayesa_mcmc(
         seed,
         fold_id,
         is_binary,
+        verbose,
     );
     
     // Run MCMC
@@ -461,6 +465,7 @@ fn run_bayesr_em(
     sigma2_e_init: f64,
     em_params: List,
     fold_id: i32,
+    verbose: bool,
 ) -> List {
     let max_iter = em_params.dollar("max_iter").unwrap().as_integer().unwrap() as usize;
     let tol = em_params.dollar("tol").unwrap().as_real().unwrap();
@@ -474,7 +479,7 @@ fn run_bayesr_em(
     let mut runner = BayesREM::new(
         w_array, y, wtw_diag, x_array,
         pi_vec, sigma2_vec, sigma2_e_init,
-        max_iter, tol, fold_id,
+        max_iter, tol, fold_id, verbose,
     );
 
     let results = runner.run();
@@ -524,6 +529,7 @@ fn run_bayesa_em(
     sigma2_e_init: f64,
     em_params: List,
     fold_id: i32,
+    verbose: bool,
 ) -> List {
     let max_iter = em_params.dollar("max_iter").unwrap().as_integer().unwrap() as usize;
     let tol = em_params.dollar("tol").unwrap().as_real().unwrap();
@@ -537,7 +543,7 @@ fn run_bayesa_em(
     let mut runner = BayesAEM::new(
         w_array, y, wtw_diag, x_array,
         nu, s_squared, sigma2_e_init,
-        max_iter, tol, fold_id,
+        max_iter, tol, fold_id, verbose,
     );
     
     let results = runner.run();

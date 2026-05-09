@@ -43,6 +43,7 @@ pub struct BayesRRunner {
     gamma: Array1<usize>,
     sigma2_e: f64,
     fold_id: i32,
+    verbose: bool,
 
     // Albert-Chib
     is_binary: bool,
@@ -77,6 +78,7 @@ impl BayesRRunner {
         seed: u64,
         fold_id: i32,
         is_binary: bool,
+        verbose: bool,
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
@@ -138,6 +140,7 @@ impl BayesRRunner {
             gamma: Array1::<usize>::zeros(n_alleles),
             sigma2_e: sigma2_e_init,
             fold_id,
+            verbose,
             is_binary,
             z: z_init,
             yadj: yadj_init,
@@ -173,14 +176,16 @@ impl BayesRRunner {
 
         let mut save_idx = 0;
         
-        eprintln!("[Fold {}] BayesR MCMC started: {} iterations", self.fold_id, self.n_iter);
-        eprintln!("[Fold {}] Hyperparameters: π = [{:.3}, {:.3}, {:.3}, {:.3}]", 
-                  self.fold_id,
-                  self.pi_vec[0], self.pi_vec[1], self.pi_vec[2], self.pi_vec[3]);
-        eprintln!("[Fold {}] σ² = [{:.6}, {:.6}, {:.6}, {:.6}]",
-                  self.fold_id,
-                  self.sigma2_vec[0], self.sigma2_vec[1], self.sigma2_vec[2], self.sigma2_vec[3]);
-        eprintln!("[Fold {}] σ²_e = {:.6}\n", self.fold_id, self.sigma2_e);
+        if self.verbose {
+            eprintln!("[Fold {}] BayesR MCMC started: {} iterations", self.fold_id, self.n_iter);
+            eprintln!("[Fold {}] Hyperparameters: π = [{:.3}, {:.3}, {:.3}, {:.3}]",
+                      self.fold_id,
+                      self.pi_vec[0], self.pi_vec[1], self.pi_vec[2], self.pi_vec[3]);
+            eprintln!("[Fold {}] σ² = [{:.6}, {:.6}, {:.6}, {:.6}]",
+                      self.fold_id,
+                      self.sigma2_vec[0], self.sigma2_vec[1], self.sigma2_vec[2], self.sigma2_vec[3]);
+            eprintln!("[Fold {}] σ²_e = {:.6}\n", self.fold_id, self.sigma2_e);
+        }
         
         // MCMC loop
         for iter in 0..self.n_iter {
@@ -403,10 +408,10 @@ impl BayesRRunner {
             
             // 5. Monitor convergence
             let monitor_interval = (self.n_iter / 10).max(100).min(1000);
-            if iter % monitor_interval == 0 {
+            if self.verbose && iter % monitor_interval == 0 {
                 let mean_beta_abs = self.beta.iter().map(|b| b.abs()).sum::<f64>() / (self.n_alleles as f64);
                 let non_zero = self.gamma.iter().filter(|&&g| g != 0).count();
-                
+
                 eprintln!(
                     "[Fold {}] Iter {}/{} | Mean|β|={:.4} | σ²e={:.4} | π=({:.2},{:.2},{:.2},{:.2}) | Non-zero={}",
                     self.fold_id, iter, self.n_iter, mean_beta_abs, self.sigma2_e,
@@ -420,8 +425,10 @@ impl BayesRRunner {
         let ess = utils::effective_size(&sigma2_e_samples);
         let geweke = utils::geweke_z(&sigma2_e_samples);
         
-        eprintln!("[Fold {}] ESS: {:.0} | Geweke Z: {:.3}", self.fold_id, ess, geweke);
-        eprintln!("\n[Fold {}] BayesR MCMC completed!\n", self.fold_id);
+        if self.verbose {
+            eprintln!("[Fold {}] ESS: {:.0} | Geweke Z: {:.3}", self.fold_id, ess, geweke);
+            eprintln!("\n[Fold {}] BayesR MCMC completed!\n", self.fold_id);
+        }
 
         // Posterior means
         let beta_hat = beta_samples.mean_axis(ndarray::Axis(0)).unwrap();
@@ -449,7 +456,9 @@ impl BayesRRunner {
         let h2 = sigma2_g / (sigma2_g + sigma2_e_hat);
         let z_hat = z_samples.map(|zs| zs.mean_axis(ndarray::Axis(0)).unwrap());
 
-        eprintln!("[Fold {}] σ²_g = {:.6} | h² = {:.4}", self.fold_id, sigma2_g, h2);
+        if self.verbose {
+            eprintln!("[Fold {}] σ²_g = {:.6} | h² = {:.4}", self.fold_id, sigma2_g, h2);
+        }
         
         BayesRResults {
             beta_samples,

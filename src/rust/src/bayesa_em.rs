@@ -22,6 +22,7 @@ pub struct BayesAEM {
     sigma2_j: Array1<f64>,
     sigma2_e: f64,
     fold_id: i32,
+    verbose: bool,
 
     // Fixed effects (optional)
     x: Option<Array2<f64>>,
@@ -43,6 +44,7 @@ impl BayesAEM {
         max_iter: usize,
         tol: f64,
         fold_id: i32,
+        verbose: bool,
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
@@ -78,6 +80,7 @@ impl BayesAEM {
             sigma2_j: Array1::<f64>::from_elem(n_alleles, s_squared),
             sigma2_e: sigma2_e_init,
             fold_id,
+            verbose,
             x,
             alpha,
             xtx_diag,
@@ -87,7 +90,9 @@ impl BayesAEM {
     }
     
     pub fn run(&mut self) -> BayesAResults {
-        eprintln!("[Fold {}] BayesA EM started: max {} iterations", self.fold_id, self.max_iter);
+        if self.verbose {
+            eprintln!("[Fold {}] BayesA EM started: max {} iterations", self.fold_id, self.max_iter);
+        }
 
         let print_interval = (self.max_iter / 50).max(1);
         let mut beta_old = Array1::<f64>::zeros(self.n_alleles);
@@ -121,16 +126,18 @@ impl BayesAEM {
             
             // Convergence check
             if iter > min_iter && rel_beta_change < self.tol {
-                eprintln!("[Fold {}] Converged at iteration {} (β_change={:.2e})", 
-                        self.fold_id, iter, rel_beta_change);
+                if self.verbose {
+                    eprintln!("[Fold {}] Converged at iteration {} (β_change={:.2e})",
+                            self.fold_id, iter, rel_beta_change);
+                }
                 break;
             }
-            
-            if iter % print_interval == 0 {
+
+            if self.verbose && iter % print_interval == 0 {
                 let mean_beta = self.beta.iter().map(|b| b.abs()).sum::<f64>() / (self.n_alleles as f64);
                 let mean_sigma2_j = self.sigma2_j.iter().sum::<f64>() / (self.n_alleles as f64);
-                eprintln!("[Fold {}] Iter {} | β_change={:.2e} | σ²e={:.4} | Mean|β|={:.4} | Mean σ²_j={:.4}", 
-                        self.fold_id, iter, rel_beta_change, 
+                eprintln!("[Fold {}] Iter {} | β_change={:.2e} | σ²e={:.4} | Mean|β|={:.4} | Mean σ²_j={:.4}",
+                        self.fold_id, iter, rel_beta_change,
                         self.sigma2_e, mean_beta, mean_sigma2_j);
             }
             
@@ -140,7 +147,9 @@ impl BayesAEM {
         let beta_samples = Array2::from_shape_fn((1, self.n_alleles), |(_, j)| self.beta[j]);
         let sigma2_j_samples = Array2::from_shape_fn((1, self.n_alleles), |(_, j)| self.sigma2_j[j]);
         
-        eprintln!("\n[Fold {}] BayesA EM completed!\n", self.fold_id);
+        if self.verbose {
+            eprintln!("\n[Fold {}] BayesA EM completed!\n", self.fold_id);
+        }
 
         let beta_hat = self.beta.clone();
         let mu_hat = 0.0;

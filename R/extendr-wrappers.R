@@ -12,32 +12,32 @@ NULL
 #' Internal Rust binding; end users should call \code{run_bayesr()}.
 #' @noRd
 #' @export
-run_bayesr_mcmc <- function(w, y, wtw_diag, x = NULL, pi_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id = 0L, is_binary = FALSE) {
-    .Call(wrap__run_bayesr_mcmc, w, y, wtw_diag, x, pi_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id, is_binary)
+run_bayesr_mcmc <- function(w, y, wtw_diag, x = NULL, pi_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id = 0L, is_binary = FALSE, verbose = TRUE) {
+    .Call(wrap__run_bayesr_mcmc, w, y, wtw_diag, x, pi_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id, is_binary, verbose)
 }
 
 #' Run BayesA MCMC (low-level binding).
 #' Internal Rust binding; end users should call \code{run_bayesa()}.
 #' @noRd
 #' @export
-run_bayesa_mcmc <- function(w, y, wtw_diag, x = NULL, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id = 0L, is_binary = FALSE) {
-    .Call(wrap__run_bayesa_mcmc, w, y, wtw_diag, x, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id, is_binary)
+run_bayesa_mcmc <- function(w, y, wtw_diag, x = NULL, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id = 0L, is_binary = FALSE, verbose = TRUE) {
+    .Call(wrap__run_bayesa_mcmc, w, y, wtw_diag, x, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id, is_binary, verbose)
 }
 
 #' Run BayesR EM (low-level binding).
 #' Internal Rust binding; end users should call \code{run_bayesr(method = "em")}.
 #' @noRd
 #' @export
-run_bayesr_em <- function(w, y, wtw_diag, x = NULL, pi_vec, sigma2_vec, sigma2_e_init, em_params, fold_id = 0L) {
-    .Call(wrap__run_bayesr_em, w, y, wtw_diag, x, pi_vec, sigma2_vec, sigma2_e_init, em_params, fold_id)
+run_bayesr_em <- function(w, y, wtw_diag, x = NULL, pi_vec, sigma2_vec, sigma2_e_init, em_params, fold_id = 0L, verbose = TRUE) {
+    .Call(wrap__run_bayesr_em, w, y, wtw_diag, x, pi_vec, sigma2_vec, sigma2_e_init, em_params, fold_id, verbose)
 }
 
 #' Run BayesA EM (low-level binding).
 #' Internal Rust binding; end users should call \code{run_bayesa(method = "em")}.
 #' @noRd
 #' @export
-run_bayesa_em <- function(w, y, wtw_diag, x = NULL, nu, s_squared, sigma2_e_init, em_params, fold_id = 0L) {
-    .Call(wrap__run_bayesa_em, w, y, wtw_diag, x, nu, s_squared, sigma2_e_init, em_params, fold_id)
+run_bayesa_em <- function(w, y, wtw_diag, x = NULL, nu, s_squared, sigma2_e_init, em_params, fold_id = 0L, verbose = TRUE) {
+    .Call(wrap__run_bayesa_em, w, y, wtw_diag, x, nu, s_squared, sigma2_e_init, em_params, fold_id, verbose)
 }
 
 # nolint end

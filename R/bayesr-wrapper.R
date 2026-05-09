@@ -76,8 +76,11 @@
 #' @param save_path Optional explicit RDS path. If \code{NULL} (default),
 #'   defaults to \code{"results_bayesr.Rds"} in the current working
 #'   directory.
-#' @param verbose If \code{TRUE} (default), a brief post-fit summary
-#'   (model, runtime, \eqn{h^2}, ESS, Geweke) is printed.
+#' @param verbose If \code{TRUE} (default), the Rust engine streams
+#'   per-iteration progress (start banner, Iter X/Y diagnostics, ESS /
+#'   Geweke, completion) to stderr \emph{and} a brief post-fit summary
+#'   (model, runtime, \eqn{h^2}, ESS, Geweke) is printed in R. Set to
+#'   \code{FALSE} for silent runs (e.g. inside cross-validation loops).
 #'
 #' @return An object of class \code{c("masbayes_bayesr", "masbayes")} — a
 #'   list with the following key fields:
@@ -235,7 +238,8 @@ run_bayesr <- function(w, y, wtw_diag,
     timing <- system.time({
       raw <- run_bayesr_mcmc(w, y, wtw_diag, X, pi_vec,
                              sigma2_e_init, sigma2_ah, prior_params,
-                             mcmc_params, fold_id, is_binary)
+                             mcmc_params, fold_id, is_binary,
+                             isTRUE(verbose))
     })
   } else {
     em_params <- modifyList(
@@ -249,7 +253,8 @@ run_bayesr <- function(w, y, wtw_diag,
 
     timing <- system.time({
       raw <- run_bayesr_em(w, y, wtw_diag, X, pi_vec, sigma2_vec,
-                           sigma2_e_init, em_params, fold_id)
+                           sigma2_e_init, em_params, fold_id,
+                           isTRUE(verbose))
     })
   }
 

@@ -22,6 +22,7 @@ pub struct BayesREM {
     gamma_prob: Array2<f64>,
     sigma2_e: f64,
     fold_id: i32,
+    verbose: bool,
 
     // Fixed effects (optional)
     x: Option<Array2<f64>>,
@@ -43,6 +44,7 @@ impl BayesREM {
         max_iter: usize,
         tol: f64,
         fold_id: i32,
+        verbose: bool,
     ) -> Self {
         let n = w.nrows();
         let n_alleles = w.ncols();
@@ -78,6 +80,7 @@ impl BayesREM {
             gamma_prob: Array2::<f64>::zeros((n_alleles, 4)),
             sigma2_e: sigma2_e_init,
             fold_id,
+            verbose,
             x,
             alpha,
             xtx_diag,
@@ -87,7 +90,9 @@ impl BayesREM {
     }
     
     pub fn run(&mut self) -> BayesRResults {
-        eprintln!("[Fold {}] BayesR EM started: max {} iterations", self.fold_id, self.max_iter);
+        if self.verbose {
+            eprintln!("[Fold {}] BayesR EM started: max {} iterations", self.fold_id, self.max_iter);
+        }
 
         let print_interval = (self.max_iter / 50).max(1);
         
@@ -123,15 +128,17 @@ impl BayesREM {
             
             // Convergence check
             if iter > min_iter && rel_beta_change < self.tol {
-                eprintln!("[Fold {}] Converged at iteration {} (β_change={:.2e} < tol={:.2e})", 
-                        self.fold_id, iter, rel_beta_change, self.tol);
+                if self.verbose {
+                    eprintln!("[Fold {}] Converged at iteration {} (β_change={:.2e} < tol={:.2e})",
+                            self.fold_id, iter, rel_beta_change, self.tol);
+                }
                 break;
             }
-            
-            if iter % print_interval == 0 {
+
+            if self.verbose && iter % print_interval == 0 {
                 let non_zero_beta = self.beta.iter().filter(|&&b| b.abs() > 1e-6).count();
-                eprintln!("[Fold {}] Iter {} | β_change={:.2e} (tgt={:.2e}) | σ²e={:.4} | |β|>0: {}", 
-                        self.fold_id, iter, rel_beta_change, self.tol, 
+                eprintln!("[Fold {}] Iter {} | β_change={:.2e} (tgt={:.2e}) | σ²e={:.4} | |β|>0: {}",
+                        self.fold_id, iter, rel_beta_change, self.tol,
                         self.sigma2_e, non_zero_beta);
             }
             
@@ -154,7 +161,9 @@ impl BayesREM {
             max_k as f64
         });
         
-        eprintln!("\n[Fold {}] BayesR EM completed!\n", self.fold_id);
+        if self.verbose {
+            eprintln!("\n[Fold {}] BayesR EM completed!\n", self.fold_id);
+        }
 
         let beta_hat = self.beta.clone();
         let mu_hat = 0.0;
