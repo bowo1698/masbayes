@@ -51,13 +51,14 @@ compute_metrics_binary <- function(y, yhat) {
       error = function(e) NA_real_
     )
   }
-  resid <- y - yhat
-  rmse  <- sqrt(mean(resid^2))
-  R2 <- if (stats::sd(yhat) < .Machine$double.eps) NA_real_ else
-        as.numeric(stats::cor(y, yhat))^2
-  bias <- if (stats::sd(yhat) < .Machine$double.eps) NA_real_ else
-          as.numeric(stats::coef(stats::lm(y ~ yhat))[2L])
-  list(R2 = R2, RMSE = rmse, AUC = auc, bias = bias)
+  resid    <- y - yhat
+  rmse     <- sqrt(mean(resid^2))
+  accuracy <- if (stats::sd(yhat) < .Machine$double.eps) NA_real_ else
+              as.numeric(stats::cor(y, yhat))
+  R2       <- if (is.na(accuracy)) NA_real_ else accuracy^2
+  bias     <- if (is.na(accuracy)) NA_real_ else
+              as.numeric(stats::coef(stats::lm(y ~ yhat))[2L])
+  list(R2 = R2, RMSE = rmse, accuracy = accuracy, AUC = auc, bias = bias)
 }
 
 #' ESS and Geweke Z for a numeric MCMC chain.
