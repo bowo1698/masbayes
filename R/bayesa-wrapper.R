@@ -58,11 +58,10 @@
 #' @param save_path Optional explicit RDS path. If \code{NULL} (default),
 #'   defaults to \code{"results_bayesa.Rds"} in the current working
 #'   directory.
-#' @param verbose If \code{TRUE} (default), the Rust engine streams
-#'   per-iteration progress (start banner, Iter X/Y diagnostics, ESS /
-#'   Geweke, completion) to stderr \emph{and} a brief post-fit summary
-#'   is printed in R. Set to \code{FALSE} for silent runs (e.g. inside
-#'   cross-validation loops).
+#' @param verbose If \code{TRUE}, the Rust engine streams per-iteration
+#'   progress (start banner, Iter X/Y diagnostics, ESS / Geweke,
+#'   completion) to stderr. Default \code{FALSE} keeps the Rust side
+#'   silent. The brief R post-fit summary prints regardless.
 #'
 #' @return An object of class \code{c("masbayes_bayesa", "masbayes")} — a
 #'   list with the following key fields:
@@ -173,7 +172,7 @@ run_bayesa <- function(w, y, wtw_diag,
                        fold_id       = 0L,
                        save_rds      = TRUE,
                        save_path     = NULL,
-                       verbose       = TRUE) {
+                       verbose       = FALSE) {
 
   call          <- match.call()
   method        <- match.arg(method)
@@ -241,7 +240,7 @@ run_bayesa <- function(w, y, wtw_diag,
 
   fit$rds_path <- maybe_save_rds(fit, save_rds, save_path)
 
-  if (isTRUE(verbose)) print_run_summary(fit)
+  print_run_summary(fit)
 
   fit
 }

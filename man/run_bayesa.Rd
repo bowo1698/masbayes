@@ -20,7 +20,7 @@ run_bayesa(
   fold_id = 0L,
   save_rds = TRUE,
   save_path = NULL,
-  verbose = TRUE
+  verbose = FALSE
 )
 }
 \arguments{
@@ -69,11 +69,10 @@ disk as an RDS file. Set \code{FALSE} for CV loops.}
 defaults to \code{"results_bayesa.Rds"} in the current working
 directory.}
 
-\item{verbose}{If \code{TRUE} (default), the Rust engine streams
-per-iteration progress (start banner, Iter X/Y diagnostics, ESS /
-Geweke, completion) to stderr \emph{and} a brief post-fit summary
-is printed in R. Set to \code{FALSE} for silent runs (e.g. inside
-cross-validation loops).}
+\item{verbose}{If \code{TRUE}, the Rust engine streams per-iteration
+progress (start banner, Iter X/Y diagnostics, ESS / Geweke,
+completion) to stderr. Default \code{FALSE} keeps the Rust side
+silent. The brief R post-fit summary prints regardless.}
 }
 \value{
 An object of class \code{c("masbayes_bayesa", "masbayes")} — a
