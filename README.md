@@ -130,7 +130,10 @@ cargo --version
 install.packages(c("devtools", "Rcpp"))
 
 # Install from GitHub
-devtools::install_github("bowo1698/masbayes")
+install.packages(
+    "https://github.com/bowo1698/masbayes/archive/refs/heads/main.tar.gz",
+    repos = NULL, type = "source"
+)
 ```
 
 ---
