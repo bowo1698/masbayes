@@ -53,8 +53,8 @@
 #' @param response_type \code{"gaussian"} (default) or \code{"binary"}.
 #'   Binary requires \code{method = "mcmc"}.
 #' @param fold_id Integer label for progress messages.
-#' @param save_rds If \code{TRUE} (default), the fit object is saved to
-#'   disk as an RDS file. Set \code{FALSE} for CV loops.
+#' @param save_rds If \code{TRUE}, the fit object is saved to
+#'   disk as an RDS file. Set \code{FALSE} (default) for CV loops.
 #' @param save_path Optional explicit RDS path. If \code{NULL} (default),
 #'   defaults to \code{"results_bayesa.Rds"} in the current working
 #'   directory.
@@ -170,7 +170,7 @@ run_bayesa <- function(w, y, wtw_diag,
                        method        = c("mcmc", "em"),
                        response_type = c("gaussian", "binary"),
                        fold_id       = 0L,
-                       save_rds      = TRUE,
+                       save_rds      = FALSE,
                        save_path     = NULL,
                        verbose       = FALSE) {
 

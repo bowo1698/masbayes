@@ -19,7 +19,7 @@ run_bayesr(
   method = c("mcmc", "em"),
   response_type = c("gaussian", "binary"),
   fold_id = 0L,
-  save_rds = TRUE,
+  save_rds = FALSE,
   save_path = NULL,
   verbose = FALSE
 )
@@ -72,7 +72,7 @@ Binary requires \code{method = "mcmc"}.}
 running CV loops.}
 
 \item{save_rds}{If \code{TRUE} (default) the fit object is written to
-disk as an RDS file. Set \code{FALSE} for CV loops.}
+disk as an RDS file. Set \code{FALSE} (default) for CV loops.}
 
 \item{save_path}{Optional explicit RDS path. If \code{NULL} (default),
 defaults to \code{"results_bayesr.Rds"} in the current working

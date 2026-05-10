@@ -18,7 +18,7 @@ run_bayesa(
   method = c("mcmc", "em"),
   response_type = c("gaussian", "binary"),
   fold_id = 0L,
-  save_rds = TRUE,
+  save_rds = FALSE,
   save_path = NULL,
   verbose = FALSE
 )
@@ -62,8 +62,8 @@ Binary requires \code{method = "mcmc"}.}
 
 \item{fold_id}{Integer label for progress messages.}
 
-\item{save_rds}{If \code{TRUE} (default), the fit object is saved to
-disk as an RDS file. Set \code{FALSE} for CV loops.}
+\item{save_rds}{If \code{TRUE}, the fit object is saved to
+disk as an RDS file. Set \code{FALSE} (default) for CV loops.}
 
 \item{save_path}{Optional explicit RDS path. If \code{NULL} (default),
 defaults to \code{"results_bayesa.Rds"} in the current working
