@@ -36,10 +36,13 @@
 #' @param ... Unused.
 #'
 #' @return An object of class \code{masbayes_prediction}: a list with
-#'   \code{GEBV}, \code{metrics} (\code{R2, RMSE, accuracy/AUC, bias} or
-#'   \code{NULL}), \code{h2, sigma2_g, sigma2_e},
-#'   \code{variance_components}, \code{response_type}, \code{model_type},
-#'   \code{eval_scope}, and \code{has_truth}.
+#'   \code{GEBV} (liability scale for binary), \code{prob} (binary only:
+#'   \code{P(y = 1) = pnorm(GEBV)}, otherwise \code{NULL}),
+#'   \code{metrics} (\code{R2, RMSE, accuracy/AUC, bias} or
+#'   \code{NULL}; for binary, computed on the observed/probability
+#'   scale so \code{bias} is the calibration slope), \code{h2, sigma2_g,
+#'   sigma2_e}, \code{variance_components}, \code{response_type},
+#'   \code{model_type}, \code{eval_scope}, and \code{has_truth}.
 #'
 #' @examples
 #' \dontrun{
@@ -157,13 +160,22 @@ predict_masbayes_common <- function(object, newdata = NULL, y_new = NULL,
       ))
     }
     metrics <- if (identical(object$response_type, "binary"))
-      compute_metrics_binary(as.numeric(y_new), GEBV)
+      # GEBV is on the liability scale; convert to probability via probit
+      # inverse link so metrics are on the observed (probability) scale.
+      compute_metrics_binary(as.numeric(y_new), stats::pnorm(GEBV))
     else
       compute_metrics_gaussian(as.numeric(y_new), GEBV)
   }
 
+  prob <- if (identical(object$response_type, "binary")) {
+    stats::pnorm(GEBV)
+  } else {
+    NULL
+  }
+
   out <- list(
     GEBV                = GEBV,
+    prob                = prob,
     metrics             = metrics,
     h2                  = object$h2,
     sigma2_g            = object$sigma2_g,
@@ -194,11 +206,19 @@ print.masbayes_prediction <- function(x, ...) {
               fmt_num(stats::median(x$GEBV)),
               fmt_num(max(x$GEBV))))
 
+  if (identical(x$response_type, "binary") && !is.null(x$prob)) {
+    cat(sprintf(" Prob (P(y=1)) : min=%s  median=%s  max=%s\n",
+                fmt_num(min(x$prob)),
+                fmt_num(stats::median(x$prob)),
+                fmt_num(max(x$prob))))
+  }
+
   if (!is.null(x$metrics)) {
-    cat(" Metrics\n")
     if (identical(x$response_type, "binary")) {
+      cat(" Metrics (observed/probability scale)\n")
       cat(sprintf("   AUC          : %s\n", fmt_num(x$metrics$AUC)))
     } else {
+      cat(" Metrics\n")
       cat(sprintf("   accuracy (r) : %s\n", fmt_num(x$metrics$accuracy)))
     }
     cat(sprintf("   R^2          : %s\n", fmt_num(x$metrics$R2)))

@@ -23,12 +23,22 @@
 #   x Train/test split (n_train=200, n_test=100)
 #
 # Metrics reported:
-#   r_train  : cor(GEBV, y) or cor(GEBV, z_hat) for binary — training fit
+#   r_train  : training fit. Continuous: cor(GEBV, y). Binary: cor(GEBV, z_hat)
+#              kept on the liability scale here as an alternative diagnostic;
+#              for the calibration-slope view use pred$metrics$accuracy
+#              (observed scale) from the package directly.
 #   r_test_y : cor(GEBV, y_test) — predictive ability
-#   r_test_g : cor(GEBV, TBV_test) — accuracy vs true breeding value (simulation only)
-#   bias     : regression slope y ~ GEBV or z_hat ~ GEBV for binary
+#   r_test_g : cor(GEBV, TBV_test) — accuracy vs true breeding value
+#              (simulation only)
+#   bias     : Continuous → slope of lm(y_test ~ gebv_te) on the observed
+#              scale. Binary → calibration slope lm(y_test ~ pnorm(gebv_te))
+#              on the observed (probability) scale, directly comparable
+#              across BayesR / BayesA / GBLUP / GWABLUP. Convention:
+#              1.0 ideal, <1 over-dispersion (predictions too extreme),
+#              >1 under-dispersion (predictions too compressed).
 #   h2_post  : posterior heritability estimate
-#   AUC      : area under ROC curve (binary trait only)
+#   AUC      : area under ROC curve (binary only). Rank-invariant — same
+#              whether scored on liability GEBV or probability mu_hat.
 #
 # Requirements: masbayes, masreml
 # Usage: source("examples/03_marker_QTL_congruency_theory.R")
@@ -141,13 +151,14 @@ ref_struct  <- list(allele_info=wah_train$allele_info,
 W_mh_test  <- construct_wah_matrix(
   hap_block_all[idx_test,], colnames_block, NULL, ref_struct, TRUE)$W_ah
 
-# SNP matrix via construct_snp_matrix() — VanRaden 2008 centering
-snp_tr      <- construct_snp_matrix(geno_snp_all[idx_train, ])
-W_snp_train <- snp_tr$W
-W_snp_test  <- construct_snp_matrix(geno_snp_all[idx_test, ],
-                                    ref_freq = snp_tr$freq)$W
-W_snp_all   <- construct_snp_matrix(geno_snp_all,
-                                    ref_freq = snp_tr$freq)$W
+p_snp_tr    <- colMeans(geno_snp_all[idx_train,]) / 2
+W_snp_train <- sweep(geno_snp_all[idx_train,], 2, 2*p_snp_tr, "-")
+W_snp_test  <- sweep(geno_snp_all[idx_test, ], 2, 2*p_snp_tr, "-")
+storage.mode(W_snp_train) <- "double"
+storage.mode(W_snp_test)  <- "double"
+
+W_snp_all <- sweep(geno_snp_all, 2, 2*p_snp_tr, "-")
+storage.mode(W_snp_all) <- "double"
 
 wah_all    <- construct_wah_matrix(
   hap_block_all, colnames_block, allele_freq_list, NULL, TRUE)
@@ -227,9 +238,7 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
           mcmc_params   = mcmc_p,
           method        = "mcmc",
           response_type = resp,
-          fold_id       = 0L,
-          save_rds      = FALSE,
-          verbose       = FALSE)
+          fold_id       = 0L)
       } else {
         res <- run_bayesa(
           w=W_tr, y=y_train, wtw_diag=wtw,
@@ -240,13 +249,13 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
           mcmc_params   = mcmc_p,
           method        = "mcmc",
           response_type = resp,
-          fold_id       = 0L,
-          save_rds      = FALSE,
-          verbose       = FALSE)
+          fold_id       = 0L)
       }
 
-      # Use the new predict() S3 method to get test GEBV + metrics in one call.
-      # res$GEBV gives training GEBV directly (= W_tr %*% beta_hat + mu_hat).
+      # Use the package's predict() S3 method instead of recomputing manually.
+      # res$GEBV gives training GEBV; predict(res, W_te, y_test) auto-computes
+      # observed-scale metrics (R2, RMSE, accuracy/AUC, bias = calibration slope)
+      # plus pred_te$prob = pnorm(GEBV) for binary.
       gebv_tr  <- res$GEBV
       pred_te  <- predict(res, W_te, y_test)
       gebv_te  <- pred_te$GEBV
@@ -254,20 +263,22 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
       r_test_g <- cor(gebv_te, g_te)     # vs true BV, both traits
 
       if (trait_type == "binary" && !is.null(res$z_hat) && is.numeric(res$z_hat)) {
-        # Binary: training metrics on liability scale
-        z_hat         <- res$z_hat
-        r_train       <- cor(gebv_tr, z_hat)
-        bias_test     <- coef(lm(z_hat ~ gebv_tr))[2]
+        # Binary: r_train on liability scale (informative diagnostic). bias
+        # on the OBSERVED (probability) scale from pred_te$metrics$bias —
+        # calibration slope: 1.0 ideal, <1 over-dispersion, >1 under-dispersion.
+        r_train       <- cor(gebv_tr, res$z_hat)
+        bias_test     <- pred_te$metrics$bias
         sigma2_g_post <- var(gebv_tr)
         h2_post       <- sigma2_g_post / (sigma2_g_post + 1.0)
       } else {
         # Continuous: training metrics on observed scale
         r_train       <- cor(gebv_tr, y_train)
         bias_test     <- pred_te$metrics$bias
-        h2_post       <- res$h2
+        sigma2_g_post <- var(gebv_tr)
+        sigma2_e_post <- mean(res$sigma2_e_samples)
+        h2_post       <- sigma2_g_post / (sigma2_g_post + sigma2_e_post)
       }
 
-      # AUC for binary — already computed by predict() when y_new is supplied
       auc <- if (trait_type == "binary") pred_te$metrics$AUC else NA
 
       list(status="OK", r_train=round(r_train,3),
@@ -326,7 +337,7 @@ run_gblup_scenario <- function(sc, marker_label, G_full, y_tr, y_te, g_te,
                   train_ids = train_ids_ch, test_ids = test_ids_ch)
 
   gebv_tr  <- fit$total_gebv + fit$fixed_effects[1]
-  gebv_te  <- pred$total_gebv + fit$fixed_effects[1]
+  gebv_te  <- pred$GEBV      + fit$fixed_effects[1]
 
   h2_post  <- as.numeric(fit$varcomp$h2["g"])
   ev       <- evaluate_prediction(
@@ -334,7 +345,7 @@ run_gblup_scenario <- function(sc, marker_label, G_full, y_tr, y_te, g_te,
                 y           = y_te,
                 h2          = h2_post,
                 tbv         = g_te,
-                fitted_prob = if (trait_type == "binary") pred$fitted else NULL
+                fitted_prob = if (trait_type == "binary") pred$prob else NULL
               )
   r_train  <- cor(gebv_tr, y_tr)
   r_test_y <- ev$r_test_y
@@ -423,7 +434,7 @@ run_gwablup_scenario <- function(sc, marker_type, y_tr, y_te, g_te,
                     test_ids  = test_ids)
 
     gebv_tr <- fit_wa$total_gebv + fit_wa$fixed_effects[1]
-    gebv_te <- pred$total_gebv  + fit_wa$fixed_effects[1]
+    gebv_te <- pred$GEBV         + fit_wa$fixed_effects[1]
 
     h2_post   <- as.numeric(fit_wa$varcomp$h2[comp_name])
     ev      <- evaluate_prediction(
@@ -431,7 +442,7 @@ run_gwablup_scenario <- function(sc, marker_type, y_tr, y_te, g_te,
                  y           = y_te,
                  h2          = h2_post,
                  tbv         = g_te,
-                 fitted_prob = if (trait_type == "binary") pred$fitted else NULL
+                 fitted_prob = if (trait_type == "binary") pred$prob else NULL
                )
 
     list(status="OK",

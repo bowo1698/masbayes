@@ -19,10 +19,13 @@ prediction metrics are computed.}
 }
 \value{
 An object of class \code{masbayes_prediction}: a list with
-  \code{GEBV}, \code{metrics} (\code{R2, RMSE, accuracy/AUC, bias} or
-  \code{NULL}), \code{h2, sigma2_g, sigma2_e},
-  \code{variance_components}, \code{response_type}, \code{model_type},
-  \code{eval_scope}, and \code{has_truth}.
+  \code{GEBV} (liability scale for binary), \code{prob} (binary only:
+  \code{P(y = 1) = pnorm(GEBV)}, otherwise \code{NULL}),
+  \code{metrics} (\code{R2, RMSE, accuracy/AUC, bias} or
+  \code{NULL}; for binary, computed on the observed/probability
+  scale so \code{bias} is the calibration slope), \code{h2, sigma2_g,
+  sigma2_e}, \code{variance_components}, \code{response_type},
+  \code{model_type}, \code{eval_scope}, and \code{has_truth}.
 }
 \description{
 Computes genomic estimated breeding values (GEBVs) and prediction

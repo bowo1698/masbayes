@@ -92,12 +92,19 @@
 #'     sigma2_large_samples, mu_samples}}{Posterior chains (single-row
 #'     matrices for EM).}
 #'   \item{\code{GEBV / pred_train}}{Training genomic estimated breeding
-#'     values.}
+#'     values. For binary traits this is on the \emph{liability} scale.}
+#'   \item{\code{prob_train}}{Binary only: training-set predicted
+#'     probabilities \code{P(y = 1) = pnorm(pred_train)} (probit
+#'     inverse link from Albert-Chib augmentation).}
 #'   \item{\code{h2, sigma2_g, sigma2_e}}{Heritability and variance
 #'     components.}
 #'   \item{\code{runtime}}{Elapsed seconds.}
-#'   \item{\code{training_metrics}}{\code{R2, RMSE, accuracy} (or
-#'     \code{AUC} for binary), \code{bias}.}
+#'   \item{\code{training_metrics}}{\code{R2}, \code{RMSE},
+#'     \code{accuracy} (or \code{AUC} for binary), \code{bias}. For
+#'     binary, all metrics are on the observed (probability) scale —
+#'     \code{bias} is the calibration slope (1.0 = perfectly
+#'     calibrated) and \code{RMSE\^2} approximates the Brier score.
+#'     AUC is rank-invariant so unaffected.}
 #'   \item{\code{diagnostics}}{ESS and Geweke Z for key parameters
 #'     (MCMC only).}
 #'   \item{\code{variance_components}}{Posterior mean and 95\% CI for

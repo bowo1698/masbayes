@@ -29,6 +29,14 @@ compute_metrics_gaussian <- function(y, yhat) {
 }
 
 #' Compute prediction metrics for a binary response.
+#'
+#' \code{yhat} must be on the \strong{observed (probability) scale} —
+#' i.e. \code{P(y = 1)}, not the liability-scale linear predictor. Apply
+#' \code{pnorm()} (probit, the link used by Albert-Chib augmentation in
+#' masbayes) to the liability prediction before calling. Using probabilities
+#' makes \code{bias} the calibration slope (1.0 = perfectly calibrated)
+#' and \code{RMSE\^2} the Brier score; AUC is rank-invariant under a
+#' monotonic inverse-link so it is unchanged.
 #' @keywords internal
 #' @noRd
 compute_metrics_binary <- function(y, yhat) {
@@ -240,8 +248,16 @@ finalise_fit <- function(raw, w, y, model_type, method, response_type,
   is_binary <- identical(response_type, "binary")
 
   yhat_train <- as.numeric(raw$pred_train)
-  metrics <- if (is_binary) compute_metrics_binary(y, yhat_train)
-             else          compute_metrics_gaussian(y, yhat_train)
+  if (is_binary) {
+    # Albert-Chib augmentation uses N(eta, 1) latents → probit link.
+    # Convert liability predictions to probabilities before scoring so that
+    # bias is the calibration slope and RMSE^2 ≈ Brier score.
+    prob_train <- stats::pnorm(yhat_train)
+    raw$prob_train <- prob_train
+    metrics <- compute_metrics_binary(y, prob_train)
+  } else {
+    metrics <- compute_metrics_gaussian(y, yhat_train)
+  }
 
   diagnostics <- compute_diagnostics(raw, model_type, method)
 

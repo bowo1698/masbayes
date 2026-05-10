@@ -72,10 +72,18 @@
 #'   \item{\code{beta_samples, sigma2_j_samples, sigma2_e_samples,
 #'     mu_samples}}{Posterior chains (single-row matrices for EM).}
 #'   \item{\code{GEBV / pred_train, h2, sigma2_g, sigma2_e}}{Training
-#'     GEBVs, heritability, and total variance components.}
+#'     GEBVs (liability scale for binary), heritability, and total
+#'     variance components.}
+#'   \item{\code{prob_train}}{Binary only: training-set predicted
+#'     probabilities \code{P(y = 1) = pnorm(pred_train)} (probit
+#'     inverse link from Albert-Chib augmentation).}
 #'   \item{\code{runtime}}{Elapsed seconds.}
-#'   \item{\code{training_metrics}}{\code{R2, RMSE, accuracy} (or
-#'     \code{AUC} for binary), \code{bias}.}
+#'   \item{\code{training_metrics}}{\code{R2}, \code{RMSE},
+#'     \code{accuracy} (or \code{AUC} for binary), \code{bias}. For
+#'     binary, all metrics are on the observed (probability) scale —
+#'     \code{bias} is the calibration slope (1.0 = perfectly
+#'     calibrated) and \code{RMSE\^2} approximates the Brier score.
+#'     AUC is rank-invariant so unaffected.}
 #'   \item{\code{diagnostics}}{ESS / Geweke Z (MCMC only).}
 #'   \item{\code{variance_components}}{Per-marker variances binned into
 #'     tertiles (small / medium / large) reporting mean, range, and

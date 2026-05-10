@@ -96,13 +96,17 @@ print.summary.masbayes <- function(x, ...) {
     cat(sprintf("   RDS path      : %s\n", x$rds_path))
 
   ## Training fit -------------------------------------------------------
-  cat("\n Training fit\n")
+  is_binary <- identical(x$response_type, "binary")
+  cat(if (is_binary)
+        "\n Training fit (observed/probability scale)\n"
+      else
+        "\n Training fit\n")
   cat(" ----------------------------------------\n")
   m <- x$training_metrics
   cat(sprintf("   h2            : %.4f\n", x$h2))
   cat(sprintf("   sigma2_g      : %.4f\n", x$sigma2_g))
   cat(sprintf("   sigma2_e      : %.4f\n", x$sigma2_e))
-  if (identical(x$response_type, "binary")) {
+  if (is_binary) {
     cat(sprintf("   AUC           : %s\n", fmt_num(m$AUC)))
   } else {
     cat(sprintf("   accuracy (r)  : %s\n", fmt_num(m$accuracy)))
