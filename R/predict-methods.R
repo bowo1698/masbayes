@@ -46,17 +46,30 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Train/test split
-#' fit  <- run_bayesr(W_train, y_train, wtw_train, wty_train,
-#'                    sigma2_e_init = var(y_train)/2,
-#'                    sigma2_ah     = var(y_train)/2)
+#' d       <- load_data("small")
+#' W       <- construct_snp_matrix(d$snp)$W
+#' y       <- d$pheno$y_cont_qtl_snp
+#' W_train <- W[d$train_idx, ]
+#' W_test  <- W[d$test_idx, ]
+#' y_train <- y[d$train_idx]
+#' y_test  <- y[d$test_idx]
+#'
+#' fit  <- run_bayesr(
+#'   w             = W_train,
+#'   y             = y_train,
+#'   wtw_diag      = colSums(W_train^2),
+#'   sigma2_e_init = var(y_train) / 2,
+#'   sigma2_ah     = var(y_train) / 2,
+#'   mcmc_params   = list(n_iter = 1000L, n_burn = 500L,
+#'                        n_thin = 5L, seed = 1L),
+#'   save_rds      = FALSE
+#' )
 #'
 #' pred <- predict(fit, W_test, y_test)   # test-set evaluation
 #' pred$metrics$accuracy
-#' pred$metrics$RMSE
 #'
-#' fc   <- predict(fit, W_unknown)        # forecast only, no y
-#' fc$GEBV
+#' fc   <- predict(fit, W_test)           # forecast only, no y_new
+#' head(fc$GEBV)
 #'
 #' insamp <- predict(fit)                 # in-sample reference
 #' insamp$metrics$R2
@@ -87,11 +100,26 @@ predict.masbayes_bayesr <- function(object, newdata = NULL, y_new = NULL,
 #'
 #' @examples
 #' \dontrun{
-#' fit  <- run_bayesa(W_train, y_train, wtw_train, wty_train,
-#'                    sigma2_g      = var(y_train)/2,
-#'                    sigma2_e_init = var(y_train)/2)
-#' pred <- predict(fit, W_test, y_test)
-#' pred$metrics$AUC      # for binary traits
+#' d       <- load_data("small")
+#' W       <- construct_snp_matrix(d$snp)$W
+#' y_bin   <- as.numeric(d$pheno$y_bin_qtl_snp)
+#' W_train <- W[d$train_idx, ]
+#' W_test  <- W[d$test_idx, ]
+#'
+#' fit  <- run_bayesa(
+#'   w             = W_train,
+#'   y             = y_bin[d$train_idx],
+#'   wtw_diag      = colSums(W_train^2),
+#'   nu            = 4.5,
+#'   sigma2_g      = 1.0,
+#'   sigma2_e_init = 1.0,
+#'   mcmc_params   = list(n_iter = 1000L, n_burn = 500L,
+#'                        n_thin = 5L, seed = 1L),
+#'   response_type = "binary",
+#'   save_rds      = FALSE
+#' )
+#' pred <- predict(fit, W_test, y_bin[d$test_idx])
+#' pred$metrics$AUC
 #' }
 #'
 #' @seealso \code{\link{run_bayesa}},

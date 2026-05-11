@@ -70,38 +70,17 @@ constraint \eqn{E[W_k] = 0}.
 }
 \examples{
 \dontrun{
-set.seed(1)
-n_ind              <- 30
-n_block            <- 10
-n_allele_per_block <- 3
+d        <- load_data("small")
+block_id <- attr(d$mh, "block_id")
 
-# Simulate a phased haplotype matrix (n x 2*blocks).
-# Each pair of columns holds the two phased copies of one block.
-hap <- matrix(
-  sample.int(n_allele_per_block, n_ind * n_block * 2, replace = TRUE),
-  nrow = n_ind
-)
-colnames(hap) <- paste0("hap_", rep(seq_len(n_block), each = 2))
-
-# Allele frequency table for the training set
-freq <- data.frame(
-  haplotype = paste0("hap_",
-                     rep(seq_len(n_block), each = n_allele_per_block)),
-  allele    = rep(seq_len(n_allele_per_block), n_block),
-  freq      = rep(c(0.5, 0.3, 0.2), n_block)
-)
-
-# Training set
-train   <- construct_wah_matrix(hap, colnames(hap), freq)
+# Training set -- pass d$allele_freq (required when reference_structure is NULL)
+hap_tr  <- d$mh[d$train_idx, ]
+train   <- construct_wah_matrix(hap_tr, block_id, d$allele_freq)
 W_train <- train$W_ah
 
-# Test set: reuse the training allele structure
-hap_te <- matrix(
-  sample.int(n_allele_per_block, 10 * n_block * 2, replace = TRUE),
-  nrow = 10
-)
-colnames(hap_te) <- colnames(hap)
-test   <- construct_wah_matrix(hap_te, colnames(hap_te),
+# Test set: reuse the training allele structure to keep columns aligned
+hap_te <- d$mh[d$test_idx, ]
+test   <- construct_wah_matrix(hap_te, block_id,
                                reference_structure = train)
 W_test <- test$W_ah
 stopifnot(ncol(W_train) == ncol(W_test))

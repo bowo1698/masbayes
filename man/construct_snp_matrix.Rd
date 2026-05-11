@@ -2,80 +2,107 @@
 % Please edit documentation in R/matrix-wrapper.R
 \name{construct_snp_matrix}
 \alias{construct_snp_matrix}
-\title{Construct a Centered SNP Design Matrix}
+\title{Construct a SNP Design Matrix}
 \usage{
-construct_snp_matrix(X, ref_freq = NULL)
+construct_snp_matrix(
+  X,
+  encoding = c("vanRaden", "zscore"),
+  ref_freq = NULL,
+  ref_sd = NULL
+)
 }
 \arguments{
 \item{X}{Numeric or integer matrix of allele dosages
 (typically \code{0}, \code{1}, or \code{2}) with dimensions
 \code{n x p_snp}. Coerced to \code{double} internally.}
 
+\item{encoding}{Either \code{"vanRaden"} (default) or \code{"zscore"}.
+Controls whether columns are additionally divided by their standard
+deviation after centering.}
+
 \item{ref_freq}{Optional numeric vector of length \code{ncol(X)}
 giving the reference allele frequencies \eqn{p_j} from the training
-set. If \code{NULL} (default) the frequencies are computed from
+set. If \code{NULL} (default) frequencies are computed from
 \code{X} itself (training-set use).}
+
+\item{ref_sd}{Optional numeric vector of length \code{ncol(X)} giving
+the training-set column standard deviations. Required only when
+\code{encoding = "zscore"} and \code{X} is a test set. If
+\code{NULL} for a training call, the sd is computed from \code{X}.
+Ignored when \code{encoding = "vanRaden"}.}
 }
 \value{
 A list with elements:
 \describe{
-  \item{\code{W}}{Numeric matrix \code{n x p_snp} of centered dosages
-    \eqn{W_{ij} = X_{ij} - 2 p_j}.}
+  \item{\code{W}}{Numeric matrix \code{n x p_snp}. For vanRaden:
+    \eqn{W_{ij} = X_{ij} - 2 p_j}. For zscore:
+    \eqn{W_{ij} = (X_{ij} - 2 p_j) / s_j}.}
   \item{\code{freq}}{Numeric vector of length \code{p_snp} with the
     allele frequencies used for centering.}
+  \item{\code{sd}}{Numeric vector of length \code{p_snp} with the
+    column standard deviations used for scaling. Present only when
+    \code{encoding = "zscore"}.}
   \item{\code{n}, \code{p}}{Number of individuals and SNPs.}
 }
 }
 \description{
-Build a centered SNP design matrix \eqn{W_{ij} = X_{ij} - 2 p_j} from an
-allele-dosage matrix \eqn{X} (entries 0, 1, 2). The output is suitable
-for direct use with \code{\link{run_bayesr}} and
-\code{\link{run_bayesa}}, which are agnostic to whether the design
-matrix encodes biallelic SNPs or multi-allelic haplotypes.
+Build a SNP design matrix from an allele-dosage matrix \eqn{X} (entries
+0, 1, 2). Two encodings are supported: VanRaden centering (default,
+\eqn{W_{ij} = X_{ij} - 2 p_j}) and per-column z-score standardisation
+(\eqn{W_{ij} = (X_{ij} - 2 p_j) / s_j}). The output is suitable for
+direct use with \code{\link{run_bayesr}} and \code{\link{run_bayesa}}.
 }
 \details{
-\strong{Training / test workflow.} Always center the test set with
-\emph{training} allele frequencies, never with frequencies recomputed
-from the test set itself:
+\strong{Choosing an encoding.}
+\itemize{
+  \item \code{"vanRaden"} (default) — centers each column on the
+    training-set allele frequency. Column variance is proportional to
+    \eqn{2 p_j (1 - p_j)}, so rare variants contribute proportionally
+    less to the implied genomic relationship matrix. This is the
+    classical genomic-prediction convention and is consistent with
+    \code{tcrossprod(W) / k_grm} used by GBLUP backends.
+  \item \code{"zscore"} — additionally divides each column by its
+    standard deviation, so every marker contributes equal variance
+    regardless of MAF. Aligned with alternative biallelic-SNP
+    parameterisations that assume marker-uniform variance contributions.
+}
+Both encodings work with either \code{marker_type = "multiallelic"} or
+\code{"snp"} in the Bayesian fitters, but \code{"zscore"} is intended
+to pair with \code{marker_type = "snp"} for a fully alternative SNP
+convention.
+
+\strong{Training / test workflow.} Always centre (and scale, for
+zscore) the test set with \emph{training} statistics, never with
+statistics recomputed from the test set itself:
 \enumerate{
-  \item Training: call \code{construct_snp_matrix(X_train)} (leave
-    \code{ref_freq = NULL}). The returned \code{$freq} contains the
-    per-SNP reference frequencies \eqn{p_j = mean(X_{train,j}) / 2}.
-  \item Test: call \code{construct_snp_matrix(X_test, ref_freq =
-    train$freq)} so the columns of \code{W_test} are aligned with
-    \code{W_train} on the same baseline frequencies.
+  \item Training: call \code{construct_snp_matrix(X_train,
+    encoding = ...)}. The returned \code{$freq} and, for zscore,
+    \code{$sd} hold the training statistics.
+  \item Test: call \code{construct_snp_matrix(X_test, encoding = ...,
+    ref_freq = train$freq, ref_sd = train$sd)} so test columns align
+    with training columns under the same baseline.
 }
 
 For phased multi-allelic haplotype data, use
-\code{\link{construct_wah_matrix}} instead. For other marker
-representations, build the design matrix manually and pass it to the
-Bayesian fitters.
+\code{\link{construct_wah_matrix}} instead.
 }
 \examples{
 \dontrun{
-set.seed(1)
-n_ind <- 30
-n_snp <- 50
-maf   <- runif(n_snp, 0.1, 0.5)
+d <- load_data("small")
+X_train <- d$snp[d$train_idx, ]
+X_test  <- d$snp[d$test_idx, ]
 
-# Simulate dosage matrix (0/1/2) for training and test sets
-X_train <- matrix(rbinom(n_ind * n_snp, 2, prob = maf),
-                  nrow = n_ind)
-X_test  <- matrix(rbinom(10    * n_snp, 2, prob = maf),
-                  nrow = 10)
+# vanRaden (default)
+train_v <- construct_snp_matrix(X_train)
+test_v  <- construct_snp_matrix(X_test, ref_freq = train_v$freq)
 
-# Training: compute frequencies from X_train
-train   <- construct_snp_matrix(X_train)
-W_train <- train$W
+# zscore (alternative SNP convention)
+train_z <- construct_snp_matrix(X_train, encoding = "zscore")
+test_z  <- construct_snp_matrix(X_test, encoding = "zscore",
+                                ref_freq = train_z$freq,
+                                ref_sd   = train_z$sd)
 
-# Test: reuse training frequencies (do NOT recompute from X_test)
-test    <- construct_snp_matrix(X_test, ref_freq = train$freq)
-W_test  <- test$W
-
-stopifnot(ncol(W_train) == ncol(W_test))
-
-# The returned W can be passed directly to run_bayesr() or run_bayesa()
-# together with the response y_train.
+stopifnot(ncol(train_z$W) == ncol(test_z$W))
 }
 
 }

@@ -53,17 +53,30 @@ training matrix structure as \code{reference_structure} so that
 }
 \examples{
 \dontrun{
-# Train/test split
-fit  <- run_bayesr(W_train, y_train, wtw_train, wty_train,
-                   sigma2_e_init = var(y_train)/2,
-                   sigma2_ah     = var(y_train)/2)
+d       <- load_data("small")
+W       <- construct_snp_matrix(d$snp)$W
+y       <- d$pheno$y_cont_qtl_snp
+W_train <- W[d$train_idx, ]
+W_test  <- W[d$test_idx, ]
+y_train <- y[d$train_idx]
+y_test  <- y[d$test_idx]
+
+fit  <- run_bayesr(
+  w             = W_train,
+  y             = y_train,
+  wtw_diag      = colSums(W_train^2),
+  sigma2_e_init = var(y_train) / 2,
+  sigma2_ah     = var(y_train) / 2,
+  mcmc_params   = list(n_iter = 1000L, n_burn = 500L,
+                       n_thin = 5L, seed = 1L),
+  save_rds      = FALSE
+)
 
 pred <- predict(fit, W_test, y_test)   # test-set evaluation
 pred$metrics$accuracy
-pred$metrics$RMSE
 
-fc   <- predict(fit, W_unknown)        # forecast only, no y
-fc$GEBV
+fc   <- predict(fit, W_test)           # forecast only, no y_new
+head(fc$GEBV)
 
 insamp <- predict(fit)                 # in-sample reference
 insamp$metrics$R2

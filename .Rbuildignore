@@ -12,3 +12,8 @@
 
 # Rust build artifacts
 ^src/rust/target$
+
+# Generated at install time by configure via tools/config.R — not needed in tarball
+^src/Makevars$
+^src/Makevars\.win$
+^src/Makevars\.ucrt$

@@ -9,6 +9,7 @@ run_bayesr(
   y,
   wtw_diag,
   X = NULL,
+  marker_type = c("auto", "snp", "multiallelic"),
   pi_vec = c(0.95, 0.02, 0.02, 0.01),
   sigma2_e_init,
   sigma2_ah = NULL,
@@ -26,7 +27,8 @@ run_bayesr(
 }
 \arguments{
 \item{w}{Numeric design matrix (\code{n x p}). Typically the
-\code{$W_ah} element returned by \code{\link{construct_wah_matrix}}.}
+\code{$W_ah} element returned by \code{\link{construct_wah_matrix}}
+or the \code{$W} element returned by \code{\link{construct_snp_matrix}}.}
 
 \item{y}{Phenotype vector (length \code{n}). For binary traits use 0/1
 coding.}
@@ -37,6 +39,15 @@ coding.}
 supplied, the model is \eqn{y = X\alpha + W\beta + \mu + \epsilon}
 with a flat prior on \eqn{\alpha}. Do \strong{not} include a column
 of ones for the intercept; \eqn{\mu} is sampled separately.}
+
+\item{marker_type}{One of \code{"auto"} (default), \code{"snp"}, or
+\code{"multiallelic"}. \code{"auto"} resolves to
+\code{"multiallelic"}. Setting \code{"snp"} (a) rescales
+\code{variance_class} by \code{p / sum_2pq} so that the per-class
+variance denominator becomes \code{sum_2pq} instead of \code{p}, and
+(b) switches the default residual-variance prior to a flat
+\code{InvGamma(1, 0)} (\code{a0_e = 1, b0_e = 0}). Supplying
+\code{prior_params$a0_e} is always honoured.}
 
 \item{pi_vec}{Initial mixture proportions for the four classes (zero,
 small, medium, large). Must sum to 1. Default
@@ -50,10 +61,12 @@ small, medium, large). Must sum to 1. Default
 
 \item{sigma2_vec}{Optional explicit variance vector for EM; if
 \code{NULL} it is derived from \code{sigma2_ah}, \code{pi_vec}, and
-\code{prior_params$variance_class}.}
+\code{prior_params$variance_class} (with the
+\code{marker_type = "snp"} rescaling applied when applicable).}
 
 \item{prior_params}{Optional named list overriding defaults: \code{a0_e}
-(10), \code{a0_g} (10), \code{variance_class}
+(10 for \code{"multiallelic"}, 1 for \code{"snp"} when not supplied),
+\code{a0_g} (10), \code{variance_class}
 (\code{c(0, 0.001, 0.01, 0.1)}). \code{b0_e} and \code{b0_g} are
 computed internally.}
 
@@ -122,7 +135,7 @@ allele effects: \emph{zero}, \emph{small}, \emph{medium}, and
 \emph{large} effect classes with proportions \code{pi_vec} and class
 variances proportional to \code{sigma2_ah}. Use \code{method = "mcmc"}
 for full Bayesian posterior inference, or \code{method = "em"} for
-fast stochastic-EM point estimates (Gaussian only).
+fast stochastic-EM point estimates (Gaussian only) (Wang et al., 2015).
 }
 \details{
 \strong{Algorithm choice.} MCMC uses marginalised Gibbs sampling and
@@ -153,69 +166,68 @@ loops to avoid overwriting earlier folds.
 \code{b0_g = sigma2_ah * (a0_g - 2) / (a0_g * (1 - pi_vec[1]))} before
 calling the Rust engine. For EM, a \code{sigma2_vec} is derived as
 \code{variance_class * sigma2_ah / ((1 - pi_vec[1]) * p)}.
+
+\strong{Marker-type-aware parameterisation.} When \code{marker_type =
+"snp"} the wrapper rescales \code{variance_class} by
+\code{ncol(w) / sum(apply(w, 2, var))} before passing it to the engine.
+Combined with the engine's hardcoded division by \code{ncol(w)}, this
+substitutes \code{sum_2pq} for \code{p} as the denominator in the
+per-class variance, matching the alternative biallelic-SNP convention
+where rare markers contribute proportionally to allele-frequency
+variance. The default \code{marker_type = "multiallelic"} preserves
+the \code{1 / p} parameterisation bit-identically.
+
+\strong{Heritability.} \eqn{h^2} is computed as
+\code{var(W \%*\% beta_hat) / (var(W \%*\% beta_hat) + sigma2_e_hat)}
+regardless of \code{marker_type}, treating heritability as a
+trait-and-population property rather than a marker-panel property.
 }
 \examples{
 \dontrun{
-set.seed(42)
-n     <- 200
-mcmc  <- list(n_iter = 2000L, n_burn = 1000L, n_thin = 5L, seed = 123L)
-X_cov <- cbind(sex = rbinom(n, 1, 0.5), batch = rnorm(n))  # optional
+d <- load_data("small")
+mcmc <- list(n_iter = 1000L, n_burn = 500L, n_thin = 5L, seed = 123L)
 
-# ---- (A) SNP path ------------------------------------------------------
-n_snp <- 100
-X     <- matrix(rbinom(n * n_snp, 2, prob = runif(n_snp, 0.1, 0.5)),
-                n, n_snp)
-W_snp <- construct_snp_matrix(X)$W
-y     <- W_snp[, 1:5] \%*\% rnorm(5, 0, 0.5) + rnorm(n, 0, 1)
+# ---- (A) SNP path -----------------------------------------------------
+# Pair `encoding = "zscore"` on the matrix builder with
+# `marker_type = "snp"` on the fitter for the alternative biallelic-SNP
+# convention.
+snp_train <- construct_snp_matrix(d$snp[d$train_idx, ], encoding = "zscore")
+W_train   <- snp_train$W
+y_train   <- d$pheno$y_cont_qtl_snp[d$train_idx]
+X_train   <- model.matrix(~ sex - 1, data = d$pheno[d$train_idx, ])
 
 fit_snp <- run_bayesr(
-  w             = W_snp,
-  y             = y,
-  wtw_diag      = colSums(W_snp^2),
-  X             = X_cov,           # optional
-  sigma2_e_init = var(y) * 0.5,
-  sigma2_ah     = var(y) * 0.5,
-  mcmc_params   = mcmc
+  w             = W_train,
+  y             = y_train,
+  wtw_diag      = colSums(W_train^2),
+  X             = X_train,
+  marker_type   = "snp",
+  sigma2_e_init = var(y_train) * 0.5,
+  sigma2_ah     = var(y_train) * 0.5,
+  mcmc_params   = mcmc,
+  save_rds      = FALSE
 )
 summary(fit_snp)
 
-# ---- (B) Microhaplotype path ------------------------------------------
-n_block <- 50
-hap <- matrix(sample.int(3, n * n_block * 2, replace = TRUE), nrow = n)
-colnames(hap) <- paste0("hap_", rep(seq_len(n_block), each = 2))
-freq <- data.frame(
-  haplotype = paste0("hap_", rep(seq_len(n_block), each = 3)),
-  allele    = rep(1:3, n_block),
-  freq      = rep(c(0.5, 0.3, 0.2), n_block)
-)
-W_mh <- construct_wah_matrix(hap, colnames(hap), freq)$W_ah
-y_mh <- W_mh[, 1:5] \%*\% rnorm(5, 0, 0.5) + rnorm(n, 0, 1)
+# ---- (B) Microhaplotype path -----------------------------------------
+# d$mh is consumable directly by construct_wah_matrix via attr("block_id").
+# d$allele_freq is the frequency table required for the training call.
+bid    <- attr(d$mh, "block_id")
+hap_tr <- d$mh[d$train_idx, ]
+W_mh   <- construct_wah_matrix(hap_tr, bid, d$allele_freq)$W_ah
+y_mh   <- d$pheno$y_cont_qtl_mh[d$train_idx]
 
 fit_mh <- run_bayesr(
   w             = W_mh,
   y             = y_mh,
   wtw_diag      = colSums(W_mh^2),
-  X             = X_cov,           # optional
+  X             = X_train,
   sigma2_e_init = var(y_mh) * 0.5,
   sigma2_ah     = var(y_mh) * 0.5,
-  mcmc_params   = mcmc
+  mcmc_params   = mcmc,
+  save_rds      = FALSE
 )
 summary(fit_mh)
-
-# ---- Train/test split (scheme-agnostic) -------------------------------
-idx  <- sample(n, 0.8 * n)
-W_tr <- W_snp[idx, ]
-y_tr <- y[idx]
-fit  <- run_bayesr(
-  w             = W_tr,
-  y             = y_tr,
-  wtw_diag      = colSums(W_tr^2),
-  sigma2_e_init = var(y_tr) * 0.5,
-  sigma2_ah     = var(y_tr) * 0.5,
-  mcmc_params   = mcmc
-)
-pred <- predict(fit, W_snp[-idx, ], y[-idx])
-pred$metrics$accuracy
 }
 
 }
@@ -227,10 +239,10 @@ breeds with imputed high-density single nucleotide polymorphism
 panels. \emph{Journal of Dairy Science}, 95(7), 4114-4129.
 \doi{10.3168/jds.2011-5019}
 
-Meuwissen, T. H. E., Hayes, B. J., \& Goddard, M. E. (2001).
-Prediction of total genetic value using genome-wide dense marker
-maps. \emph{Genetics}, 157(4), 1819-1829.
-\doi{10.1093/genetics/157.4.1819}
+Wang, T., Chen, YP. P., \& Goddard, M. E. (2015).
+A computationally efficient algorithm for genomic prediction using
+a Bayesian model. \emph{Genet Sel Evol}, 47(34).
+\doi{10.1186/s12711-014-0082-4}
 }
 \seealso{
 \code{\link{run_bayesa}}, \code{\link{construct_wah_matrix}},

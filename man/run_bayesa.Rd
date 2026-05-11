@@ -9,6 +9,7 @@ run_bayesa(
   y,
   wtw_diag,
   X = NULL,
+  marker_type = c("auto", "snp", "multiallelic"),
   nu = 4.5,
   sigma2_g,
   sigma2_e_init,
@@ -25,7 +26,8 @@ run_bayesa(
 }
 \arguments{
 \item{w}{Numeric design matrix (\code{n x p}). Typically the
-\code{$W_ah} element returned by \code{\link{construct_wah_matrix}}.}
+\code{$W_ah} element returned by \code{\link{construct_wah_matrix}}
+or the \code{$W} element returned by \code{\link{construct_snp_matrix}}.}
 
 \item{y}{Phenotype vector (length \code{n}). Use 0/1 for binary traits.}
 
@@ -35,6 +37,15 @@ run_bayesa(
 supplied, the model is \eqn{y = X\alpha + W\beta + \mu + \epsilon}
 with a flat prior on \eqn{\alpha}. Do \strong{not} include a column
 of ones for the intercept; \eqn{\mu} is sampled separately.}
+
+\item{marker_type}{One of \code{"auto"} (default), \code{"snp"}, or
+\code{"multiallelic"}. \code{"auto"} resolves to
+\code{"multiallelic"}. Setting \code{"snp"} switches the default
+residual-variance prior to a flat \code{InvGamma(1, 0)}
+(\code{a0_e = 1, b0_e = 0}); the per-marker prior scale
+\code{s_squared} is unaffected because it already adapts via
+\code{sum_2pq}. Custom supply of \code{prior_params$a0_e} is always
+honoured and overrides the SNP-mode flat default.}
 
 \item{nu}{Degrees of freedom for the scaled inverse chi-squared prior on
 marker variances. Smaller values allow heavier tails. Must be > 2.
@@ -46,8 +57,11 @@ Default \code{4.5}.}
 \item{sigma2_e_init}{Initial residual variance. For binary traits fix
 at \code{1.0}.}
 
-\item{prior_params}{Optional named list. Only \code{a0_e} (default 10)
-is used; \code{b0_e} is derived as \code{sigma2_e_init * (a0_e - 1)}.}
+\item{prior_params}{Optional named list. Only \code{a0_e} is used;
+\code{b0_e} is derived as \code{sigma2_e_init * (a0_e - 1)}. Default
+\code{a0_e} is 10 for \code{marker_type = "multiallelic"} and 1 for
+\code{marker_type = "snp"} (with \code{b0_e = 0}); supplying
+\code{a0_e} explicitly always overrides the default.}
 
 \item{mcmc_params}{Optional named list: \code{n_iter} (40000),
 \code{n_burn} (20000), \code{n_thin} (10), \code{seed} (123).}
@@ -128,73 +142,59 @@ train-test splits, and k-fold CV uniformly. See
 \strong{Derived parameter.} The wrapper computes
 \code{s_squared = sigma2_g * (nu - 2) / (nu * sum(apply(w, 2, var)))}
 so the prior expectation of each marker variance equals
-\code{sigma2_g / sum_2pq}.
+\code{sigma2_g / sum_2pq}. This adapts to the supplied design matrix
+and is therefore the same formula under both
+\code{marker_type = "multiallelic"} and \code{marker_type = "snp"}.
+
+\strong{Heritability.} \eqn{h^2} is computed as
+\code{var(W \%*\% beta_hat) / (var(W \%*\% beta_hat) + sigma2_e_hat)}
+regardless of \code{marker_type}, treating heritability as a
+trait-and-population property rather than a marker-panel property.
 }
 \examples{
 \dontrun{
-set.seed(42)
-n     <- 200
-mcmc  <- list(n_iter = 2000L, n_burn = 1000L, n_thin = 5L, seed = 123L)
-X_cov <- cbind(sex = rbinom(n, 1, 0.5), batch = rnorm(n))  # optional
+d <- load_data("small")
+mcmc <- list(n_iter = 1000L, n_burn = 500L, n_thin = 5L, seed = 123L)
 
-# ---- (A) SNP path ------------------------------------------------------
-n_snp <- 100
-X     <- matrix(rbinom(n * n_snp, 2, prob = runif(n_snp, 0.1, 0.5)),
-                n, n_snp)
-W_snp <- construct_snp_matrix(X)$W
-y     <- W_snp[, 1:5] \%*\% rnorm(5, 0, 0.5) + rnorm(n, 0, 1)
+# ---- (A) SNP path -----------------------------------------------------
+snp_train <- construct_snp_matrix(d$snp[d$train_idx, ], encoding = "zscore")
+W_train   <- snp_train$W
+y_train   <- d$pheno$y_cont_qtl_snp[d$train_idx]
+X_train   <- model.matrix(~ sex - 1, data = d$pheno[d$train_idx, ])
 
 fit_snp <- run_bayesa(
-  w             = W_snp,
-  y             = y,
-  wtw_diag      = colSums(W_snp^2),
-  X             = X_cov,           # optional
+  w             = W_train,
+  y             = y_train,
+  wtw_diag      = colSums(W_train^2),
+  X             = X_train,
+  marker_type   = "snp",
   nu            = 4.5,
-  sigma2_g      = var(y) * 0.5,
-  sigma2_e_init = var(y) * 0.5,
-  mcmc_params   = mcmc
+  sigma2_g      = var(y_train) * 0.5,
+  sigma2_e_init = var(y_train) * 0.5,
+  mcmc_params   = mcmc,
+  save_rds      = FALSE
 )
 summary(fit_snp)
 
-# ---- (B) Microhaplotype path ------------------------------------------
-n_block <- 50
-hap <- matrix(sample.int(3, n * n_block * 2, replace = TRUE), nrow = n)
-colnames(hap) <- paste0("hap_", rep(seq_len(n_block), each = 2))
-freq <- data.frame(
-  haplotype = paste0("hap_", rep(seq_len(n_block), each = 3)),
-  allele    = rep(1:3, n_block),
-  freq      = rep(c(0.5, 0.3, 0.2), n_block)
-)
-W_mh <- construct_wah_matrix(hap, colnames(hap), freq)$W_ah
-y_mh <- W_mh[, 1:5] \%*\% rnorm(5, 0, 0.5) + rnorm(n, 0, 1)
+# ---- (B) Microhaplotype path -----------------------------------------
+# d$allele_freq is the frequency table required for the training call.
+bid    <- attr(d$mh, "block_id")
+hap_tr <- d$mh[d$train_idx, ]
+W_mh   <- construct_wah_matrix(hap_tr, bid, d$allele_freq)$W_ah
+y_mh   <- d$pheno$y_cont_qtl_mh[d$train_idx]
 
 fit_mh <- run_bayesa(
   w             = W_mh,
   y             = y_mh,
   wtw_diag      = colSums(W_mh^2),
-  X             = X_cov,           # optional
+  X             = X_train,
   nu            = 4.5,
   sigma2_g      = var(y_mh) * 0.5,
   sigma2_e_init = var(y_mh) * 0.5,
-  mcmc_params   = mcmc
+  mcmc_params   = mcmc,
+  save_rds      = FALSE
 )
 summary(fit_mh)
-
-# ---- Predict on a held-out test set -----------------------------------
-idx  <- sample(n, 0.8 * n)
-W_tr <- W_snp[idx, ]
-y_tr <- y[idx]
-fit  <- run_bayesa(
-  w             = W_tr,
-  y             = y_tr,
-  wtw_diag      = colSums(W_tr^2),
-  nu            = 4.5,
-  sigma2_g      = var(y_tr) * 0.5,
-  sigma2_e_init = var(y_tr) * 0.5,
-  mcmc_params   = mcmc
-)
-pred <- predict(fit, W_snp[-idx, ], y[-idx])
-pred$metrics$accuracy
 }
 
 }

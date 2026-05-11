@@ -1,14 +1,20 @@
 # examples/02_basic_binary_trait.R
 #
-# Binary trait example: BayesR and BayesA with Albert-Chib data augmentation
-# (probit link). Demonstrates response_type = "binary" plus the predict()
-# / summary() API. Binary metrics are reported on the OBSERVED (probability)
-# scale: bias is the calibration slope (1.0 = well-calibrated), RMSE is
-# Brier-like, AUC is rank-invariant.
+# Binary-trait BayesR + BayesA with Albert-Chib data augmentation (probit
+# link), using the multi-allelic microhaplotype (MH) marker representation.
+# Binary metrics are reported on the OBSERVED (probability) scale:
+#   bias  = calibration slope (1.0 = well-calibrated)
+#   RMSE  = Brier-like
+#   AUC   = rank-invariant, link-independent
+#
+# Uses the bundled demo dataset (load_data()): 10 full-sib families x 20
+# offspring, within-family 80/20 split, QTL effects at the allele level
+# (QTL@MH architecture). For SNP / SNP-vs-MH comparison see
+# examples/03_marker_QTL_congruency_theory.R.
 #
 # NEW fields exposed:
-#   fit$prob_train   — training-set predicted probabilities pnorm(GEBV)
-#   pred$prob        — test-set predicted probabilities pnorm(GEBV)
+#   fit$prob_train   -- training-set predicted probabilities pnorm(GEBV)
+#   pred$prob        -- test-set predicted probabilities pnorm(GEBV)
 #   pred$metrics$bias = calibration slope on observed scale
 #
 # Requirements: masbayes, pROC
@@ -16,42 +22,46 @@
 
 library(masbayes)
 
-set.seed(42)
-n <- 200
-p <- 100
+# ── Load bundled demo data and build MH design matrix W_mh ──────────────────
+d <- load_data()
+bid      <- attr(d$mh, "block_id")
+wah_full <- construct_wah_matrix(d$mh, bid, d$allele_freq, NULL, TRUE)
+W        <- wah_full$W_ah
+n <- nrow(W)
 
-# Simulate genotype matrix (or substitute construct_snp_matrix(X)$W for SNP dosage)
-W <- matrix(rnorm(n * p), n, p)
-
-# Simulate continuous liability and threshold to binary
-liability <- W[, 1:5] %*% rnorm(5, 0, 0.5) + rnorm(n, 0, 1)
-y_bin     <- as.numeric(liability > median(liability))   # prevalence ~50%
+# y_bin is stored as integer in the demo Rds -- coerce to double because the
+# Rust MCMC kernel expects numeric (not integer) input.
+y_bin <- as.numeric(d$pheno$y_bin_qtl_mh)
+X     <- model.matrix(~ sex - 1, data = d$pheno)
 
 cat(sprintf("Prevalence: %.3f | n_cases=%d | n_controls=%d\n",
             mean(y_bin), sum(y_bin), sum(1 - y_bin)))
 
-wtw <- colSums(W^2)
+wtw <- colSums(W ^ 2)
 
 mcmc_p <- list(n_iter = 2000L, n_burn = 1000L, n_thin = 5L, seed = 123L)
 
 # ── BayesR (binary) ──────────────────────────────────────────────────────────
 fit_r <- run_bayesr(
   w             = W,
+  X             = X,
   y             = y_bin,
   wtw_diag      = wtw,
   pi_vec        = c(0.90, 0.05, 0.03, 0.02),
   sigma2_e_init = 1.0,                        # liability scale
   sigma2_ah     = 1.0,                        # liability scale
-  prior_params  = list(a0_e=10, a0_g=10, variance_class=c(0, 0.01, 0.1, 1)),
+  prior_params  = list(a0_e = 10, a0_g = 10,
+                       variance_class = c(0, 0.01, 0.1, 1)),
   mcmc_params   = mcmc_p,
   method        = "mcmc",
-  response_type = "binary",                   # Albert-Chib data augmentation
+  response_type = "binary",                   # Albert-Chib augmentation
   save_rds      = FALSE
 )
 
 # ── BayesA (binary) ──────────────────────────────────────────────────────────
 fit_a <- run_bayesa(
   w             = W,
+  X             = X,
   y             = y_bin,
   wtw_diag      = wtw,
   nu            = 4.5,
@@ -65,9 +75,6 @@ fit_a <- run_bayesa(
 )
 
 # ── New field: fit$prob_train (binary only) ────────────────────────────────
-# Probability predictions for training set, derived from the liability GEBV
-# via probit inverse link. Useful for plotting / threshold tuning without
-# calling predict(fit).
 cat(sprintf("\nfit_r$prob_train range: [%.3f, %.3f]  median=%.3f\n",
             min(fit_r$prob_train), max(fit_r$prob_train),
             median(fit_r$prob_train)))
@@ -95,11 +102,29 @@ cat(sprintf("sigma2_e mean (should be ~1.0): %.4f\n",
             mean(fit_r$sigma2_e_samples)))
 
 # ── Train/test split + AUC + calibration on hold-out ──────────────────────
-idx_tr <- sample(n, 0.8 * n)
-fit_tr <- run_bayesr(
-  w             = W[idx_tr, ],
-  y             = y_bin[idx_tr],
-  wtw_diag      = colSums(W[idx_tr, ]^2),
+# Bundled within-family split: 16 train + 4 test per family. Rebuild W_mh
+# on the train set with d$allele_freq, then reuse the training reference
+# structure for the test set so columns stay aligned.
+idx_train <- d$train_idx
+idx_test  <- d$test_idx
+
+wah_train  <- construct_wah_matrix(d$mh[idx_train, ], bid,
+                                   d$allele_freq, NULL, TRUE)
+W_train    <- wah_train$W_ah
+ref_train  <- list(allele_info     = wah_train$allele_info,
+                   dropped_alleles = wah_train$dropped_alleles)
+W_test     <- construct_wah_matrix(d$mh[idx_test, ], bid,
+                                   NULL, ref_train, TRUE)$W_ah
+X_train    <- X[idx_train, , drop = FALSE]
+X_test     <- X[idx_test, , drop = FALSE]
+y_train    <- y_bin[idx_train]
+y_test     <- y_bin[idx_test]
+
+fit_train <- run_bayesr(
+  w             = W_train,
+  X             = X_train,
+  y             = y_train,
+  wtw_diag      = colSums(W_train ^ 2),
   pi_vec        = c(0.90, 0.05, 0.03, 0.02),
   sigma2_e_init = 1.0,
   sigma2_ah     = 1.0,
@@ -109,25 +134,25 @@ fit_tr <- run_bayesr(
   save_rds      = FALSE,
   verbose       = FALSE
 )
-pred_te <- predict(fit_tr, W[-idx_tr, ], y_bin[-idx_tr])
+pred_test <- predict(fit_train, W_test, y_test, X_new = X_test)
 
-# pred_te$prob is the NEW probability field; pred_te$GEBV is liability
 cat(sprintf("\n-- Hold-out (BayesR test set, observed/probability scale) --\n"))
-cat(sprintf("  AUC          : %.3f\n", pred_te$metrics$AUC))
-cat(sprintf("  RMSE (~Brier): %.3f\n", pred_te$metrics$RMSE))
-cat(sprintf("  bias (calib) : %.3f\n", pred_te$metrics$bias))
+cat(sprintf("  AUC          : %.3f\n", pred_test$metrics$AUC))
+cat(sprintf("  RMSE (~Brier): %.3f\n", pred_test$metrics$RMSE))
+cat(sprintf("  bias (calib) : %.3f\n", pred_test$metrics$bias))
 cat(sprintf("  prob range   : [%.3f, %.3f]\n",
-            min(pred_te$prob), max(pred_te$prob)))
+            min(pred_test$prob), max(pred_test$prob)))
 
 # ════════════════════════════════════════════════════════════════════════════
-# Visualisation — three panels (ROC + GEBV by class + calibration plot)
+# Visualisation -- three panels (ROC + GEBV by class + calibration plot)
 # ════════════════════════════════════════════════════════════════════════════
 
 gebv_r <- fit_r$GEBV
 gebv_a <- fit_a$GEBV
 
-# Helper: decile-binned calibration curve
-.calibration_curve <- function(y, prob, n_bins = 10) {
+# Helper: decile-binned calibration curve. n_bins=5 chosen because n=200
+# and the demo class balance produces sparse decile bins at n_bins=10.
+.calibration_curve <- function(y, prob, n_bins = 5) {
   qs    <- quantile(prob, probs = seq(0, 1, length.out = n_bins + 1),
                     na.rm = TRUE)
   qs[1] <- qs[1] - 1e-9
@@ -138,14 +163,14 @@ gebv_a <- fit_a$GEBV
 
 par(mfrow = c(1, 3))
 
-# Panel 1 — ROC (rank-based, identical whether scored on liability or prob)
+# Panel 1 -- ROC (rank-based, identical whether scored on liability or prob)
 pROC::plot.roc(pROC::roc(y_bin, gebv_r, quiet = TRUE),
                main = sprintf("BayesR ROC (AUC=%.3f)", in_r$metrics$AUC))
 pROC::plot.roc(pROC::roc(y_bin, gebv_a, quiet = TRUE),
                main = sprintf("BayesA ROC (AUC=%.3f)", in_a$metrics$AUC),
                add  = FALSE)
 
-# Panel 2 — Liability GEBV by class
+# Panel 2 -- Liability GEBV by class
 boxplot(gebv_r ~ y_bin,
         names = c("Control (0)", "Case (1)"),
         main  = sprintf("BayesR GEBV (liability)\nbias=%.3f",
@@ -153,9 +178,7 @@ boxplot(gebv_r ~ y_bin,
         ylab  = "Liability scale GEBV",
         col   = c("lightblue", "lightcoral"))
 
-# Panel 3 — Calibration plot (NEW): probability vs observed proportion
-# A perfectly calibrated model lies on the diagonal y = x; the slope of
-# this curve corresponds to pred_te$metrics$bias / in_*$metrics$bias.
+# Panel 3 -- Calibration plot: probability vs observed proportion
 cal_r <- .calibration_curve(y_bin, fit_r$prob_train)
 cal_a <- .calibration_curve(y_bin, fit_a$prob_train)
 plot(cal_r$p, cal_r$y, type = "b", lwd = 2, pch = 19, col = "steelblue",
@@ -174,4 +197,6 @@ legend("topleft",
 
 par(mfrow = c(1, 1))
 
+cat(sprintf("\nW_mh dimensions (full): %d x %d (allele-level)\n",
+            nrow(W), ncol(W)))
 cat("\nDone.\n")
