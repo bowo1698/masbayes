@@ -7,6 +7,11 @@
 summary.masbayes_bayesr <- function(object, top_k = 10L, ...) {
   out <- summarise_masbayes_common(object, top_k = top_k)
   out$variance_components <- object$variance_components  # 4-class structure
+  # GWAS fields propagate only when run_bayesr() was called with a `map`
+  # argument; otherwise NULL keeps the printed summary byte-identical to
+  # pre-v0.5.0 output.
+  out$gwas      <- object$gwas
+  out$gwas_meta <- object$gwas_meta
   class(out) <- c("summary.masbayes_bayesr", "summary.masbayes")
   out
 }
@@ -167,6 +172,25 @@ print.summary.masbayes <- function(x, ...) {
   cat(sprintf("\n Top %d alleles by |beta_hat|\n", nrow(x$top_alleles)))
   cat(" ----------------------------------------\n")
   print(x$top_alleles, row.names = FALSE)
+
+  # GWAS block — only when run_bayesr() was called with a `map` argument.
+  # Renders the top 5 windows by WPPA (full table lives in fit$gwas).
+  if (!is.null(x$gwas)) {
+    meta <- x$gwas_meta
+    win_spec <- if (!is.null(meta$windsize)) {
+      sprintf("windsize = %g bp", meta$windsize)
+    } else {
+      sprintf("windnum = %d", as.integer(meta$windnum))
+    }
+    n_top    <- min(5L, nrow(x$gwas))
+    ord_idx  <- order(x$gwas$WPPA, decreasing = TRUE)[seq_len(n_top)]
+    top_gwas <- x$gwas[ord_idx, ]
+    cat(sprintf(
+      "\n GWAS (top %d of %d windows, %s, marker_type = %s)\n",
+      n_top, nrow(x$gwas), win_spec, meta$marker_type))
+    cat(" ----------------------------------------\n")
+    print(top_gwas, row.names = FALSE)
+  }
 
   cat("\n============================================================\n\n")
   invisible(x)

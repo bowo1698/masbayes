@@ -17,3 +17,7 @@
 ^src/Makevars$
 ^src/Makevars\.win$
 ^src/Makevars\.ucrt$
+
+# Tests are kept local-only and not shipped in the tarball;
+# run them via the /testthat skill from the dev tree.
+^tests$

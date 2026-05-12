@@ -439,8 +439,66 @@ This reduces computational complexity from $O(np)$ to $O(n)$ per marker update.
 
 ## Quick start
 - [Basic continuous trait example](examples/01_basic_continuous.R)
-- [Binary trait with Albert-Chib](examples/02_binary_trait.R)  
+- [Binary trait with Albert-Chib](examples/02_binary_trait.R)
 - [SNP vs MH simulation proof-of-concept](examples/03_snp_vs_mh_simulation.R)
+- [GWAS (PIP + WPPA) with BayesR](examples/04_gwas.R)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+---
+
+## GWAS
+
+Since **v0.5.0**, `run_bayesr()` can produce per-allele PIP, per-block PIP,
+and per-window WPPA in the same call that fits the model. Pass a `map`
+together with exactly one of `windsize` (bp) or `windnum` (markers per
+window). The Rust kernel is unchanged; PIP and WPPA are derived in R from
+the existing `gamma_samples` matrix.
+
+```r
+# SNP path -------------------------------------------------------------
+map_snp <- data.frame(
+  SNP   = paste0("M", 1:100),
+  CHROM = rep(1:4, each = 25),
+  POS   = rep(seq(1e6, by = 1e5, length.out = 25), 4)
+)
+fit <- run_bayesr(
+  w = W, y = y, wtw_diag = colSums(W^2),
+  sigma2_e_init = var(y) * 0.5, sigma2_ah = var(y) * 0.5,
+  marker_type = "snp",
+  map = map_snp, windsize = 5e5
+)
+
+head(fit$gwas[order(-fit$gwas$WPPA), ], 5)
+#>     Wind Chr N   Start     End WPPA
+#>   wind1   1 6 1000000 1500000 1.00
+#>   wind9   2 6 2800000 3300000 1.00
+#>  wind16   4 6 1000000 1500000 1.00
+#>   wind6   2 6 1000000 1500000 0.98
+#>  wind19   4 6 2800000 3300000 0.98
+
+length(fit$pip)        # 100  — per-allele/per-SNP PIP
+length(fit$pip_block)  # 100  — per-block PIP (same as pip for SNP)
+nrow(fit$gwas)         # 20   — windows
+```
+
+For **multi-allelic (MH) markers**, supply a per-block map with columns
+`block_id`, `chr`, `start_pos`, `end_pos` — the same schema that
+[`maspipeline`](https://github.com/bowo1698/maspipeline) emits in
+`microhaplotype_coordinates.csv`, so production pipelines can pass it
+through with no translation. PIP is reported at allele resolution; a
+separate `fit$pip_block` aggregates to the block level for plotting and
+QTL recovery.
+
+Notes:
+
+- `run_bayesa()` accepts the same arguments for API symmetry but errors
+  out — BayesA has no zero-effect mass and PIP / WPPA are ill-defined.
+- GWAS requires `method = "mcmc"` (EM has no posterior samples).
+- `map = NULL` (default) produces a fit byte-identical to v1.4.0 output.
+
+See [`examples/04_gwas.R`](examples/04_gwas.R) for a complete runnable
+demo using `load_data()` on both SNP and MH paths.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -546,10 +604,11 @@ If you use `masbayes` in your research, please cite:
 
 ## Vesion Update
 
-- **v1.3.1**: `verbose` argument now also gates Rust-side per-iteration logs (start banner, Iter X/Y diagnostics, ESS/Geweke, completion).
-- **v1.3.0**: Add fixed-effects support (`X` parameter); `predict()` accepts `X_new`; backward-compatible (X=NULL bitwise-identical to v1.2.0).
-- **v1.2.0**: Drop public-facing `wty` parameter; `yadj` refactor saves 2 mat-vec products per MCMC iteration (~30% speedup).
-- **v1.1.0**: Add S3 class system, `summary()`/`predict()` methods, auto-save RDS, `construct_snp_matrix()`, post-fit metrics.
+- **v0.5.0**: GWAS surface on `run_bayesr()` — per-allele PIP, per-block PIP, and per-window WPPA via new `map` / `windsize` / `windnum` arguments. Pure R post-fit addition; Rust kernel untouched. `map = NULL` keeps output byte-identical to v1.4.0. `run_bayesa()` accepts the same args but errors (BayesA has no zero-effect mass).
+- **v0.4.1**: `verbose` argument now also gates Rust-side per-iteration logs (start banner, Iter X/Y diagnostics, ESS/Geweke, completion).
+- **v0.3.0**: Add fixed-effects support (`X` parameter); `predict()` accepts `X_new`; backward-compatible (X=NULL bitwise-identical to v1.2.0).
+- **v0.2.0**: Drop public-facing `wty` parameter; `yadj` refactor saves 2 mat-vec products per MCMC iteration (~30% speedup).
+- **v0.1.0**: Add S3 class system, `summary()`/`predict()` methods, auto-save RDS, `construct_snp_matrix()`, post-fit metrics.
 
 ---
 

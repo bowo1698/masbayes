@@ -21,7 +21,10 @@ run_bayesa(
   fold_id = 0L,
   save_rds = FALSE,
   save_path = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  map = NULL,
+  windsize = NULL,
+  windnum = NULL
 )
 }
 \arguments{
@@ -87,6 +90,12 @@ directory.}
 progress (start banner, Iter X/Y diagnostics, ESS / Geweke,
 completion) to stderr. Default \code{FALSE} keeps the Rust side
 silent. The brief R post-fit summary prints regardless.}
+
+\item{map, windsize, windnum}{Accepted for API symmetry with
+\code{\link{run_bayesr}} but \strong{not supported} for BayesA. Passing
+any non-NULL \code{map} raises an error; BayesA has no zero-effect
+mixture mass, so PIP and WPPA are ill-defined for it. Use
+\code{\link{run_bayesr}} for GWAS-style posterior summaries.}
 }
 \value{
 An object of class \code{c("masbayes_bayesa", "masbayes")} — a

@@ -1,7 +1,7 @@
 Package: masbayes
 Title: Bayesian models for genomic prediction based on multi-allelic markers
-Version: 0.3.1
-Date: 2026-05-11
+Version: 0.5.0
+Date: 2026-05-12
 Authors@R: c(
     person("Agus", "Wibowo", 
            email = "aguswibowo1698@gmail.com", 
@@ -21,12 +21,12 @@ Depends:
     R (>= 4.4.0)
 Imports:
     coda,
-    dplyr,
-    pROC,
     stats,
     utils
 Suggests:
+    pROC,
     testthat (>= 3.0.0)
 RoxygenNote: 7.3.2
 Config/rextendr/version: 0.4.2
+Config/testthat/edition: 3
 SystemRequirements: Cargo (Rust's package manager), rustc >= 1.78, xz

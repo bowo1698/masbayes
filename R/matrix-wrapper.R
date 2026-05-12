@@ -119,6 +119,11 @@ construct_wah_matrix <- function(hap_matrix,
       freq             = result$allele_info$freq,
       stringsAsFactors = FALSE
     )
+    # Attach per-column block_id as an attribute so downstream consumers
+    # (e.g. run_bayesr() GWAS path, v0.5.0+) can identify MH vs SNP design
+    # matrices via attr(W_ah, "block_id") without re-passing allele_info.
+    # Pure additive: existing callers that ignored attributes are unaffected.
+    attr(result$W_ah, "block_id") <- result$allele_info$block
   }
 
   if (length(result$dropped_alleles) > 0) {

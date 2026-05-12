@@ -19,6 +19,13 @@ print.masbayes <- function(x, ...) {
               x$h2, x$sigma2_g, x$sigma2_e))
   if (!is.null(x$rds_path))
     cat(sprintf("  saved: %s\n", x$rds_path))
-  cat("  Use summary(x) for full report; predict(x, newdata, y_new) to evaluate.\n")
+  # One-line GWAS indicator — only present when run_bayesr() was called
+  # with a `map` argument (BayesR-only path).
+  if (!is.null(x$gwas)) {
+    cat(sprintf("  GWAS: %d windows, top WPPA = %.3f\n",
+                nrow(x$gwas), max(x$gwas$WPPA)))
+  }
+  cat("  Use summary(x) for full report; ",
+      "predict(x, newdata, y_new) to evaluate.\n", sep = "")
   invisible(x)
 }

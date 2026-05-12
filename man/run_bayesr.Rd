@@ -22,7 +22,10 @@ run_bayesr(
   fold_id = 0L,
   save_rds = FALSE,
   save_path = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  map = NULL,
+  windsize = NULL,
+  windnum = NULL
 )
 }
 \arguments{
@@ -96,6 +99,26 @@ progress (start banner, Iter X/Y diagnostics, ESS / Geweke,
 completion) to stderr. Default \code{FALSE} keeps the Rust side
 silent. The brief R post-fit summary (model, runtime, \eqn{h^2},
 ESS, Geweke) prints regardless.}
+
+\item{map}{Optional GWAS map. Supplying \code{map} (together with
+exactly one of \code{windsize} or \code{windnum}) computes per-allele
+PIP, per-block PIP, and per-window WPPA from the posterior samples
+and attaches them to the fit. For SNP markers, supply a data.frame
+with columns \code{SNP}, \code{CHROM}, \code{POS} (one row per W
+column). For multi-allelic (MH) markers, supply a data.frame with
+columns \code{block_id}, \code{chr}, \code{start_pos}, \code{end_pos}
+(one row per unique block_id in \code{attr(w, "block_id")}); this
+matches the schema of \code{microhaplotype_coordinates.csv} from the
+\code{maspipeline} tool. Marker type is auto-detected from
+\code{attr(w, "block_id")}. \code{map = NULL} (default) leaves the
+fit object byte-identical to v1.4.0 output.}
+
+\item{windsize}{Window size in base pairs for WPPA. Mutually exclusive
+with \code{windnum}. Required when \code{map} is supplied unless
+\code{windnum} is.}
+
+\item{windnum}{Number of consecutive markers (or MH blocks) per window
+for WPPA. Mutually exclusive with \code{windsize}.}
 }
 \value{
 An object of class \code{c("masbayes_bayesr", "masbayes")} — a
@@ -127,6 +150,24 @@ An object of class \code{c("masbayes_bayesr", "masbayes")} — a
     each class plus the mixture proportions \code{pi}.}
   \item{\code{rds_path}}{Path of the saved RDS file, or \code{NULL}
     when \code{save_rds = FALSE}.}
+  \item{\code{pip}}{(GWAS only, since v0.5.0) Per-allele posterior
+    inclusion probability, length \code{ncol(w)}. Computed as
+    \code{colMeans(gamma_samples != 0)}. \code{NULL} unless \code{map}
+    was supplied.}
+  \item{\code{pip_block}}{(GWAS only) Per-block PIP, length
+    \code{nrow(map)}. For SNP markers, identical to \code{pip}. For
+    multi-allelic markers, a block is "active" in a posterior sample
+    if at least one of its alleles has \code{gamma != 0}. \code{NULL}
+    unless \code{map} was supplied.}
+  \item{\code{gwas}}{(GWAS only) Data frame with columns \code{Wind},
+    \code{Chr}, \code{N}, \code{Start}, \code{End}, \code{WPPA}. Each
+    row is one physical window; \code{WPPA} is the window posterior
+    probability of association, i.e. the fraction of posterior samples
+    in which at least one marker / block in the window has non-zero
+    effect.}
+  \item{\code{gwas_meta}}{(GWAS only) List capturing the call:
+    \code{windsize}, \code{windnum}, \code{midpoint_convention},
+    \code{marker_type}, \code{n_windows}.}
 }
 }
 \description{
@@ -210,6 +251,36 @@ the \code{1 / p} parameterisation bit-identically.
 the Statistical model section above is applied regardless of
 \code{marker_type}.
 }
+\section{GWAS}{
+
+Supplying a \code{map} together with exactly one of \code{windsize} or
+\code{windnum} turns \code{run_bayesr()} into a one-shot GWAS engine
+alongside genomic prediction. The Rust kernel is untouched; PIP and
+WPPA are derived from the existing \code{gamma_samples} matrix.
+
+\strong{Map schema.} For \strong{SNP} markers, \code{map} is a
+\code{data.frame} with columns \code{SNP} (character), \code{CHROM}
+(integer), \code{POS} (integer), one row per W column.
+For \strong{multi-allelic (MH)} markers, \code{map} has columns
+\code{block_id} (character), \code{chr} (integer), \code{start_pos}
+(integer), \code{end_pos} (integer), one row per unique block_id in
+\code{attr(w, "block_id")}. The MH schema matches the
+\code{microhaplotype_coordinates.csv} produced by the
+\code{maspipeline} tool, so production pipelines can pass it through
+without translation.
+
+\strong{Windows.} \code{windsize} (bp) closes a window when the next
+marker's position exceeds the window start by \code{windsize}.
+\code{windnum} groups \code{windnum} consecutive markers / blocks per
+window. Windows never cross chromosome boundaries.
+
+\strong{Constraints.} GWAS requires \code{method = "mcmc"} (EM has no
+posterior samples). \code{\link{run_bayesa}} accepts the same
+arguments for API symmetry but errors out (BayesA has no zero-effect
+mixture mass, so PIP / WPPA are ill-defined). \code{map = NULL}
+(default) leaves the fit object byte-identical to pre-v0.5.0 output.
+}
+
 \examples{
 \dontrun{
 d <- load_data("small")
@@ -244,6 +315,31 @@ bid    <- attr(d$mh, "block_id")
 hap_tr <- d$mh[d$train_idx, ]
 W_mh   <- construct_wah_matrix(hap_tr, bid, d$allele_freq)$W_ah
 y_mh   <- d$pheno$y_cont_qtl_mh[d$train_idx]
+
+# ---- (C) GWAS (BayesR-only) ------------------------------------------
+# Supply `map` together with `windsize` (bp) or `windnum` (markers per
+# window) to compute per-allele PIP, per-block PIP, and per-window WPPA.
+# Schema for SNP map: SNP / CHROM / POS (one row per W column).
+# The map's row order does not need to be pre-sorted.
+map_snp <- data.frame(
+  SNP   = paste0("M", seq_len(ncol(W_train))),
+  CHROM = rep(seq_len(4L), each = ncol(W_train) \%/\% 4L),
+  POS   = rep(seq(1e6, by = 1e5,
+                  length.out = ncol(W_train) \%/\% 4L), 4L)
+)
+fit_gwas <- run_bayesr(
+  w             = W_train,
+  y             = y_train,
+  wtw_diag      = colSums(W_train^2),
+  marker_type   = "snp",
+  sigma2_e_init = var(y_train) * 0.5,
+  sigma2_ah     = var(y_train) * 0.5,
+  mcmc_params   = mcmc,
+  save_rds      = FALSE,
+  map           = map_snp,
+  windsize      = 5e5
+)
+head(fit_gwas$gwas[order(-fit_gwas$gwas$WPPA), ], 5)
 
 fit_mh <- run_bayesr(
   w             = W_mh,

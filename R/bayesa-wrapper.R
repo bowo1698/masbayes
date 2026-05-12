@@ -110,6 +110,11 @@
 #'   progress (start banner, Iter X/Y diagnostics, ESS / Geweke,
 #'   completion) to stderr. Default \code{FALSE} keeps the Rust side
 #'   silent. The brief R post-fit summary prints regardless.
+#' @param map,windsize,windnum Accepted for API symmetry with
+#'   \code{\link{run_bayesr}} but \strong{not supported} for BayesA. Passing
+#'   any non-NULL \code{map} raises an error; BayesA has no zero-effect
+#'   mixture mass, so PIP and WPPA are ill-defined for it. Use
+#'   \code{\link{run_bayesr}} for GWAS-style posterior summaries.
 #'
 #' @return An object of class \code{c("masbayes_bayesa", "masbayes")} — a
 #'   list with the following key fields:
@@ -208,7 +213,10 @@ run_bayesa <- function(w, y, wtw_diag,
                        fold_id       = 0L,
                        save_rds      = FALSE,
                        save_path     = NULL,
-                       verbose       = FALSE) {
+                       verbose       = FALSE,
+                       map           = NULL,
+                       windsize      = NULL,
+                       windnum       = NULL) {
 
   call          <- match.call()
   method        <- match.arg(method)
@@ -219,6 +227,16 @@ run_bayesa <- function(w, y, wtw_diag,
 
   if (is_binary && method == "em") {
     stop("response_type = 'binary' is only supported for method = 'mcmc'")
+  }
+
+  # GWAS is BayesR-only. BayesA places a continuous prior on every marker
+  # variance (Scaled-Inv-Chi-Sq), so the mixture indicator that defines PIP
+  # in BayesR does not exist here. Reject up front rather than silently
+  # discarding the user's GWAS arguments.
+  if (!is.null(map) || !is.null(windsize) || !is.null(windnum)) {
+    stop("GWAS is only supported for run_bayesr(); BayesA has no ",
+         "zero-effect mass required for PIP/WPPA. Use run_bayesr() instead.",
+         call. = FALSE)
   }
 
   # FFI integer contract: Rust calls `.as_integer().unwrap()` on fold_id and

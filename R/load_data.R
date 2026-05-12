@@ -87,6 +87,24 @@
 #'   \item{\code{test_idx}}{Integer vector -- row indices for the test set.
 #'     Length 40 (large) / 20 (small). Every test individual has its
 #'     full-sibs in \code{train_idx}.}
+#'   \item{\code{map_snp}}{Data frame with one row per SNP. Columns
+#'     \code{SNP} (character), \code{CHROM} (integer 1..5), \code{POS}
+#'     (integer base-pair coordinate). Aligns 1-to-1 with the columns
+#'     of \code{snp} and with the design matrix from
+#'     \code{\link{construct_snp_matrix}()}. Ready to pass as the
+#'     \code{map} argument to \code{\link{run_bayesr}()} for GWAS.
+#'     Dimensions: 100 x 3 (large) / 50 x 3 (small).}
+#'   \item{\code{map_mh}}{Data frame with one row per MH block. Columns
+#'     \code{block_id} (character, matches
+#'     \code{unique(attr(mh, "block_id"))}), \code{chr}, \code{start_pos},
+#'     \code{end_pos}, \code{n_snps} (integers). Schema matches
+#'     \code{microhaplotype_coordinates.csv} produced by the
+#'     \code{maspipeline} tool, so production pipelines can pass
+#'     \code{map_mh} unchanged into \code{\link{run_bayesr}()}.
+#'     Physical positions are synthetic (5 chromosomes, 100 kb intra-chr
+#'     SNP spacing, 1 Mb chr base offset); each block spans the two
+#'     consecutive SNPs that built it. Dimensions: 50 x 5 (large) /
+#'     25 x 5 (small).}
 #' }
 #'
 #' @examples

@@ -41,3 +41,6 @@ src/Makevars.ucrt
 *~
 *.swp
 *.swo
+
+# the suite is run on-demand via the /testthat skill.
+tests/
