@@ -3,11 +3,11 @@
 #' Returns a small, deterministic genomic dataset bundled with the package,
 #' intended for examples, vignettes, and tests.
 #'
-#' Two scales are bundled: \code{size = "large"} (default; n=200, p=400,
-#' n_qtl=50) and \code{size = "small"} (n=100, p=200, n_qtl=25) that run
+#' Two scales are bundled: \code{size = "large"} (default; n=200, p=100,
+#' n_qtl=10) and \code{size = "small"} (n=100, p=50, n_qtl=5) that run
 #' during \code{R CMD check --examples}.
-#' Both have the same family structure (10 full-sib families) and the same
-#' 9-field shape, so consumer code does not have to branch on size.
+#' Both have the same family structure (10 full-sib families) and the
+#' same 12-field shape, so consumer code does not have to branch on size.
 #'
 #' The data simulates a small breeding-style population: 10 full-sib
 #' families (each from one sire-dam founder pair). The founders are kept in
@@ -49,13 +49,13 @@
 #'   \item{\code{snp}}{Integer matrix \eqn{n \times p} of biallelic SNP
 #'     dosages (values \code{0/1/2}). Rownames are individual IDs
 #'     \code{IND001..INDn}; colnames are \code{SNP001..SNPp}.
-#'     Dimensions: 200 x 400 (large) / 100 x 200 (small).}
+#'     Dimensions: 200 x 100 (large) / 100 x 50 (small).}
 #'   \item{\code{mh}}{Integer matrix \eqn{n \times (2 \cdot n_{blocks})} of
 #'     microhaplotype allele codes. Columns alternate strand 1 / strand 2
 #'     per block. The \code{attr(mh, "block_id")} attribute maps each column
 #'     to its block. Consumable directly by
-#'     \code{\link{construct_wah_matrix}()}. Dimensions: 200 x 160 with 80
-#'     blocks (large) / 100 x 80 with 40 blocks (small).}
+#'     \code{\link{construct_wah_matrix}()}. Dimensions: 200 x 100 with 50
+#'     blocks (large) / 100 x 50 with 25 blocks (small).}
 #'   \item{\code{allele_freq}}{List with parallel vectors
 #'     \code{haplotype}, \code{allele}, \code{freq} -- the training-style
 #'     allele frequency table required by
@@ -73,7 +73,7 @@
 #'     offspring with their sire/dam recorded. Columns: \code{id},
 #'     \code{sire}, \code{dam}.}
 #'   \item{\code{qtl}}{List with \code{snp_idx}, \code{mh_idx},
-#'     \code{effects_snp}, \code{effects_mh} (each length 50 for large, 25
+#'     \code{effects_snp}, \code{effects_mh} (each length 10 for large, 5
 #'     for small; effects drawn from \code{rnorm}, unit-normalised).}
 #'   \item{\code{meta}}{List with \code{n}, \code{n_snp}, \code{n_blocks},
 #'     \code{n_snp_per_block}, \code{n_qtl}, \code{n_families},
