@@ -11,7 +11,21 @@
 #' only evaluates the trained model on whatever data it receives.
 #'
 #' @details
-#' Three usage modes:
+#' \strong{GEBV formula (direct marker effects).}
+#' The genomic estimated breeding value for individual \eqn{i} is obtained
+#' by summing the posterior mean allele effects across all loci:
+#' \deqn{\hat{g}_i = \hat{\mu} + \mathbf{w}_i^\top \hat{\boldsymbol{\beta}}}
+#' where \eqn{\mathbf{w}_i} is row \eqn{i} of the marker design matrix \eqn{W}
+#' and \eqn{\hat{\boldsymbol{\beta}}} is the vector of posterior mean allele
+#' effects. When fixed effects were supplied to the fitting function:
+#' \deqn{\hat{g}_i = \hat{\mu} + \mathbf{x}_i^\top \hat{\boldsymbol{\alpha}} + \mathbf{w}_i^\top \hat{\boldsymbol{\beta}}}
+#' For binary traits, the liability-scale GEBV is converted to a predicted
+#' probability via the probit inverse link:
+#' \deqn{P(y_i = 1) = \Phi(\hat{g}_i)}
+#' This is identical for SNP and multi-allelic (microhaplotype) markers;
+#' only the construction of \eqn{W} differs between the two marker types.
+#'
+#' \strong{Three usage modes.}
 #' \describe{
 #'   \item{\strong{In-sample (full-fit)}}{Call \code{predict(fit)}. Returns
 #'     training GEBVs and the in-sample metrics already stored in the fit

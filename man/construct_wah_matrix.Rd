@@ -56,6 +56,22 @@ alleles become columns of \eqn{W_{\alpha h}} encoded with the Da (2015)
 rule. A frequency-weighted projection enforces the sum-to-zero
 constraint \eqn{E[W_k] = 0}.
 
+\strong{W_ah encoding (Da, 2015).}
+For individual \eqn{i} with phased alleles \eqn{(A_i, A_j)} at haplotype
+block \eqn{h}, the column corresponding to non-baseline allele \eqn{k}
+(with population frequency \eqn{p_k}) is coded as:
+\describe{
+  \item{Homozygous (\eqn{A_i = A_j = k}):}{
+    \eqn{W_{\alpha h}^{(k)} = -2(1 - p_k)}}
+  \item{Heterozygous (\eqn{A_i = k} or \eqn{A_j = k}):}{
+    \eqn{W_{\alpha h}^{(k)} = -(1 - 2p_k)}}
+  \item{Absent (\eqn{A_i \neq k} and \eqn{A_j \neq k}):}{
+    \eqn{W_{\alpha h}^{(k)} = 2p_k}}
+}
+Rare alleles receive larger absolute deviations; common alleles receive
+smaller deviations. The population column-mean is zero by construction,
+ensuring the additive effects sum to zero across individuals.
+
 \strong{Cross-validation / train-test split workflow:}
 \enumerate{
   \item Build the matrix on the \emph{training} set: pass

@@ -114,7 +114,7 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "masbayes"
-version = "1.3.0"
+version = "0.3.1"
 dependencies = [
  "extendr-api",
  "libm",

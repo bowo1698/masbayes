@@ -9,6 +9,36 @@
 #' stochastic-EM point estimates (Gaussian only).
 #'
 #' @details
+#' \strong{Statistical model.}
+#' The base linear model for BayesA is:
+#' \deqn{y = \mathbf{1}\mu + W\beta + \varepsilon, \quad
+#'   \varepsilon \sim \mathcal{N}(0,\,\sigma_e^2 I)}
+#' where \eqn{y} is the phenotype vector, \eqn{\mu} is the intercept,
+#' \eqn{W} is the marker design matrix (from
+#' \code{\link{construct_wah_matrix}} for multi-allelic or
+#' \code{\link{construct_snp_matrix}} for SNP markers), and \eqn{\beta}
+#' is the allele-effect vector. When fixed effects are supplied via \code{X}:
+#' \deqn{y = \mathbf{1}\mu + X\alpha + W\beta + \varepsilon}
+#' \strong{BayesA prior.}
+#' Each allele effect has a marker-specific variance drawn from a scaled
+#' inverse chi-squared distribution (Meuwissen et al., 2001):
+#' \deqn{\beta_j \mid \sigma_{\beta_j}^2 \;\sim\; \mathcal{N}(0,\,\sigma_{\beta_j}^2),
+#'   \quad \sigma_{\beta_j}^2 \;\sim\; \chi^{-2}(\nu,\,S^2)}
+#' where \eqn{\nu} is the degrees-of-freedom hyperparameter (\code{nu},
+#' default 4.5) and \eqn{S^2 = \sigma_\beta^2 / L} is the scale, with
+#' \eqn{L} denoting the total number of alleles (columns of \eqn{W}).
+#' The wrapper derives \code{s_squared} as
+#' \code{sigma2_g * (nu - 2) / (nu * sum_2pq)}, which sets
+#' \eqn{E[\sigma_{\beta_j}^2] = \sigma_\beta^2 / \sum_j \mathrm{Var}(w_j)}.
+#'
+#' \strong{Heritability.}
+#' \eqn{h^2} is estimated as:
+#' \deqn{h^2 = \frac{\mathrm{Var}(W\hat{\beta})}
+#'   {\mathrm{Var}(W\hat{\beta}) + \hat{\sigma}_e^2}}
+#' This estimator is identical for SNP and multi-allelic markers,
+#' treating heritability as a trait-and-population property rather than
+#' a marker-panel property.
+#'
 #' \strong{Algorithm choice.} MCMC uses marginalised Gibbs sampling and
 #' returns full posterior chains. EM is much faster but provides no
 #' uncertainty quantification and does not support \code{response_type =
@@ -30,10 +60,9 @@
 #' and is therefore the same formula under both
 #' \code{marker_type = "multiallelic"} and \code{marker_type = "snp"}.
 #'
-#' \strong{Heritability.} \eqn{h^2} is computed as
-#' \code{var(W \%*\% beta_hat) / (var(W \%*\% beta_hat) + sigma2_e_hat)}
-#' regardless of \code{marker_type}, treating heritability as a
-#' trait-and-population property rather than a marker-panel property.
+#' \strong{Marker-specific heritability note.} The \eqn{h^2} estimator in
+#' the Statistical model section above is applied regardless of
+#' \code{marker_type}.
 #'
 #' @param w Numeric design matrix (\code{n x p}). Typically the
 #'   \code{$W_ah} element returned by \code{\link{construct_wah_matrix}}

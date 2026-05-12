@@ -71,16 +71,14 @@ The data simulates a small breeding-style population: 10 full-sib
 families (each from one sire-dam founder pair). The founders are kept in
 the pedigree only (no genotype, no phenotype). A within-family 80/20
 train/test split is bundled so every test individual has its full-sibs in
-training -- this is the regime where genomic prediction methods deliver
-high accuracy.
+training.
 }
 \section{On the microhaplotype representation in \code{d$mh}}{
 
 In production, microhaplotype genotypes are produced by the
-\pkg{maspipeline} preprocessing pipeline
-(\code{genomic_prediction/maspipeline/}): phasing with Beagle, conversion
-to phased haplotype alleles, LD- or window-based block discovery, then
-per-strand block encoding. The on-disk output is one
+\pkg{maspipeline} preprocessing pipeline, where phasing with Beagle
+or Shapeit, conversion to phased haplotype alleles, LD- or window-based
+block discovery, then per-strand block encoding. The on-disk output is one
 tab-separated file per chromosome with header
 \preformatted{
 ID         hap_1_1 hap_1_1 hap_1_2 hap_1_2 hap_2_1 hap_2_1 hap_2_2 hap_2_2 ...

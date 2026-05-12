@@ -1,122 +1,104 @@
-#' masbayes: Bayesian Genomic Prediction Models for SNPs and Microhaplotypes
+#' masbayes: Bayesian Genomic Prediction for SNP and Multi-allelic Markers
 #'
-#' Bayesian methods for genomic prediction using SNP or microhaplotype
-#' markers. Implements BayesR (four-class mixture) and
-#' BayesA (marker-specific variance), each available as full MCMC or
-#' stochastic EM. Continuous (Gaussian) and binary (Albert-Chib data
-#' augmentation) traits are supported.
+#' Implements BayesR (four-class mixture prior) and BayesA
+#' (marker-specific variance prior) for genomic prediction using biallelic
+#' SNP or multi-allelic markers. Both methods are available as full MCMC
+#' or stochastic EM; continuous (Gaussian) and binary (probit) traits are
+#' supported natively via a high-performance Rust backend.
 #'
-#' @section Workflow:
-#' The standard pipeline is three steps:
-#' \enumerate{
-#'   \item \code{\link{construct_wah_matrix}()} — build the
-#'     \eqn{W_{\alpha h}} design matrix from phased haplotypes.
-#'   \item \code{\link{run_bayesr}()} or \code{\link{run_bayesa}()} — fit
-#'     the Bayesian model. The fit object is auto-saved to
-#'     \code{results_bayesr.Rds} / \code{results_bayesa.Rds} by default.
-#'   \item \code{summary(fit)} — full report (heritability, MCMC ESS /
-#'     Geweke, variance components, training metrics, top alleles).
-#'   \item \code{predict(fit, newdata, y_new)} — evaluate the model on
-#'     any data: in-sample, test split, or k-fold CV held-out fold.
-#' }
+#' @section Statistical model:
+#' The general linear model shared by BayesR and BayesA is:
+#' \deqn{y = \mathbf{1}\mu + W\beta + \varepsilon,
+#'   \quad \varepsilon \sim \mathcal{N}(0,\,\sigma_e^2 I)}
+#' where \eqn{y} is the phenotype vector, \eqn{\mu} is the intercept,
+#' \eqn{W} is the marker design matrix (from
+#' \code{\link{construct_wah_matrix}} for multi-allelic or
+#' \code{\link{construct_snp_matrix}} for SNP markers), \eqn{\beta} is
+#' the vector of allele effects, and \eqn{\sigma_e^2} is the residual
+#' variance. When fixed effects are included:
+#' \deqn{y = \mathbf{1}\mu + X\alpha + W\beta + \varepsilon}
 #'
-#' @section Three usage scenarios:
-#' \code{summary()} and \code{predict()} are scheme-agnostic — the same
-#' methods cover all three of:
+#' @section General assumptions:
 #' \itemize{
-#'   \item \strong{Full-data fit:} train on everything;
-#'     \code{predict(fit)} returns in-sample metrics.
-#'   \item \strong{Train/test split:} train on a subset; evaluate via
-#'     \code{predict(fit, W_test, y_test)}.
-#'   \item \strong{k-fold CV:} the user loops over folds (typically with
-#'     \code{save_rds = FALSE}, \code{verbose = FALSE}), then
-#'     \code{predict()} on each held-out fold.
+#'   \item Phenotypic observations are conditionally independent given the
+#'     genetic and fixed effects.
+#'   \item Residuals \eqn{\varepsilon \sim \mathcal{N}(0,\,\sigma_e^2 I)};
+#'     for binary traits the probit model with Albert-Chib data augmentation
+#'     is used (liability scale, \eqn{\sigma_e^2 = 1}).
+#'   \item Allele effects \eqn{\beta_j} are a priori independent across
+#'     loci; the prior distribution differs between BayesR and BayesA.
+#'   \item The design matrix \eqn{W} is centred (column mean zero) to
+#'     ensure identifiability of the intercept \eqn{\mu}.
+#'   \item For multi-allelic markers the most-frequent allele per block is
+#'     treated as the baseline reference and excluded from \eqn{W}.
 #' }
-#' Cross-validation orchestration is intentionally left to the caller —
-#' the package does not ship a built-in \code{cv_*()} helper.
 #'
-#' @section Quick start:
-#' \preformatted{
-#' library(masbayes)
+#' @section How the model works (marker level):
+#' masbayes estimates allele effects \emph{individually} at the marker
+#' level, rather than aggregating them into a population-level relationship
+#' matrix.
 #'
-#' # 1. Design matrix
-#' train <- construct_wah_matrix(hap, colnames(hap), allele_freq)
-#' W     <- train$W_ah
+#' \strong{BayesR} places a four-component mixture prior on each allele
+#' effect (Erbe et al., 2012):
+#' \deqn{\beta_j \mid \pi,\,\sigma_\beta^2 \;\sim\;
+#'   \pi_0\,\mathcal{N}(0,0)
+#'   + \pi_1\,\mathcal{N}(0,\,0.001\sigma_\beta^2)
+#'   + \pi_2\,\mathcal{N}(0,\,0.01\sigma_\beta^2)
+#'   + \pi_3\,\mathcal{N}(0,\,0.1\sigma_\beta^2)}
+#' Most alleles are shrunk to zero (\eqn{\pi_0}), while a small proportion
+#' carry small, medium, or large effects — enabling implicit variable
+#' selection.
 #'
-#' # 2. Sufficient statistics
-#' wtw <- colSums(W^2)
+#' \strong{BayesA} assigns each allele a marker-specific variance from a
+#' scaled inverse chi-squared distribution (Meuwissen et al., 2001):
+#' \deqn{\beta_j \mid \sigma_{\beta_j}^2 \sim \mathcal{N}(0,\,\sigma_{\beta_j}^2),
+#'   \quad \sigma_{\beta_j}^2 \sim \chi^{-2}(\nu,\,S^2)}
+#' allowing heavier-tailed effect-size distributions than ridge regression.
 #'
-#' # 3. Fit
-#' fit <- run_bayesr(W, y, wtw,
-#'                   sigma2_e_init = var(y) * 0.5,
-#'                   sigma2_ah     = var(y) * 0.5,
-#'                   method        = "mcmc")
-#'
-#' # 4. Report and evaluate
-#' summary(fit)
-#' pred <- predict(fit, W_test, y_test)   # train/test mode
-#' pred$metrics$accuracy
-#' }
+#' Posterior parameters are inferred via MCMC (Gibbs sampling) or
+#' stochastic EM. Genomic estimated breeding values (GEBVs) are computed
+#' by summing posterior mean allele effects across all loci:
+#' \deqn{\widehat{g}_i = \hat{\mu} + \mathbf{w}_i^\top \hat{\boldsymbol{\beta}}}
+#' Heritability is estimated as
+#' \eqn{h^2 = \mathrm{Var}(W\hat{\beta}) /
+#'   [\mathrm{Var}(W\hat{\beta}) + \hat{\sigma}_e^2]}.
 #'
 #' @section Main functions:
 #' \describe{
-#'   \item{\code{\link{construct_wah_matrix}}}{Build the
-#'     \eqn{W_{\alpha h}} design matrix.}
-#'   \item{\code{\link{run_bayesr}}}{Fit BayesR (4-class mixture).}
-#'   \item{\code{\link{run_bayesa}}}{Fit BayesA (marker-specific
-#'     variance).}
-#'   \item{\code{\link{summary.masbayes_bayesr}},
-#'     \code{\link{summary.masbayes_bayesa}}}{Full-fit reports
-#'     (S3 methods).}
+#'   \item{\code{\link{construct_wah_matrix}}}{Build the multi-allelic
+#'     \eqn{W_{\alpha h}} design matrix from phased haplotype data.}
+#'   \item{\code{\link{construct_snp_matrix}}}{Build the SNP design matrix
+#'     (VanRaden centering or z-score standardisation).}
+#'   \item{\code{\link{run_bayesr}}}{Fit BayesR (four-class mixture).}
+#'   \item{\code{\link{run_bayesa}}}{Fit BayesA (marker-specific variance).}
 #'   \item{\code{\link{predict.masbayes_bayesr}},
-#'     \code{\link{predict.masbayes_bayesa}}}{GEBV + metrics, scheme-
-#'     agnostic (S3 methods).}
+#'     \code{\link{predict.masbayes_bayesa}}}{Predict GEBVs and compute
+#'     accuracy metrics (S3 methods).}
+#'   \item{\code{\link{summary.masbayes_bayesr}},
+#'     \code{\link{summary.masbayes_bayesa}}}{Full posterior report
+#'     including \eqn{h^2}, ESS, Geweke, and variance components (S3
+#'     methods).}
 #' }
-#'
-#' @section Output of run_bayesr() / run_bayesa():
-#' The returned S3 object (class \code{masbayes_bayesr} or
-#' \code{masbayes_bayesa}) contains:
-#' \itemize{
-#'   \item \code{GEBV}, \code{beta_hat}, \code{beta_samples} (and
-#'     \code{sigma2_j_samples} for BayesA)
-#'   \item \code{sigma2_e_samples}, \code{mu_samples}, \code{runtime}
-#'     (seconds)
-#'   \item \code{h2}, \code{sigma2_g}, \code{sigma2_e}
-#'   \item \code{training_metrics}: \code{R2}, \code{RMSE},
-#'     \code{accuracy}/\code{AUC}, \code{bias}
-#'   \item \code{diagnostics}: ESS, Geweke Z (MCMC only)
-#'   \item \code{variance_components}: small / medium / large + \code{pi}
-#'     (BayesR), or tertile bins of marker variances (BayesA)
-#'   \item \code{rds_path}: where the fit was auto-saved
-#' }
-#' Disable auto-save with \code{save_rds = FALSE} — recommended for CV
-#' loops.
-#'
-#' @section Low-level bindings:
-#' \code{run_bayesr_mcmc()}, \code{run_bayesr_em()},
-#' \code{run_bayesa_mcmc()}, and \code{run_bayesa_em()} are the direct
-#' Rust bindings. They are exported but undocumented; prefer
-#' \code{run_bayesr()} / \code{run_bayesa()} for routine use.
 #'
 #' @section References:
 #' \itemize{
 #'   \item Meuwissen, T. H. E., Hayes, B. J., \& Goddard, M. E. (2001).
 #'     Prediction of total genetic value using genome-wide dense marker
-#'     maps. \emph{Genetics}, 157(4), 1819-1829.
+#'     maps. \emph{Genetics}, 157(4), 1819--1829.
 #'     \doi{10.1093/genetics/157.4.1819}
 #'   \item Erbe, M., Hayes, B. J., Matukumalli, L. K., Goswami, S.,
 #'     Bowman, P. J., Reich, C. M., Mason, B. A., \& Goddard, M. E.
 #'     (2012). Improving accuracy of genomic predictions within and
 #'     between dairy cattle breeds with imputed high-density single
 #'     nucleotide polymorphism panels. \emph{Journal of Dairy Science},
-#'     95(7), 4114-4129. \doi{10.3168/jds.2011-5019}
-#'   \item Da, Y. (2015). Multi-allelic haplotype model based on
-#'     genetic partition for genomic prediction and variance component
-#'     estimation using SNP markers. \emph{BMC Genetics}, 16(1), 144.
+#'     95(7), 4114--4129. \doi{10.3168/jds.2011-5019}
+#'   \item Da, Y. (2015). Multi-allelic haplotype model based on genetic
+#'     partition for genomic prediction and variance component estimation
+#'     using SNP markers. \emph{BMC Genetics}, 16(1), 144.
 #'     \doi{10.1186/s12863-015-0301-1}
 #' }
 #'
-#' @docType package
+#' @author \strong{Maintainer}: Agus Wibowo \email{aguswibowo1698@@gmail.com}
+#'
 #' @name masbayes-package
-#' @aliases masbayes
-"_PACKAGE"
+NULL
