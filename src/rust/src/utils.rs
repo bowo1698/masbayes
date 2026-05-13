@@ -147,9 +147,13 @@ pub fn rtruncnorm_lower<R: Rng>(rng: &mut R, mean: f64, lower: f64) -> f64 {
     use std::f64::consts::SQRT_2;
     
     let alpha = (lower - mean) / 1.0;  // standardize
-    
-    // CDF of standard normal at alpha
-    let phi_alpha = 0.5 * (1.0 + libm::erf(alpha / SQRT_2));
+
+    // CDF of standard normal at alpha.
+    // erf can return a value marginally > 1.0 due to floating-point round-off
+    // when alpha is large (mean << lower for Albert-Chib y=1, i.e. model very
+    // confident in wrong direction). Clamp keeps the inverse-CDF bound on
+    // line 156 valid (phi_alpha + 1e-10 <= 1 - 1e-10).
+    let phi_alpha = (0.5 * (1.0 + libm::erf(alpha / SQRT_2))).clamp(0.0, 1.0 - 2e-10);
     
     // Sample u ~ Uniform(phi_alpha, 1)
     let u: f64 = rng.gen::<f64>() * (1.0 - phi_alpha) + phi_alpha;

@@ -2,5 +2,9 @@
 target/
 **/*.rs.bk
 
+# Local backups (created before edits to Rust kernel; never commit)
+*.bak
+*.bak.*
+
 # Don't ignore Cargo.lock
 !Cargo.lock
