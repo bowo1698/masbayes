@@ -233,9 +233,6 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
   y_test  <- y_te
   resp    <- if (trait_type == "binary") "binary" else "gaussian"
 
-  # Dispatch marker_type from the marker_label argument:
-  #   SNP path → "snp"          (v1.4.0 alternative biallelic-SNP prior)
-  #   MH  path → "multiallelic" (current default, same as omitting the arg)
   mtype <- if (identical(marker_label, "SNP")) "snp" else "multiallelic"
 
   wtw <- colSums(W_tr^2)
@@ -277,7 +274,7 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
           fold_id       = 0L)
       }
 
-      # Use the package's predict() S3 method instead of recomputing manually.
+      # Use the package's predict()
       # res$GEBV gives training GEBV; predict(res, W_te, y_test) auto-computes
       # observed-scale metrics (R2, RMSE, accuracy/AUC, bias = calibration slope)
       # plus pred_te$prob = pnorm(GEBV) for binary.
