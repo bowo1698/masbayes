@@ -41,9 +41,12 @@ src/Makevars.ucrt
 *.swp
 *.swo
 
-# Local backups 
+# Local backups
 *.bak
 *.bak.*
 
-# the suite 
+# Local-only GitHub release notes drafts
+RELEASE_NOTES_*.txt
+
+# the suite
 tests/
