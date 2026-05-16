@@ -3,8 +3,8 @@
 #' Returns a small, deterministic genomic dataset bundled with the package,
 #' intended for examples, vignettes, and tests.
 #'
-#' Two scales are bundled: \code{size = "large"} (default; n=200, p=100,
-#' n_qtl=10) and \code{size = "small"} (n=100, p=50, n_qtl=5) that run
+#' Two scales are bundled: \code{size = "large"} (n=200, p=500,
+#' n_qtl=20) and \code{size = "small"} (default; n=100, p=50, n_qtl=5) that run
 #' during \code{R CMD check --examples}.
 #' Both have the same family structure (10 full-sib families) and the
 #' same 12-field shape, so consumer code does not have to branch on size.
@@ -41,7 +41,7 @@
 #' biological information; \code{d$mh} skips the file-layout overhead and
 #' the recomputation of allele frequencies.
 #'
-#' @param size character, either \code{"large"} (default) or \code{"small"}.
+#' @param size character, either \code{"small"} (default) or \code{"large"}.
 #'
 #' @return A list with the following elements (dimensions shown for
 #'   \code{size = "large"} / \code{size = "small"}):
@@ -49,12 +49,12 @@
 #'   \item{\code{snp}}{Integer matrix \eqn{n \times p} of biallelic SNP
 #'     dosages (values \code{0/1/2}). Rownames are individual IDs
 #'     \code{IND001..INDn}; colnames are \code{SNP001..SNPp}.
-#'     Dimensions: 200 x 100 (large) / 100 x 50 (small).}
+#'     Dimensions: 200 x 500 (large) / 100 x 50 (small).}
 #'   \item{\code{mh}}{Integer matrix \eqn{n \times (2 \cdot n_{blocks})} of
 #'     microhaplotype allele codes. Columns alternate strand 1 / strand 2
 #'     per block. The \code{attr(mh, "block_id")} attribute maps each column
 #'     to its block. Consumable directly by
-#'     \code{\link{construct_wah_matrix}()}. Dimensions: 200 x 100 with 50
+#'     \code{\link{construct_wah_matrix}()}. Dimensions: 200 x 500 with 250
 #'     blocks (large) / 100 x 50 with 25 blocks (small).}
 #'   \item{\code{allele_freq}}{List with parallel vectors
 #'     \code{haplotype}, \code{allele}, \code{freq} -- the training-style
@@ -73,7 +73,7 @@
 #'     offspring with their sire/dam recorded. Columns: \code{id},
 #'     \code{sire}, \code{dam}.}
 #'   \item{\code{qtl}}{List with \code{snp_idx}, \code{mh_idx},
-#'     \code{effects_snp}, \code{effects_mh} (each length 10 for large, 5
+#'     \code{effects_snp}, \code{effects_mh} (each length 20 for large, 5
 #'     for small; effects drawn from \code{rnorm}, unit-normalised).}
 #'   \item{\code{meta}}{List with \code{n}, \code{n_snp}, \code{n_blocks},
 #'     \code{n_snp_per_block}, \code{n_qtl}, \code{n_families},
@@ -93,7 +93,7 @@
 #'     of \code{snp} and with the design matrix from
 #'     \code{\link{construct_snp_matrix}()}. Ready to pass as the
 #'     \code{map} argument to \code{\link{run_bayesr}()} for GWAS.
-#'     Dimensions: 100 x 3 (large) / 50 x 3 (small).}
+#'     Dimensions: 500 x 3 (large) / 50 x 3 (small).}
 #'   \item{\code{map_mh}}{Data frame with one row per MH block. Columns
 #'     \code{block_id} (character, matches
 #'     \code{unique(attr(mh, "block_id"))}), \code{chr}, \code{start_pos},
@@ -103,7 +103,7 @@
 #'     \code{map_mh} unchanged into \code{\link{run_bayesr}()}.
 #'     Physical positions are synthetic (5 chromosomes, 100 kb intra-chr
 #'     SNP spacing, 1 Mb chr base offset); each block spans the two
-#'     consecutive SNPs that built it. Dimensions: 50 x 5 (large) /
+#'     consecutive SNPs that built it. Dimensions: 250 x 5 (large) /
 #'     25 x 5 (small).}
 #' }
 #'
@@ -118,7 +118,7 @@
 #' dim(d_small$snp)
 #'
 #' @export
-load_data <- function(size = c("large", "small")) {
+load_data <- function(size = c("small", "large")) {
   size  <- match.arg(size)
   fname <- if (size == "large") "demo_data.rds" else "demo_data_small.rds"
   path  <- system.file("extdata", fname, package = "masbayes")
