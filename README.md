@@ -122,10 +122,11 @@ Full tutorials (GP + GWAS, SNP + MH, continuous + binary):
 
 ```bibtex
 @software{masbayes,
-  author = {Agus Wibowo},
-  title  = {masbayes: Bayesian genomic prediction for multi-allelic markers},
-  year   = {2025},
-  url    = {https://github.com/bowo1698/masbayes}
+  author = {Wibowo, Agus},
+  title = {masbayes: Bayesian genomic prediction for biallelic SNP and multi-allelic markers},
+  url = {https://github.com/bowo1698/masbayes},
+  doi = {10.5281/zenodo.20219719},
+  year = {2026}
 }
 ```
 
