@@ -109,6 +109,29 @@ pub struct BayesRRunner {
 }
 
 impl BayesRRunner {
+    /// Construct a new BayesR Gibbs runner from raw inputs and
+    /// hyperparameters.
+    ///
+    /// # Mixture initialisation
+    ///
+    /// - `pi_vec`: starting mixture proportions, length 4. The
+    ///   R wrapper defaults to `(0.95, 0.02, 0.02, 0.01)` — most
+    ///   markers start in the spike, with diminishing mass on the
+    ///   three slabs.
+    /// - `sigma2_vec`: starting variance for each component, derived
+    ///   from `variance_class · sigma2_ah`. Component 0 (spike)
+    ///   always has variance 0.
+    /// - `γ`: all markers start in the spike (component 0) — the
+    ///   first iteration's allocation step assigns them to slabs
+    ///   based on data.
+    /// - `β`: zero vector. The first marker-update step samples
+    ///   from the conditional given σ²_e and the chosen component.
+    ///
+    /// # Binary-trait setup
+    ///
+    /// Identical to `BayesARunner::new` — `z` initialised to `y`,
+    /// `σ²_e` fixed to 1 (probit identifiability), Albert-Chib step
+    /// activated in the main loop.
     pub fn new(
         w: Array2<f64>,
         y: Vec<f64>,
@@ -199,6 +222,38 @@ impl BayesRRunner {
         }
     }
     
+    /// Run the BayesR Gibbs sweep for `n_iter` iterations.
+    ///
+    /// # Sampling order per iteration
+    ///
+    /// See the inline math comments in the loop body for the full
+    /// derivation. Briefly:
+    ///
+    /// 1. Albert-Chib latent liability update (binary only).
+    /// 2. Fixed-effect coefficients α.
+    /// 3. Intercept μ.
+    /// 4. For each marker j:
+    ///    - Mixture allocation γ_j from its four-component
+    ///      categorical full conditional, derived by marginalising
+    ///      β_j out under each component.
+    ///    - Conditional on the chosen component, β_j from its
+    ///      normal full conditional (or exactly 0 for the spike).
+    /// 5. Residual variance σ²_e (continuous only).
+    /// 6. Genetic-variance scale σ²_g (single inverse-gamma update
+    ///    that scales all three slab components).
+    /// 7. Mixture proportions π from Dirichlet–Multinomial conjugacy.
+    ///
+    /// # Numerical stability
+    ///
+    /// The categorical step in 4 uses log-sum-exp to avoid underflow
+    /// when one component dominates the other three by several orders
+    /// of magnitude — a common situation late in convergence.
+    ///
+    /// # Returns
+    ///
+    /// [`BayesRResults`] with posterior sample arrays (including
+    /// `gamma_samples` and `pi_samples`), posterior means, derived
+    /// quantities (`sigma2_g`, `h2`), and convergence diagnostics.
     pub fn run(&mut self) -> BayesRResults {
         let n_save = (self.n_iter - self.n_burn) / self.n_thin;
         let mut mu_samples = Array1::<f64>::zeros(n_save);

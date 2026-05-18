@@ -102,6 +102,32 @@ pub struct BayesARunner {
 }
 
 impl BayesARunner {
+    /// Construct a new BayesA Gibbs runner from raw inputs and
+    /// hyperparameters.
+    ///
+    /// # Initialisation strategy
+    ///
+    /// - `β` is initialised to the zero vector — every marker
+    ///   starts with no effect. The first Gibbs sweep updates β_j
+    ///   for all j given the (rough) starting σ²_j values.
+    /// - `σ²_j` is initialised to the prior scale `s_squared` for
+    ///   every marker — equivalent to "no per-marker information yet,
+    ///   trust the prior".
+    /// - `σ²_e` is initialised to `sigma2_e_init`, typically
+    ///   `var(y) · (1 − h²_target)` from the R wrapper.
+    /// - `μ` is initialised to 0; the first iteration updates it to
+    ///   the residual mean.
+    /// - The working residual `yadj = y − μ − W β − X α` is computed
+    ///   once and then maintained incrementally; this is the trick
+    ///   that turns each coordinate update from `O(n_alleles · n)`
+    ///   into `O(n)`.
+    ///
+    /// # Binary-trait special case
+    ///
+    /// When `is_binary = true`, the latent liability `z` is
+    /// initialised to `y` and `σ²_e` is fixed to 1.0 throughout
+    /// (probit identifiability). The Albert-Chib step in the main
+    /// loop samples `z` from truncated normals every iteration.
     pub fn new(
         w: Array2<f64>,
         y: Vec<f64>,
@@ -173,6 +199,42 @@ impl BayesARunner {
         }
     }
     
+    /// Run the BayesA Gibbs sweep for `n_iter` iterations.
+    ///
+    /// # Sampling order per iteration
+    ///
+    /// See the inline math comments in the loop body for the full
+    /// derivation. Briefly:
+    ///
+    /// 1. Albert-Chib latent liability update (binary trait only).
+    /// 2. Fixed-effect coefficients α.
+    /// 3. Intercept μ.
+    /// 4. For each marker j: per-marker variance σ²_j (inverse-gamma)
+    ///    then marker effect β_j (normal). yadj is kept in sync
+    ///    incrementally.
+    /// 5. Residual variance σ²_e (continuous trait only).
+    ///
+    /// # Thinning / burn-in
+    ///
+    /// Posterior samples are stored only after `n_burn` warm-up
+    /// iterations and only every `n_thin`-th step. The number of
+    /// retained samples is `(n_iter − n_burn) / n_thin`. The R
+    /// wrapper exposes these as `n_iter`, `n_burn`, `n_thin`
+    /// arguments with sensible defaults.
+    ///
+    /// # Convergence monitoring
+    ///
+    /// With `verbose = true`, the function prints every
+    /// `n_iter / 10` iterations (clamped to `[100, 1000]`): mean
+    /// `|β|`, σ²_e, and the min/max/mean of σ²_j. Useful for
+    /// catching chains stuck in a degenerate region during
+    /// development.
+    ///
+    /// # Returns
+    ///
+    /// [`BayesAResults`] with posterior sample arrays, posterior
+    /// means, derived quantities, and convergence diagnostics
+    /// (`effective_size` and `geweke_z` on σ²_e).
     pub fn run(&mut self) -> BayesAResults {
         let n_save = (self.n_iter - self.n_burn) / self.n_thin;
         

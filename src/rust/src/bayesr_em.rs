@@ -31,36 +31,79 @@
 use ndarray::{Array1, Array2};
 use crate::types::BayesRResults;
 
+/// Stochastic-EM BayesR runner.
+///
+/// Mirrors [`crate::bayesa_em::BayesAEM`] but for the four-component
+/// mixture model of BayesR. The key differences from the Gibbs path
+/// in [`crate::bayesr`]:
+///
+/// - **Soft membership** (`gamma_prob`) instead of hard sampled
+///   labels: each marker carries a `(1, 4)` row of mixture-component
+///   responsibilities that get re-estimated every iteration.
+/// - **`π` from posterior expectation**, not a Dirichlet draw.
+/// - **σ²_e from closed-form** mode, not an inverse-gamma draw.
+///
+/// Result: deterministic point estimates instead of posterior samples.
+/// Useful when speed matters more than uncertainty quantification
+/// (e.g. inside cross-validation loops).
 pub struct BayesREM {
+    /// Design matrix `W`, shape `(n, n_alleles)`.
     w: Array2<f64>,
+    /// Response vector `y`, length `n`.
     y: Array1<f64>,
+    /// Precomputed `diag(W' W)`, length `n_alleles`.
     wtw_diag: Array1<f64>,
+    /// Precomputed `W' y`, length `n_alleles`.
     wty: Array1<f64>,
 
+    /// Number of individuals.
     n: usize,
+    /// Number of marker columns.
     n_alleles: usize,
 
+    /// Current mixture proportions, length 4 (spike + 3 slabs).
     pi_vec: Array1<f64>,
+    /// Component variances, length 4. The spike (index 0) has
+    /// variance 0.
     sigma2_vec: Array1<f64>,
 
+    /// Maximum EM iterations.
     max_iter: usize,
+    /// Convergence tolerance on max relative change in `β`.
     tol: f64,
 
+    /// Current marker-effect estimates.
     beta: Array1<f64>,
+    /// Soft mixture membership probabilities, shape
+    /// `(n_alleles, 4)`. Each row sums to 1.
     gamma_prob: Array2<f64>,
+    /// Current residual variance estimate.
     sigma2_e: f64,
+    /// CV fold id (verbose log prefix only).
     fold_id: i32,
+    /// Verbose progress flag.
     verbose: bool,
 
-    // Fixed effects (optional)
+    /// Optional fixed-effects design.
     x: Option<Array2<f64>>,
+    /// Current fixed-effect coefficients.
     alpha: Array1<f64>,
+    /// Precomputed `diag(X' X)`.
     xtx_diag: Array1<f64>,
+    /// Precomputed `X' y`.
     xty: Array1<f64>,
+    /// Number of fixed-effect columns.
     n_fixed: usize,
 }
 
 impl BayesREM {
+    /// Construct a new EM runner from raw data and initial values.
+    ///
+    /// Precomputes `W' y` and, when `x` is supplied, `X' y` and
+    /// `diag(X' X)`. The mixture state (`pi_vec`, `sigma2_vec`) is
+    /// stored as the initial guess; the EM loop will update both as
+    /// it runs. `beta` and `gamma_prob` start at zero / uniform and
+    /// converge to point estimates during [`Self::run`].
     pub fn new(
         w: Array2<f64>,
         y: Vec<f64>,
@@ -117,20 +160,59 @@ impl BayesREM {
         }
     }
     
+    /// Run the BayesR EM loop until convergence or `max_iter`.
+    ///
+    /// # Algorithm
+    ///
+    /// Each iteration performs two phases:
+    ///
+    /// 1. **E-step** — compute the four-component mixture
+    ///    responsibilities for every marker:
+    ///
+    ///    ```text
+    ///    γ_prob[j, c] ∝ π_c · N(β_j | 0, v_c · σ²_g),    c ∈ {1, 2, 3, 4}.
+    ///    ```
+    ///
+    ///    Normalised per marker so each row of `gamma_prob` sums to 1.
+    ///    These soft memberships replace Gibbs's hard categorical
+    ///    draws.
+    ///
+    /// 2. **M-step** — update everything else conditional on the soft
+    ///    memberships:
+    ///    - Marker effects β_j (weighted average of the conditional
+    ///      means under each component, weighted by `γ_prob[j, ·]`).
+    ///    - Fixed effects α (closed-form normal updates).
+    ///    - Mixture proportions π from the column sums of
+    ///      `gamma_prob`.
+    ///    - σ²_g and σ²_e from their inverse-gamma modes.
+    ///
+    /// # Convergence
+    ///
+    /// Same criterion as BayesA-EM: stop when relative
+    /// `‖β_new − β_old‖² / ‖β_new‖² < tol` after at least
+    /// `min_iter` iterations (50–200 depending on `n`).
+    ///
+    /// # Returns
+    ///
+    /// [`BayesRResults`] populated with MAP-style point estimates
+    /// instead of posterior samples. `gamma_samples` is the
+    /// per-marker `argmax_c γ_prob[j, c]` — useful for reporting
+    /// the "most likely" mixture assignment without exposing the
+    /// soft posterior probabilities.
     pub fn run(&mut self) -> BayesRResults {
         if self.verbose {
             eprintln!("[Fold {}] BayesR EM started: max {} iterations", self.fold_id, self.max_iter);
         }
 
         let print_interval = (self.max_iter / 50).max(1);
-        
+
         let mut beta_old = Array1::<f64>::zeros(self.n_alleles);
-        
+
         for iter in 0..self.max_iter {
-            // E-step
+            // E-step: compute soft mixture responsibilities γ_prob[j, c].
             self.e_step();
-            
-            // M-step
+
+            // M-step: update β, α, π, σ²_g, σ²_e given responsibilities.
             self.m_step();
             
             // Compute beta change
@@ -238,6 +320,32 @@ impl BayesREM {
         }
     }
     
+    /// E-step: update the soft mixture responsibilities
+    /// `γ_prob[j, c] = P(component c | β_j, current params)`.
+    ///
+    /// # Computation
+    ///
+    /// For each marker `j` and each component `c`:
+    ///
+    /// ```text
+    /// γ_prob[j, c] ∝ π_c · N(β_j | 0, v_c · σ²_g)
+    /// ```
+    ///
+    /// where the spike component (c = 0) has v_0 = 0 ⇒ a delta at
+    /// zero. The Normalising constant is computed via log-sum-exp
+    /// for numerical stability — when one component dominates by
+    /// several orders of magnitude, computing in linear scale would
+    /// underflow at single precision.
+    ///
+    /// # Output
+    ///
+    /// Writes into `self.gamma_prob` (shape `(n_alleles, 4)`). Each
+    /// row sums to 1 after the normalisation step.
+    ///
+    /// The fitted vector `W β + X α` is rebuilt at the top of every
+    /// E-step rather than maintained incrementally, mirroring the
+    /// BayesA-EM M-step. EM iterations touch all markers anyway, so
+    /// the cache trade-off favours the simpler full recomputation.
     fn e_step(&mut self) {
         // fitted = W*beta + X*alpha (X*alpha = 0 when no fixed effects)
         let mut fitted = self.w.dot(&self.beta);
@@ -287,6 +395,39 @@ impl BayesREM {
         }
     }
 
+    /// M-step: update model parameters given the soft mixture
+    /// responsibilities computed by [`Self::e_step`].
+    ///
+    /// # Updates
+    ///
+    /// 1. **Marker effects β** — for each marker, a weighted average
+    ///    of the conditional means under each non-spike component:
+    ///
+    ///    ```text
+    ///    β_j = Σ_{c>0} γ_prob[j, c] · (rhs_j / σ²_e) / (l_j / σ²_e + 1 / (v_c · σ²_g))
+    ///    ```
+    ///
+    ///    The spike (c = 0) contributes nothing because its conditional
+    ///    mean is exactly 0. The working residual is updated
+    ///    incrementally as β_j moves.
+    ///
+    /// 2. **Fixed effects α** — closed-form normal updates per
+    ///    column of X (skipped when no fixed effects supplied).
+    ///
+    /// 3. **Mixture proportions π** — column sums of `gamma_prob`
+    ///    normalised by `n_alleles`. This is the M-step analogue of
+    ///    the Dirichlet draw in Gibbs.
+    ///
+    /// 4. **σ²_g** — weighted inverse-gamma mode using soft
+    ///    responsibilities as weights, replacing the
+    ///    `Σ_{γ_j > 0}` hard count in Gibbs.
+    ///
+    /// 5. **σ²_e** — closed-form residual variance from SSE.
+    ///
+    /// All updates are coordinate-ascent on the expected complete-
+    /// data log-likelihood, so each strictly improves (or leaves
+    /// unchanged) the objective. This is what guarantees EM's
+    /// monotone convergence.
     fn m_step(&mut self) {
         // Initialise fitted = W*beta + X*alpha
         let mut fitted = self.w.dot(&self.beta);

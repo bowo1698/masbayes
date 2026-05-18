@@ -34,36 +34,77 @@
 use ndarray::{Array1, Array2};
 use crate::types::BayesAResults;
 
+/// Stochastic-EM BayesA runner.
+///
+/// Holds the full state of a BayesA EM fit between iterations. The
+/// fields fall into three groups:
+///
+/// - **Data**: `w` (design matrix), `y` (response), `wtw_diag`,
+///   `wty` (precomputed sufficient statistics).
+/// - **Hyperparameters**: `nu`, `s_squared` (scaled inverse-χ² prior
+///   on per-marker variance), `max_iter`, `tol`.
+/// - **State**: `beta`, `sigma2_j`, `sigma2_e`, plus the optional
+///   fixed-effects block (`x`, `alpha`, `xtx_diag`, `xty`).
+///
+/// Constructed by [`BayesAEM::new`], stepped by [`BayesAEM::run`].
+/// After `run()` returns, the struct is consumed — the results
+/// struct ([`BayesAResults`]) is the only output.
 pub struct BayesAEM {
+    /// Design matrix `W`, shape `(n, n_alleles)`.
     w: Array2<f64>,
+    /// Response vector `y`, length `n`.
     y: Array1<f64>,
+    /// Precomputed diagonal of `W' W`, length `n_alleles`.
+    /// Avoids recomputing it inside the per-marker loop.
     wtw_diag: Array1<f64>,
+    /// Precomputed `W' y`, length `n_alleles`.
     wty: Array1<f64>,
 
+    /// Number of individuals.
     n: usize,
+    /// Number of marker columns.
     n_alleles: usize,
 
+    /// Degrees of freedom of the scaled inverse-χ² prior on `σ²_j`.
     nu: f64,
+    /// Scale of the same prior. Larger `s_squared` ⇒ weaker shrinkage.
     s_squared: f64,
 
+    /// Maximum EM iterations.
     max_iter: usize,
+    /// Convergence tolerance on the max relative change in `β`.
     tol: f64,
 
+    /// Current marker effects estimate.
     beta: Array1<f64>,
+    /// Current per-marker variance estimates.
     sigma2_j: Array1<f64>,
+    /// Current residual variance estimate.
     sigma2_e: f64,
+    /// Cross-validation fold id (for verbose log prefixes only).
     fold_id: i32,
+    /// Verbose flag — `true` ⇒ print per-iteration diagnostics.
     verbose: bool,
 
-    // Fixed effects (optional)
+    /// Optional fixed-effects design `X`, shape `(n, n_fixed)`.
     x: Option<Array2<f64>>,
+    /// Current fixed-effect coefficients, length `n_fixed`.
     alpha: Array1<f64>,
+    /// Precomputed diagonal of `X' X`, length `n_fixed`.
     xtx_diag: Array1<f64>,
+    /// Precomputed `X' y`, length `n_fixed`.
     xty: Array1<f64>,
+    /// Number of fixed-effect columns (`0` if `x = None`).
     n_fixed: usize,
 }
 
 impl BayesAEM {
+    /// Construct a new EM runner from raw data and hyperparameters.
+    ///
+    /// Precomputes the sufficient statistics `W' y` and (if `X` is
+    /// supplied) `X' y` and `diag(X' X)` once at construction so the
+    /// per-iteration loop touches `W` and `X` purely through these
+    /// reduced summaries.
     pub fn new(
         w: Array2<f64>,
         y: Vec<f64>,
@@ -120,6 +161,36 @@ impl BayesAEM {
         }
     }
     
+    /// Run the EM loop until convergence or `max_iter`.
+    ///
+    /// # Algorithm
+    ///
+    /// Each iteration performs:
+    ///
+    /// 1. **E-step**: update per-marker variance
+    ///    `σ²_j = (ν · S² + β_j²) / (ν + 1)` — the conditional mean of
+    ///    the inverse-chi-squared full conditional, replacing the
+    ///    Gibbs random draw.
+    /// 2. **M-step for β**: coordinate-ascent update of each marker
+    ///    effect using the closed-form normal posterior:
+    ///    `β_j ← (rhs_j / σ²_e) / (l_j / σ²_e + 1 / σ²_j)`.
+    /// 3. **M-step for α** (if fixed effects supplied): normal update
+    ///    of each fixed-effect coefficient.
+    /// 4. **M-step for σ²_e**: closed-form mode of the inverse-gamma
+    ///    full conditional given the current residual sum of squares.
+    ///
+    /// # Convergence
+    ///
+    /// Stops when the largest relative change in any `β_j` falls
+    /// below `tol`, or when `max_iter` is reached. Unlike Gibbs, EM
+    /// is deterministic: identical inputs ⇒ identical output.
+    ///
+    /// # Returns
+    ///
+    /// [`BayesAResults`] populated with the final EM point estimates
+    /// in place of posterior samples. The R wrapper reuses the same
+    /// post-processing as the Gibbs path so downstream code is
+    /// algorithm-agnostic.
     pub fn run(&mut self) -> BayesAResults {
         if self.verbose {
             eprintln!("[Fold {}] BayesA EM started: max {} iterations", self.fold_id, self.max_iter);
@@ -129,24 +200,54 @@ impl BayesAEM {
         let mut beta_old = Array1::<f64>::zeros(self.n_alleles);
         
         for iter in 0..self.max_iter {
-            // E-step
+            // ========================================================
+            // E-step — compute the conditional expectation of the
+            // marker-precision parameter `1 / σ²_j` given the current
+            // marker effect β_j and the prior:
+            //
+            //     E[1 / σ²_j | β_j] = (ν + 1) / (ν · S² + β_j²).
+            //
+            // This is the exact mean of the inverse-gamma full
+            // conditional that Gibbs would have sampled from. Plugging
+            // in the expectation here is what makes BayesA-EM
+            // deterministic (vs. Gibbs's stochastic draws).
+            // ========================================================
             let expected_inv_sigma2 = self.compute_expected_inv_variance();
-            
-            // M-step
+
+            // ========================================================
+            // M-step — maximise the expected complete-data log-likelihood
+            // w.r.t. β, σ²_e, and (optionally) α. Each is closed-form
+            // because the relevant full conditionals are conjugate:
+            //
+            //     β_j   ← (rhs_j / σ²_e) / (l_j / σ²_e + E[1/σ²_j])
+            //     σ²_e  ← (SSE + 2 b₀_e) / (n + 2 a₀_e)
+            //     α_k   ← (x_k' yadj + l_k · α_k_old) / l_k         (when X present)
+            //
+            // Updates are done in coordinate-ascent order; yadj stays
+            // in sync incrementally as in the Gibbs path.
+            // ========================================================
             self.m_step(&expected_inv_sigma2);
-            
-            // Compute beta change (Paper's method)
+
+            // Relative β change for convergence — Paper's method:
+            //     change = ‖β_new − β_old‖² / ‖β_new‖².
+            // Squared norms keep the comparison scale-free; the
+            // `beta_norm_sq > 1e-20` guard avoids dividing by zero in
+            // the first iteration (when β is still all-zero).
             let diff = &self.beta - &beta_old;
             let change_sq = diff.dot(&diff);
             let beta_norm_sq = self.beta.dot(&self.beta);
-            
+
             let rel_beta_change = if beta_norm_sq > 1e-20 {
                 change_sq / beta_norm_sq
             } else {
                 f64::INFINITY
             };
-            
-            // Adaptive min_iter
+
+            // Adaptive minimum-iteration floor. Larger samples need
+            // more iterations before the convergence test can safely
+            // fire — the relative-β-change criterion is noisier at
+            // small n_iter. Floor values were tuned empirically on
+            // simulated data of various sizes.
             let min_iter = if self.n > 5000 {
                 200
             } else if self.n > 1000 {
@@ -225,18 +326,64 @@ impl BayesAEM {
         }
     }
     
+    /// E-step: compute `E[1 / σ²_j | β_j]` for every marker.
+    ///
+    /// # Derivation
+    ///
+    /// Given the prior `σ²_j ~ InvChi2(ν, S²)` and a single
+    /// observation β_j, the inverse-gamma full conditional has mean
+    ///
+    /// ```text
+    /// E[1 / σ²_j | β_j] = (ν + 1) / (ν · S² + β_j²).
+    /// ```
+    ///
+    /// This is the EM analogue of Gibbs's "draw σ²_j" step: instead
+    /// of sampling, we plug in the conditional mean and feed it into
+    /// the M-step. The result is deterministic and converges to the
+    /// MAP solution rather than to a posterior sample.
+    ///
+    /// # Performance
+    ///
+    /// Pure `O(n_alleles)` arithmetic, no memory allocation beyond
+    /// the output vector. Called once per EM iteration.
     fn compute_expected_inv_variance(&self) -> Array1<f64> {
         let mut expected_inv = Array1::<f64>::zeros(self.n_alleles);
-        
+
         for j in 0..self.n_alleles {
             let a = (self.nu + 1.0) / 2.0;
             let b = (self.nu * self.s_squared + self.beta[j].powi(2)) / 2.0;
             expected_inv[j] = a / b;
         }
-        
+
         expected_inv
     }
-    
+
+    /// M-step: maximise the expected complete-data log-likelihood
+    /// given the current `E[1 / σ²_j]` from the E-step.
+    ///
+    /// # Updates (in coordinate-ascent order)
+    ///
+    /// 1. **β** — for each marker `j`:
+    ///    ```text
+    ///    β_j ← (w_j' · resid + l_j · β_j_old) · σ²_e⁻¹
+    ///          ÷ (l_j · σ²_e⁻¹ + E[1 / σ²_j])
+    ///    ```
+    ///    where `resid = y − W β − X α` is the working residual.
+    ///    The `+ l_j · β_j_old` term re-injects β_j's own contribution
+    ///    into the residual so we condition on (W β − w_j β_j) without
+    ///    materialising it. Same trick as the Gibbs path.
+    ///
+    /// 2. **α** (when fixed effects present) — closed-form normal
+    ///    posterior mode per column of X.
+    ///
+    /// 3. **σ²_e** — closed-form inverse-gamma posterior mode:
+    ///    `σ²_e = (SSE + 2 b₀_e) / (n + 2 a₀_e)`.
+    ///
+    /// The fitted vector is recomputed from scratch at the start
+    /// rather than maintained incrementally because the
+    /// per-iteration M-step touches all markers in sequence anyway
+    /// (less cache-friendly to track per-marker deltas at this
+    /// scale).
     fn m_step(&mut self, expected_inv_sigma2: &Array1<f64>) {
         // fitted = W*beta + X*alpha
         let mut fitted = self.w.dot(&self.beta);

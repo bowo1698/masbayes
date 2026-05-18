@@ -144,18 +144,66 @@ fn array1_to_vec(arr: &ndarray::Array1<f64>) -> Vec<f64> {
     arr.to_vec()
 }
 
-/// Construct W matrix from haplotype genotypes (low-level binding)
+/// Construct the multi-allelic design matrix W_αh from phased haplotype
+/// data (low-level binding).
 ///
-/// Internal Rust binding. End users should call the R wrapper
-/// `construct_wah_matrix()` defined in `R/matrix-wrapper.R`.
+/// Internal Rust binding called by the R wrapper
+/// `construct_wah_matrix()`. End users should always go through the
+/// wrapper, which exposes a cleaner argument list and handles
+/// train / test alignment automatically.
 ///
-/// @param hap_matrix Matrix of haplotype genotypes (n x 2*blocks)
-/// @param colnames Column names for haplotype matrix
-/// @param allele_freq_filtered Dataframe with columns: haplotype, allele, freq
-/// @param reference_structure Optional reference structure for test set (NULL for training)
-/// @param drop_baseline Whether to drop most frequent allele as baseline
-/// @return List with W_ah matrix, allele_info dataframe, and dropped_alleles dataframe
-/// @keywords internal
+/// # Pipeline
+///
+/// 1. **Per-block encoding** — Da (2015) three-value rule for each
+///    non-baseline microhaplotype `k` with frequency `p_k`:
+///
+///    ```text
+///    W_{i,k} = −2 (1 − p_k)   if individual i is homozygous for k
+///    W_{i,k} = −(1 − 2 p_k)   if heterozygous (one copy of k)
+///    W_{i,k} =  2 p_k          if k is absent in i's genotype
+///    ```
+///
+/// 2. **Baseline drop** — the most frequent microhaplotype per block is
+///    used as the contrast reference and dropped from the columns.
+///
+/// 3. **Frequency-weighted row shrinkage** — see
+///    [`crate::matrix::frequency_weighted_row_shrinkage`]. Applied per
+///    block after encoding.
+///
+/// # Arguments
+///
+/// - `hap_matrix`: `(n, 2 · n_blocks)` integer matrix of phased
+///   microhaplotype codes. Columns alternate paternal/maternal per
+///   block.
+/// - `colnames`: column names of `hap_matrix`. Used to derive block
+///   identity (`block_1`, `block_1_copy` ⇒ both belong to block 1).
+/// - `allele_freq_filtered`: required for **training** input — an R
+///   data.frame with columns `haplotype` (character), `allele` (integer),
+///   `freq` (numeric). Pass `NULL` for test data.
+/// - `reference_structure`: required for **test** input — the return
+///   value of a prior training call, carrying the column ordering and
+///   the dropped-baseline list so the test encoding aligns with training.
+///   Pass `NULL` for training data.
+/// - `drop_baseline`: whether to drop the most-frequent microhaplotype
+///   per block as baseline. Default `TRUE` in the R wrapper; setting
+///   `FALSE` keeps all alleles (rare; produces a rank-deficient W).
+///
+/// # Returns
+///
+/// R list with three elements:
+/// - `W_ah`: the `(n, p)` design matrix with `p = Σ_b (h_b − 1)` columns
+///   (after baseline drop and row shrinkage).
+/// - `allele_info`: data frame describing each retained column —
+///   `allele_id`, `block`, `allele`, `freq`.
+/// - `dropped_alleles`: data frame of baseline microhaplotypes that
+///   were excluded.
+///
+/// # Train / test alignment (critical)
+///
+/// Always derive `allele_freq_filtered` from the **training** data only,
+/// then pass the full training return value as `reference_structure`
+/// when encoding the test set. Recomputing allele frequencies from the
+/// test set itself produces a different centering and biases GEBVs.
 #[extendr]
 fn construct_wah_matrix(
     hap_matrix: RMatrix<i32>,
@@ -269,22 +317,70 @@ fn construct_wah_matrix(
     )
 }
 
-/// Run BayesR MCMC sampling (low-level binding)
+/// Run a full BayesR Gibbs MCMC fit (low-level binding).
 ///
-/// Internal Rust binding. End users should call `run_bayesr()` (R wrapper in
-/// `R/bayesr-wrapper.R`), which sets defaults and post-processing.
+/// Internal Rust binding called by the R wrapper `run_bayesr()`. End users
+/// should always go through the R wrapper, which validates inputs, applies
+/// the documented defaults, and post-processes the raw posterior samples
+/// into the `masbayes` fit object.
 ///
-/// @param W Training genotype matrix (n x p)
-/// @param y Phenotype vector (n)
-/// @param WtW_diag Diagonal of W'W (p)
-/// @param Wty W'y vector (p)
-/// @param pi_vec Mixture proportions (4)
-/// @param sigma2_vec Variance components (4)
-/// @param sigma2_e_init Initial residual variance
-/// @param prior_params List of prior hyperparameters
-/// @param mcmc_params List of MCMC parameters
-/// @return List containing posterior samples and diagnostics
-/// @keywords internal
+/// # Model
+///
+/// ```text
+/// y = 1 · μ + X · α + W · β + ε,   ε ~ N(0, σ²_e · I)
+/// β_j | γ_j = c ~ N(0, v_c · σ²_g),   v_c ∈ {0, 1e-4, 1e-3, 1e-2}
+/// γ_j        ~ Categorical(π),         γ_j ∈ {1, 2, 3, 4}
+/// π          ~ Dirichlet(α₀),          α₀ = (1, 1, 1, 1) by default
+/// σ²_g, σ²_e ~ InvGamma(·, ·)
+/// ```
+///
+/// Component 1 is the spike (`v_c = 0`, exactly zero effect); components
+/// 2–4 are slabs of increasing variance. Sparsity emerges from the
+/// Dirichlet weighting on the spike — the data decide what fraction of
+/// markers stay zero.
+///
+/// # Sampling steps per iteration
+///
+/// See the inline math comments in [`crate::bayesr`] for the full
+/// derivation. Briefly:
+/// 1. Albert-Chib augmentation (binary trait only).
+/// 2. Fixed effects `α` from conjugate normal.
+/// 3. Intercept μ from its normal full conditional.
+/// 4. For each marker: mixture allocation `γ_j` via log-sum-exp, then
+///    `β_j` from the conditional normal given the chosen component.
+/// 5. Residual variance `σ²_e` from inverse-gamma (continuous traits).
+/// 6. Genetic-variance scale `σ²_g` from inverse-gamma.
+/// 7. Mixture proportions `π` from Dirichlet–Multinomial conjugacy.
+///
+/// # Arguments
+///
+/// - `w`: `(n, p)` design matrix.
+/// - `y`: length-`n` response. For binary, must be coded `0`/`1`.
+/// - `wtw_diag`: precomputed diagonal of `W' W` (length `p`). Avoids
+///   recomputing it inside the per-marker loop every iteration.
+/// - `x`: optional `(n, c)` fixed-effect design.
+/// - `pi_vec`: initial mixture proportions (length 4).
+/// - `sigma2_e_init`: initial residual variance.
+/// - `sigma2_ah`: initial genetic variance.
+/// - `prior_params`: list with `a0_e`, `b0_e`, `a0_g`, `b0_g`,
+///   `variance_class` (length-4 vector of relative variances).
+/// - `mcmc_params`: list with `n_iter`, `n_burn`, `n_thin`, `seed`.
+/// - `fold_id`: fold id used in verbose log prefixes.
+/// - `is_binary`: enable Albert-Chib path for binary traits.
+/// - `verbose`: print per-iteration diagnostics.
+///
+/// # Returns
+///
+/// R list with posterior sample matrices (`beta_samples`, `gamma_samples`,
+/// `sigma2_*_samples`, `pi_samples`, `mu_samples`, optional
+/// `alpha_samples` / `z_samples`), posterior point estimates, derived
+/// quantities (`sigma2_g`, `h2`), and convergence diagnostics (ESS,
+/// Geweke z).
+///
+/// # Reproducibility
+///
+/// Given the same `w`, `y`, hyperparameters, and `seed`, this function
+/// produces bit-for-bit identical posterior samples on the same platform.
 #[extendr]
 fn run_bayesr_mcmc(
     w: RMatrix<f64>,
@@ -383,22 +479,69 @@ fn run_bayesr_mcmc(
     )
 }
 
-/// Run BayesA MCMC sampling (low-level binding)
+/// Run a full BayesA Gibbs MCMC fit (low-level binding).
 ///
-/// Internal Rust binding. End users should call `run_bayesa()` (R wrapper in
-/// `R/bayesa-wrapper.R`), which sets defaults and post-processing.
+/// Internal Rust binding called by the R wrapper `run_bayesa()`. End users
+/// should always go through the R wrapper, which validates inputs and
+/// post-processes the raw posterior samples into the `masbayes` fit
+/// object.
 ///
-/// @param W Training genotype matrix (n x p)
-/// @param y Phenotype vector (n)
-/// @param WtW_diag Diagonal of W'W (p)
-/// @param Wty W'y vector (p)
-/// @param nu Degrees of freedom for marker variance prior
-/// @param S_squared Prior scale for marker variances
-/// @param sigma2_e_init Initial residual variance
-/// @param prior_params List of prior hyperparameters
-/// @param mcmc_params List of MCMC parameters
-/// @return List containing posterior samples and diagnostics
-/// @keywords internal
+/// # Model
+///
+/// ```text
+/// y = 1 · μ + X · α + W · β + ε,    ε ~ N(0, σ²_e · I)
+/// β_j | σ²_j ~ N(0, σ²_j)
+/// σ²_j       ~ InvChi2(ν, S²),       S² = σ²_β / L (scaled)
+/// σ²_e       ~ InvGamma(a₀_e, b₀_e)
+/// ```
+///
+/// Each marker carries its own variance `σ²_j` drawn from a scaled
+/// inverse-chi-squared prior. Marginalising `σ²_j` yields a `t_ν`-shrunk
+/// effect distribution — this is the defining feature of BayesA vs.
+/// ridge regression (which assumes a single common variance for all
+/// markers).
+///
+/// # Sampling steps per iteration
+///
+/// See [`crate::bayesa`] for the full math; briefly:
+/// 1. Albert-Chib augmentation (binary trait only).
+/// 2. Fixed effects `α` from conjugate normal full conditional.
+/// 3. Intercept μ from its normal full conditional.
+/// 4. For each marker `j`: sample `σ²_j` from inverse-gamma, then `β_j`
+///    from its normal full conditional given the new variance. Maintain
+///    the working residual `yadj` incrementally to avoid recomputing
+///    `W β` from scratch.
+/// 5. Residual variance `σ²_e` from inverse-gamma (continuous traits).
+///
+/// # Arguments
+///
+/// - `w`: `(n, p)` design matrix.
+/// - `y`: length-`n` response. For binary, must be coded `0`/`1`.
+/// - `wtw_diag`: precomputed diagonal of `W' W` (length `p`).
+/// - `x`: optional `(n, c)` fixed-effect design.
+/// - `nu`: degrees of freedom of the scaled inverse-chi-squared prior
+///   on each `σ²_j`. Default 4.5.
+/// - `s_squared`: scale of the same distribution.
+/// - `sigma2_e_init`: initial residual variance.
+/// - `prior_params`: list with `a0_e`, `b0_e` for the residual variance
+///   prior.
+/// - `mcmc_params`: list with `n_iter`, `n_burn`, `n_thin`, `seed`.
+/// - `fold_id`: fold id used in verbose log prefixes.
+/// - `is_binary`: enable Albert-Chib path for binary traits.
+/// - `verbose`: print per-iteration diagnostics.
+///
+/// # Returns
+///
+/// R list with posterior sample arrays (`beta_samples`, `sigma2_j_samples`,
+/// `sigma2_e_samples`, `mu_samples`, optional `alpha_samples` /
+/// `z_samples`), posterior means, derived quantities (`sigma2_g`, `h2`),
+/// and convergence diagnostics.
+///
+/// # Reproducibility
+///
+/// Given identical `w`, `y`, hyperparameters, and `seed`, the function
+/// produces bit-for-bit identical posterior samples on the same
+/// platform.
 #[extendr]
 fn run_bayesa_mcmc(
     w: RMatrix<f64>,
@@ -489,11 +632,53 @@ fn run_bayesa_mcmc(
     )
 }
 
-/// Run BayesR stochastic EM (low-level binding)
+/// Run a BayesR stochastic-EM fit (low-level binding).
 ///
-/// Internal Rust binding. End users should call `run_bayesr(method = "em")`.
+/// Internal Rust binding called by the R wrapper `run_bayesr(method = "em")`.
+/// Replaces the full Gibbs sampling of [`run_bayesr_mcmc`] with an EM-style
+/// coordinate-ascent fit that returns point estimates of marker effects
+/// and variance components rather than posterior samples.
 ///
-/// @keywords internal
+/// # Algorithm overview
+///
+/// At each iteration, EM performs:
+/// 1. **E-step**: compute the soft mixture membership probabilities for
+///    every marker (which mixture component each `β_j` likely belongs to)
+///    given the current parameters.
+/// 2. **M-step**: update marker effects, mixture proportions `π`, the
+///    component-specific variances `σ²_c`, the residual variance `σ²_e`,
+///    and the intercept μ to maximise the expected complete-data
+///    log-likelihood under the soft memberships.
+///
+/// Compared with the full Gibbs sampler:
+///
+/// - **No RNG draws**, hence no need for a seed. Two runs on identical
+///   inputs produce bit-for-bit identical output.
+/// - **Faster per iteration**: no posterior sample storage, no log-sum-exp
+///   for stochastic mixture allocation.
+/// - **No uncertainty**: only point estimates. Posterior credible
+///   intervals, ESS, and Geweke diagnostics are not available.
+///
+/// # Arguments
+///
+/// - `w`: `(n, p)` design matrix (W_αh from Da encoding or VanRaden SNP).
+/// - `y`: length-`n` response vector. Continuous trait only here; binary
+///   support is currently only wired through the Gibbs path.
+/// - `wtw_diag`: length-`p` precomputed diagonal of `W' W`, supplied by
+///   the R wrapper to avoid recomputing inside the kernel.
+/// - `x`: optional `(n, c)` fixed-effects design (Nullable).
+/// - `pi_vec`: length-4 initial mixture proportions.
+/// - `sigma2_vec`: length-4 initial variance for each mixture component.
+/// - `sigma2_e_init`: initial residual variance.
+/// - `em_params`: list with `max_iter` and `tol` controlling convergence.
+/// - `fold_id`: cross-validation fold id (used for verbose log prefixes).
+/// - `verbose`: print per-iteration progress.
+///
+/// # Returns
+///
+/// R list with the same shape as `run_bayesr_mcmc` (so the R wrapper can
+/// use identical post-processing), but the "sample" arrays now contain the
+/// EM trajectory rather than posterior draws.
 #[extendr]
 fn run_bayesr_em(
     w: RMatrix<f64>,
@@ -553,11 +738,43 @@ fn run_bayesr_em(
     )
 }
 
-/// Run BayesA stochastic EM (low-level binding)
+/// Run a BayesA stochastic-EM fit (low-level binding).
 ///
-/// Internal Rust binding. End users should call `run_bayesa(method = "em")`.
+/// Internal Rust binding called by the R wrapper `run_bayesa(method = "em")`.
+/// The EM variant of BayesA replaces full Gibbs sampling of the per-marker
+/// variances `σ²_j` with their conditional expectation (the E-step), then
+/// updates marker effects, residual variance, and intercept in closed
+/// form (the M-step).
 ///
-/// @keywords internal
+/// # Why EM for BayesA
+///
+/// The per-marker variances `σ²_j` are the defining feature of BayesA —
+/// they induce Student-t shrinkage on marker effects. Gibbs samples
+/// `σ²_j` from its scaled-inverse-chi-squared full conditional every
+/// iteration; EM plugs in the conditional mean instead. The result is:
+///
+/// - A point estimate of `β` and `σ²_j` rather than posterior samples.
+/// - Deterministic output (no RNG).
+/// - Typical run time on the order of 1/10 the equivalent Gibbs run.
+///
+/// Use the EM variant when only point estimates are needed (e.g. GEBV
+/// computation inside a CV loop). Use [`run_bayesa_mcmc`] when you need
+/// credible intervals, heritability uncertainty, or convergence diagnostics.
+///
+/// # Arguments
+///
+/// - `w`, `y`, `wtw_diag`, `x`: same as the Gibbs runner.
+/// - `nu`: degrees of freedom of the scaled inverse-chi-squared prior on
+///   each `σ²_j`. Default 4.5 (used by the R wrapper).
+/// - `s_squared`: prior scale of the same distribution.
+/// - `sigma2_e_init`: initial residual variance.
+/// - Other arguments: standard EM controls (`em_params`, `fold_id`,
+///   `verbose`).
+///
+/// # Returns
+///
+/// R list shaped like `run_bayesa_mcmc` for shape compatibility, but the
+/// "sample" arrays carry EM trajectory rather than posterior draws.
 #[extendr]
 fn run_bayesa_em(
     w: RMatrix<f64>,

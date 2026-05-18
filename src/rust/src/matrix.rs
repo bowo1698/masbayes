@@ -123,7 +123,33 @@ pub struct WMatrixBuilder {
 }
 
 impl WMatrixBuilder {
-    /// Create new builder from training data
+    /// Create a new builder for the training set.
+    ///
+    /// # Inputs
+    ///
+    /// - `hap_matrix`: `(n, 2 · n_blocks)` integer matrix. Each
+    ///   individual contributes two columns per haplotype block
+    ///   (paternal and maternal copies). Column names encoded as
+    ///   `block_X` and `block_X_copy`.
+    /// - `colnames`: column names of `hap_matrix`, used to derive
+    ///   block identity for the per-block encoding.
+    /// - `allele_freq`: list of `AlleleFreq` records — one per
+    ///   (block, allele) pair, with the population frequency. Must
+    ///   come from the training set, never from the test set.
+    /// - `drop_baseline`: when `true` (the default in the R
+    ///   wrapper), the most frequent microhaplotype per block is
+    ///   used as the contrast reference and dropped from the design
+    ///   matrix. When `false`, all alleles are retained (produces a
+    ///   rank-deficient design — rarely useful).
+    ///
+    /// # Allocation
+    ///
+    /// Builds an internal frequency map keyed by block base name.
+    /// The map is consulted by [`build`] during the per-block
+    /// encoding sweep. Cost: `O(n_alleles_total)` — negligible
+    /// relative to the encoding itself.
+    ///
+    /// [`build`]: Self::build
     pub fn new(
         hap_matrix: Array2<i32>,
         colnames: Vec<String>,
@@ -165,7 +191,33 @@ impl WMatrixBuilder {
             .to_string()
     }
     
-    /// Build W matrix for training set
+    /// Build the W_αh design matrix for the training set.
+    ///
+    /// # Algorithm
+    ///
+    /// For each block:
+    /// 1. Look up the per-block allele frequencies in the cached
+    ///    map built by `new`.
+    /// 2. Sort alleles by frequency (descending), drop the most
+    ///    frequent as baseline if `drop_baseline = true`.
+    /// 3. Apply the Da (2015) Eqs. 22–24 three-value rule to every
+    ///    individual at every retained allele.
+    /// 4. Apply [`frequency_weighted_row_shrinkage`] to the per-block
+    ///    matrix.
+    /// 5. Concatenate all per-block matrices horizontally to form
+    ///    the final `(n, p)` W_αh.
+    ///
+    /// # Returns
+    ///
+    /// [`WMatrixResult`] containing the encoded matrix, the
+    /// `allele_info` table (one row per retained column), and the
+    /// `dropped_alleles` table (baselines that were excluded). The
+    /// dropped list is essential for downstream test-set encoding via
+    /// [`build_with_reference`]: it carries the column ordering and
+    /// baseline choice forward to keep the test design aligned with
+    /// the training one.
+    ///
+    /// [`build_with_reference`]: Self::build_with_reference
     pub fn build(&self) -> WMatrixResult {
         let mut w_blocks: Vec<Array2<f64>> = Vec::new();
         let mut all_allele_info: Vec<AlleleInfo> = Vec::new();
@@ -276,7 +328,42 @@ impl WMatrixBuilder {
         }
     }
     
-    /// Build W matrix for test set using reference structure from W
+    /// Build the W_αh matrix for the **test** set, using the column
+    /// ordering and allele frequencies from a prior training-set call.
+    ///
+    /// # Why a separate method
+    ///
+    /// The training-set [`build`] method (a) derives allele frequencies
+    /// from the data being encoded, and (b) picks per-block baselines
+    /// based on those frequencies. Both choices must be **frozen** to
+    /// the training values when encoding a test set, otherwise:
+    ///
+    /// - Test-set frequencies might pick a different baseline ⇒ wrong
+    ///   column ordering ⇒ test-set GEBVs are nonsense.
+    /// - Test-set centering would shift relative to training ⇒ GEBV
+    ///   biased away from training-set predictions.
+    ///
+    /// This method enforces both: it pulls allele IDs (with their
+    /// associated frequencies) and the dropped-baseline list out of
+    /// the `ReferenceStructure` passed in, and applies them verbatim
+    /// to the new haplotype data.
+    ///
+    /// # Inputs
+    ///
+    /// - `hap_matrix`: test-set haplotype matrix, shape
+    ///   `(n_test, 2 · n_blocks)`.
+    /// - `colnames`: column names of the test haplotype matrix
+    ///   (typically identical to training colnames).
+    /// - `reference`: the [`ReferenceStructure`] returned by the
+    ///   training-set [`build`] call.
+    ///
+    /// # Returns
+    ///
+    /// `(n_test, p)` design matrix with columns aligned to the
+    /// training one. Ready to feed into [`crate::bayesa::BayesARunner`]
+    /// or [`crate::bayesr::BayesRRunner`] for prediction.
+    ///
+    /// [`build`]: Self::build
     pub fn build_with_reference(
         hap_matrix: Array2<i32>,
         colnames: Vec<String>,
@@ -445,6 +532,35 @@ mod tests {
         assert!((w[[0, 0]] - 2.0 * p * scale).abs() < 1e-12);
         assert!((w[[1, 0]] - (-(1.0 - 2.0 * p)) * scale).abs() < 1e-12);
         assert!((w[[2, 0]] - (-2.0 * (1.0 - p)) * scale).abs() < 1e-12);
+    }
+
+    #[test]
+    fn shrinkage_reduces_weighted_row_sum() {
+        // For any block with at least 2 non-baseline alleles, the
+        // post-shrinkage p-weighted row sum is reduced relative to
+        // the pre-shrinkage value (factor 1 - Q/F).
+        let mut w = make_w(&[
+            [1.5, -0.5],
+            [-2.0, 3.0],
+            [0.0, 0.0],
+        ]);
+        let p = [0.3_f64, 0.2_f64];
+        let freqs = vec![(1, p[0]), (2, p[1])];
+
+        // Pre-shrinkage weighted row sums.
+        let pre: Vec<f64> = (0..w.nrows()).map(|i| {
+            p[0] * w[[i, 0]] + p[1] * w[[i, 1]]
+        }).collect();
+
+        frequency_weighted_row_shrinkage(&mut w, &freqs);
+
+        // Post-shrinkage weighted row sums; magnitude should not exceed pre.
+        for i in 0..w.nrows() {
+            let post = p[0] * w[[i, 0]] + p[1] * w[[i, 1]];
+            assert!(post.abs() <= pre[i].abs() + 1e-12,
+                "row {} post-shrink |sum| {} should not exceed pre {}",
+                i, post.abs(), pre[i].abs());
+        }
     }
 
     #[test]
