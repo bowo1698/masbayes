@@ -1,3 +1,43 @@
+//! # masbayes — Rust kernel
+//!
+//! Computational backend for the `masbayes` R package: Bayesian genomic
+//! prediction models for biallelic SNP and multi-allelic microhaplotype
+//! markers. All numerically heavy work (MCMC, stochastic EM, design matrix
+//! construction) lives here; the R side is a thin extendr wrapper.
+//!
+//! ## Module map
+//!
+//! - [`matrix`] — design-matrix construction:
+//!   * `WMatrixBuilder` implements the Da (2015) $W_{\alpha h}$ encoding for
+//!     phased multi-allelic haplotype data, followed by a per-locus
+//!     frequency-weighted row shrinkage.
+//!   * Helper routines for biallelic SNP encoding (VanRaden) are exposed via
+//!     the FFI wrappers in this file.
+//! - [`bayesa`] — BayesA Gibbs sampler. Per-marker variance follows a scaled
+//!   inverse chi-squared prior, leading to a t-shrunk effect distribution.
+//!   Supports binary traits via Albert–Chib data augmentation.
+//! - [`bayesr`] — BayesR Gibbs sampler. Marker effects follow a four-component
+//!   normal mixture (one spike at zero plus three slab components scaled
+//!   relative to the genetic variance); mixture proportions are updated with
+//!   a Dirichlet–Multinomial step.
+//! - [`bayesa_em`] / [`bayesr_em`] — Stochastic EM variants of the two
+//!   samplers. Faster but discard posterior uncertainty.
+//! - [`utils`] — RNG helpers (inverse-gamma, Dirichlet, normal, tabulate)
+//!   and R↔`ndarray` conversion shims used across the kernels.
+//! - [`types`] — POD result structs returned to R via the extendr wrappers.
+//!
+//! ## Reproducibility
+//!
+//! All samplers take a `seed: u64` initialising a PCG64 RNG (`rand_pcg`).
+//! Given the same data, hyperparameters, and seed, the kernels reproduce
+//! posterior samples bit-for-bit on the same platform.
+//!
+//! ## Reference
+//!
+//! Da, Y. (2015). Multi-allelic haplotype model based on genetic partition
+//! for genomic prediction and variance component estimation using SNP
+//! markers. *BMC Genetics*, 16:144.
+
 use extendr_api::prelude::*;
 
 mod matrix;

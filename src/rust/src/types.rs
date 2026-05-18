@@ -1,3 +1,24 @@
+//! POD result structs returned by the BayesR and BayesA kernels.
+//!
+//! These types are written by the MCMC / EM runners in `bayesr.rs`,
+//! `bayesa.rs`, `bayesr_em.rs`, `bayesa_em.rs` and then marshalled to R
+//! lists by the extendr wrappers in `lib.rs`. Field naming matches the
+//! manuscript notation:
+//!
+//! - `beta_samples` / `beta_hat`: marker (allele) effects.
+//! - `mu_samples` / `mu_hat`: intercept (grand mean).
+//! - `sigma2_e_*`: residual variance.
+//! - `sigma2_j_*` (BayesA) and `sigma2_{small,medium,large}_*` (BayesR):
+//!   per-marker / per-component variance components.
+//! - `gamma_samples` / `pi_samples` (BayesR only): mixture allocations and
+//!   their Dirichlet posterior weights.
+//! - `alpha_*`: optional fixed-effect coefficients; `None` when no design
+//!   matrix `X` was supplied.
+//! - `z_hat`: posterior mean of latent liabilities (Albert–Chib) for
+//!   binary traits; `None` for continuous traits.
+//! - `sigma2_g`, `h2`: derived quantities — total additive variance and
+//!   narrow-sense heritability computed from posterior means.
+
 use ndarray::{Array1, Array2};
 
 /// Results from BayesR

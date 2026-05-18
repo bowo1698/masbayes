@@ -1,3 +1,51 @@
+//! BayesR Gibbs sampler.
+//!
+//! ## Model
+//!
+//! Marker effects follow a four-component mixture of normals (a spike at
+//! zero plus three slab components scaled relative to the total genetic
+//! variance):
+//!
+//! ```text
+//! y = 1·μ + X·α + W·β + ε,             ε ~ N(0, σ²_e · I)
+//! β_j | γ_j = c ~ N(0, vᶜ · σ²_g),     vᶜ ∈ {0, 1e-4, 1e-3, 1e-2}
+//! γ_j        ~ Categorical(π),          γ_j ∈ {1, 2, 3, 4}
+//! π          ~ Dirichlet(α₀)
+//! σ²_e, σ²_g ~ InvGamma(·, ·)
+//! ```
+//!
+//! Component 1 is the spike (`vᶜ = 0`, exactly zero effect); components 2–4
+//! are slabs of increasing variance. Sparsity comes from the high prior
+//! mass on the spike under the Dirichlet, while large-effect markers
+//! escape into one of the slabs.
+//!
+//! ## Sampling steps (per Gibbs iteration)
+//!
+//! 1. For each marker $j$, draw the mixture label $\gamma_j$ from its
+//!    full conditional categorical (probabilities proportional to the
+//!    marginal likelihood under each component × $\pi_c$).
+//! 2. Conditional on $\gamma_j = c$, draw $\beta_j$ from its normal
+//!    full conditional (zero when `vᶜ = 0`).
+//! 3. Update $\pi$ via Dirichlet–Multinomial conjugacy:
+//!    $\pi \mid \gamma \sim \mathrm{Dirichlet}(\alpha_0 + n_c)$ with
+//!    $n_c$ tabulated by `tabulate(gamma, 4)`.
+//! 4. Update $\sigma²_g$ and $\sigma²_e$ from their inverse-gamma full
+//!    conditionals.
+//! 5. Update the intercept $\mu$ and (optional) fixed effects $\alpha$.
+//! 6. (Binary trait) Albert–Chib augmentation step on latent liabilities.
+//!
+//! ## State management
+//!
+//! Identical strategy to BayesA: keep an incremental working residual
+//! `yadj` updated after every coordinate move so $W\beta$ is never
+//! recomputed from scratch within a sweep.
+//!
+//! ## Output
+//!
+//! `BayesRRunner::run` returns [`BayesRResults`] with posterior samples
+//! of all parameters, mixture allocations $\gamma$, mixture weights $\pi$,
+//! and derived quantities (genetic variance, heritability).
+
 use ndarray::{Array1, Array2};
 use rand::SeedableRng;
 use rand::Rng;
@@ -248,7 +296,31 @@ impl BayesRRunner {
                 self.yadj.mapv_inplace(|v| v - mu_delta);
             }
 
-            // 1. Sample beta and gamma
+            // ============================================================
+            // Step 4 — Mixture allocation γ_j and marker effect β_j.
+            //
+            // BayesR posits a four-component mixture on each β_j:
+            //     β_j | γ_j = c  ~  N(0, vᶜ · σ²_g),
+            //     vᶜ ∈ {0, 1e-4, 1e-3, 1e-2}   (component 1 is the spike).
+            // The categorical posterior of γ_j is computed by integrating
+            // β_j out under each component (marginalised likelihood):
+            //     log p(γ_j = c | rest) ∝ log π_c
+            //                              − 0.5 · log(1 + l_j · vᶜ / σ²_e)
+            //                              + 0.5 · (rhs²·vᶜ·σ²_g)
+            //                                       / (σ²_e (σ²_e + l_j · vᶜ · σ²_g))
+            // where rhs = w_j' · yadj + l_j · β_j_old absorbs the current
+            // β_j contribution back into the residual (same trick as BayesA).
+            //
+            // Numerical stability: probabilities are computed via log-sum-exp
+            // to avoid underflow when one component dominates.
+            //
+            // Conditional on γ_j = c (the sampled component):
+            //     β_j  ~  N(μ_post, σ²_post)  if vᶜ > 0
+            //     β_j  ~  δ(0)                 if vᶜ = 0  (spike)
+            //     σ²_post⁻¹ = l_j / σ²_e + 1 / (vᶜ · σ²_g)
+            //     μ_post    = σ²_post · rhs / σ²_e
+            // yadj is updated incrementally with (β_j_new − β_j_old) · w_j.
+            // ============================================================
             let inv_sigma2_e = 1.0 / self.sigma2_e;
 
             for j in 0..self.n_alleles {
@@ -338,20 +410,36 @@ impl BayesRRunner {
                 }
             }
 
-            // 2. Sample variance components.
-            // For gaussian: SSE = sum((y - mu - W*beta)^2) = sum(yadj^2).
+            // ============================================================
+            // Step 5 — Residual variance σ²_e (Gibbs, continuous traits).
+            //
+            //     σ²_e | rest  ~  InvGamma( a₀_e + n/2,  b₀_e + SSE/2 )
+            //     SSE = Σ_i yadj_i²  (since yadj = response − μ − W β − X α).
+            //
+            // Binary traits fix σ²_e = 1 on the liability scale; see Step 1
+            // for the probit identifiability constraint.
+            // ============================================================
             if !self.is_binary {
                 let sse: f64 = self.yadj.iter().map(|r| r.powi(2)).sum();
                 let a_e = self.a0_e + (self.n as f64) / 2.0;
                 let b_e = self.b0_e + sse / 2.0;
                 self.sigma2_e = rinvgamma(&mut self.rng, a_e, b_e);
-                // sigma2_e stays fixed at 1.0 for binary
             }
             
-            // Tabulate component counts
+            // ============================================================
+            // Step 6 — Genetic-variance scale σ²_g (Gibbs).
+            //
+            // The three slab components share a common scale σ²_g with
+            // component-specific factors v_c (variance_class):
+            //     σ²_c = σ²_g · v_c   for c ∈ {1, 2, 3}.
+            // Conjugate inverse-gamma update from the non-zero β_j only:
+            //     σ²_g | rest  ~  InvGamma( a₀_g + n_nz/2,
+            //                                b₀_g + Σ_{j:γ_j>0} β_j²/v_{γ_j} / 2 )
+            // where n_nz = #{j : γ_j > 0}. The spike (γ_j = 0) contributes
+            // nothing because β_j is exactly zero there.
+            // ============================================================
             let n_counts = tabulate(&self.gamma, 4);
 
-            // Pooled base variance update
             let mut varg_sum = 0.0;
             let mut n_nz: usize = 0;
             for j in 0..self.n_alleles {
@@ -366,12 +454,21 @@ impl BayesRRunner {
             let b_g = self.b0_g + varg_sum / 2.0;
             let varg = rinvgamma(&mut self.rng, a_g, b_g);
 
-            // Propagate to all components
             for k in 1..4 {
                 self.sigma2_vec[k] = varg * self.variance_class[k];
             }
-            
-            // 3. Sample mixture proportions
+
+            // ============================================================
+            // Step 7 — Mixture proportions π (Dirichlet–Multinomial Gibbs).
+            //
+            //     π | γ  ~  Dirichlet(α₀ + n_c, c = 1..4)
+            // with prior concentration α₀ = 1 (uniform) and n_c the count
+            // of markers currently assigned to component c (from `tabulate`
+            // above). Sampling π every iteration lets the prior adapt to
+            // the observed sparsity in the data — small numbers of large
+            // effects pull π toward the slabs; many near-zero effects pull
+            // π_1 (the spike) toward 1.
+            // ============================================================
             let mut alpha_post = Array1::<f64>::ones(4);
             for k in 0..4 {
                 alpha_post[k] += n_counts[k] as f64;

@@ -1,5 +1,36 @@
 // src/rust/src/bayesa_em.rs
 
+//! BayesA — stochastic EM variant.
+//!
+//! Replaces the full Gibbs sweep of [`crate::bayesa`] with an EM-style
+//! coordinate-ascent update that uses posterior means (rather than draws)
+//! of the per-marker variances $\sigma²_j$. Concretely, instead of
+//! sampling $\sigma²_j$ each iteration, the E-step plugs in its
+//! conditional expectation and the M-step closes the loop by updating
+//! $\beta$ and $\sigma²_e$.
+//!
+//! ## When to use
+//!
+//! - Genome-wide screens or large runs where full posterior uncertainty
+//!   is not needed and only point estimates of marker effects ($\hat\beta$)
+//!   are reported.
+//! - Cross-validation folds where many BayesA fits are needed and runtime
+//!   is the bottleneck.
+//!
+//! ## When not to use
+//!
+//! - Reporting credible intervals, posterior distributions of variance
+//!   components, or heritability uncertainty — these require the full
+//!   MCMC in [`crate::bayesa`].
+//! - Datasets with strong multimodality in the marker-effect posterior;
+//!   EM only finds a local mode.
+//!
+//! ## Output
+//!
+//! Reuses the [`BayesAResults`] struct so downstream R code does not need
+//! to branch on which estimator was used. Sample arrays in the result
+//! contain point estimates rather than MCMC traces.
+
 use ndarray::{Array1, Array2};
 use crate::types::BayesAResults;
 

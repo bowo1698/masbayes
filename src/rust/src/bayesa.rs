@@ -1,3 +1,51 @@
+//! BayesA Gibbs sampler.
+//!
+//! ## Model
+//!
+//! For a continuous trait,
+//!
+//! ```text
+//! y = 1·μ + X·α + W·β + ε,        ε ~ N(0, σ²_e · I)
+//! β_j | σ²_j ~ N(0, σ²_j)
+//! σ²_j      ~ InvChi2(ν, S²),     S² = σ²_β / L  (scaled)
+//! σ²_e      ~ InvGamma(a₀_e, b₀_e)
+//! ```
+//!
+//! Marginalising the per-marker variance yields a $t_\nu$-shrunk effect
+//! distribution, which is the defining feature of BayesA relative to
+//! ridge regression / BayesC. The prior on `σ²_j` is informative
+//! (default `ν = 4.5`) so the posterior contracts toward small effects
+//! unless data demand otherwise.
+//!
+//! ## Sampling steps (per Gibbs iteration)
+//!
+//! 1. Update marker effects $\beta_j$ one at a time from their full
+//!    conditionals (Normal with mean and variance involving `wtw_diag[j]`,
+//!    `σ²_e`, `σ²_j`, and the working residual `yadj`).
+//! 2. Update per-marker variances $\sigma²_j$ from
+//!    $\mathrm{InvChi2}(\nu + 1, (\nu S² + \beta_j²) / (\nu + 1))$.
+//! 3. Update residual variance $\sigma²_e$ from
+//!    $\mathrm{InvGamma}(a_0 + n/2,\, b_0 + \|y - \hat{y}\|^2 / 2)$.
+//! 4. Update intercept $\mu$ from its normal full conditional given the
+//!    residual mean.
+//! 5. (Optional) Update fixed effects $\alpha$ component-wise from normal
+//!    full conditionals using `xtx_diag`.
+//! 6. (Binary trait) Albert–Chib step: sample latent liabilities $z$ from
+//!    truncated normals consistent with the observed binary response.
+//!
+//! ## State management
+//!
+//! `BayesARunner` keeps a single working residual vector `yadj = y - μ -
+//! X·α - W·β` (or `z - …` for binary traits) updated incrementally after
+//! every coordinate move. This avoids recomputing the full $W\beta$
+//! product at each iteration, which is the main reason the kernel is fast.
+//!
+//! ## Output
+//!
+//! `BayesARunner::run` returns [`BayesAResults`] containing posterior
+//! samples (after burn-in / thinning) of all parameters, plus posterior
+//! means and derived quantities (`sigma2_g`, `h2`).
+
 use ndarray::{Array1, Array2};
 use rand::SeedableRng;
 use rand_pcg::Pcg64;
@@ -156,8 +204,20 @@ impl BayesARunner {
         // MCMC loop
         for iter in 0..self.n_iter {
 
-            // Albert-Chib data augmentation: maintain yadj invariant
-            // yadj = response - mu - W*beta_a, so (W*beta_a)[i] + mu = z_old - yadj[i].
+            // ============================================================
+            // Step 1 — Albert-Chib data augmentation (binary traits only).
+            //
+            // For binary y_i ∈ {0, 1}, introduce latent liabilities
+            //     z_i = μ + W β + X α + ε_i,   ε_i ~ N(0, 1)
+            // with y_i = 1[z_i > 0]. The conditional posterior of z_i is
+            //     z_i | y_i = 1  ~  N(μ_i, 1) truncated to z_i > 0
+            //     z_i | y_i = 0  ~  N(μ_i, 1) truncated to z_i ≤ 0
+            // where μ_i is the linear predictor for individual i, recovered
+            // from the working residual via μ_i = z_old_i - yadj_i (since
+            // yadj = z - μ - W β - X α). After resampling z, yadj is updated
+            // incrementally to preserve this invariant. The residual variance
+            // is fixed to 1 on the liability scale (probit identifiability).
+            // ============================================================
             if self.is_binary {
                 for i in 0..self.n {
                     let z_old = self.z[i];
@@ -172,7 +232,17 @@ impl BayesARunner {
                 self.sigma2_e_a = 1.0;
             }
 
-            // Sample fixed-effect coefficients alpha (when X provided).
+            // ============================================================
+            // Step 2 — Fixed-effect coefficients α (Gibbs, when X provided).
+            //
+            // For each fixed-effect column k of X with diagonal l_k = x_k'x_k:
+            //     α_k | rest  ~  N(μ_post, σ²_post),
+            //     σ²_post = σ²_e / l_k,
+            //     μ_post   = (x_k · yadj + l_k · α_k_old) / l_k.
+            // Skipped silently if l_k < 1e-10 (zero-variance column / aliased).
+            // The (l_k · α_k_old) term cancels the contribution of α_k_old
+            // already absorbed into yadj, avoiding a second pass over y.
+            // ============================================================
             if let Some(ref x_mat) = self.x {
                 for k in 0..self.n_fixed {
                     let l_k = self.xtx_diag[k];
@@ -195,6 +265,17 @@ impl BayesARunner {
                 }
             }
 
+            // ============================================================
+            // Step 3 — Intercept μ (Gibbs).
+            //
+            // Full conditional under a flat prior on μ:
+            //     μ | rest  ~  N(mean(response - W β - X α),  σ²_e / n)
+            //                = N(mean(yadj) + μ_old,         σ²_e / n)
+            // The μ_old term restores μ from yadj because yadj already has
+            // the previous μ subtracted off. After sampling, yadj is updated
+            // in-place by subtracting (μ_new - μ_old) so the invariant
+            // yadj = response - μ - W β - X α holds going into Step 4.
+            // ============================================================
             // Sample mu. mean(response - W*beta - X*alpha) = mean(yadj) + mu.
             let mu_mean = self.yadj.iter().sum::<f64>() / self.n as f64 + self.mu;
             let mu_var = self.sigma2_e_a / self.n as f64;
@@ -209,15 +290,40 @@ impl BayesARunner {
 
             let inv_sigma2_e = 1.0 / self.sigma2_e_a;
 
+            // ============================================================
+            // Step 4 — Per-marker variance σ²_j and marker effect β_j.
+            //
+            // BayesA pairs each marker with its own variance σ²_j drawn
+            // from a scaled inverse-χ² prior with d.o.f. ν and scale S²:
+            //     σ²_j  ~  InvChi2(ν, S²).
+            // Marginalising σ²_j induces a Student-t shrinkage on β_j,
+            // which is the defining feature of BayesA vs. ridge regression.
+            //
+            // Both updates run together inside the per-marker loop so the
+            // working residual yadj only needs to be touched once per
+            // marker (after β_j is resampled, via incremental delta).
+            // ============================================================
             for j in 0..self.n_alleles {
                 let l_j = self.wtw_diag[j];
 
-                // Sample sigma2_j | beta_j_current
+                // 4a — σ²_j | β_j  ~  InvGamma( (ν+1)/2,  (ν·S² + β_j²)/2 )
+                //
+                // Conjugate update of a scaled-inv-χ² prior with one
+                // observation β_j (the current marker effect). Larger β_j
+                // pushes σ²_j higher, which then weakens shrinkage in the
+                // subsequent β_j draw below — the mechanism behind BayesA's
+                // adaptive per-marker regularisation.
                 let shape_j = (self.nu + 1.0) / 2.0;
                 let scale_j = (self.nu * self.s_squared + self.beta_a[j].powi(2)) / 2.0;
                 self.sigma2_j[j] = rinvgamma(&mut self.rng, shape_j, scale_j);
 
-                // Sample beta_j: residuals_prod = w_col[j] · yadj
+                // 4b — β_j | rest  ~  N(μ_post, σ²_post)
+                //     σ²_post⁻¹  =  l_j / σ²_e  +  1 / σ²_j
+                //     μ_post     =  σ²_post · (w_j' · yadj_with_β_j_added) / σ²_e
+                // where l_j = w_j' w_j is precomputed once at construction.
+                // The "rhs = residuals_prod + l_j · β_j_old" trick adds the
+                // current β_j contribution back into the residual so we
+                // condition on (W β − w_j β_j) without ever materialising it.
                 let w_j = self.w.column(j);
                 let residuals_prod: f64 = w_j.iter()
                     .zip(self.yadj.iter())
@@ -253,7 +359,18 @@ impl BayesARunner {
                     self.fold_id, mean_abs_beta, sse_check, self.mu);
             }
 
-            // Sample sigma2_e (gaussian only)
+            // ============================================================
+            // Step 5 — Residual variance σ²_e (Gibbs, continuous traits).
+            //
+            //     σ²_e | rest  ~  InvGamma( a₀_e + n/2,  b₀_e + SSE/2 )
+            //     SSE = Σ_i yadj_i²
+            // The hyperparameters a₀_e, b₀_e set the (weakly informative)
+            // inverse-gamma prior; defaults are 1 and 0 respectively, giving
+            // an essentially flat prior on log σ²_e.
+            //
+            // Binary traits skip this step — σ²_e is fixed to 1 on the
+            // liability scale for probit identifiability (see Step 1).
+            // ============================================================
             if !self.is_binary {
                 let sse: f64 = self.yadj.iter().map(|r| r.powi(2)).sum();
                 let a_e = self.a0_e + (self.n as f64) / 2.0;

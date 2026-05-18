@@ -1,3 +1,20 @@
+//! Shared utilities for the masbayes kernels.
+//!
+//! Two unrelated groups of helpers live here:
+//!
+//! 1. **R ↔ `ndarray` conversion** — `rmatrix_to_array2*` copy an extendr
+//!    `RMatrix` into an owned `ndarray::Array2` so the MCMC loops can work
+//!    with native Rust types without going through the R FFI on every cell
+//!    access. Copy cost is paid once per kernel invocation.
+//! 2. **Sampling primitives** — `rnorm`, `rinvgamma`, `rdirichlet`,
+//!    `tabulate`. These wrap `rand_distr` distributions so the call sites
+//!    in `bayesa.rs` / `bayesr.rs` stay close to the manuscript notation
+//!    (e.g. `sigma2 ~ InvGamma(a, b)` reads as `rinvgamma(rng, a, b)`).
+//!
+//! All sampling functions take an `&mut R: Rng` so that the caller controls
+//! the seed; this is what makes the full MCMC reproducible from a single
+//! `Pcg64::seed_from_u64(seed)` at the start of each runner.
+
 use extendr_api::prelude::*;
 use ndarray::{Array1, Array2};
 use rand::Rng;

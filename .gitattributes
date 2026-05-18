@@ -1,0 +1,3 @@
+man/*.Rd             linguist-generated=true
+R/extendr-wrappers.R linguist-generated=true
+src/rust/Cargo.lock  linguist-generated=true

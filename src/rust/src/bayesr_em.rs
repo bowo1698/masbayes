@@ -1,5 +1,33 @@
 // src/rust/src/bayesr_em.rs
 
+//! BayesR — stochastic EM variant.
+//!
+//! Replaces the full Gibbs sweep of [`crate::bayesr`] with an EM-style
+//! update where the mixture allocations $\gamma_j$ are replaced by their
+//! posterior probabilities and the Dirichlet draws of $\pi$ are replaced
+//! by their conditional expectation under the current allocation counts.
+//! Marker effects, variance components, and intercept retain closed-form
+//! coordinate updates.
+//!
+//! ## When to use
+//!
+//! - Same niche as [`crate::bayesa_em`]: large screens where point
+//!   estimates suffice and runtime per fit must be small.
+//! - Hybrid pipelines that first run EM to warm-start MCMC, then switch
+//!   to the full [`crate::bayesr`] sampler for posterior inference.
+//!
+//! ## When not to use
+//!
+//! - Reporting mixture-membership uncertainty (which markers belong to
+//!   the spike vs. slab) — EM collapses this to soft probabilities at
+//!   the mode and loses the underlying Bernoulli/Dirichlet posterior.
+//! - Variance-component inference; same caveats as the BayesA EM variant.
+//!
+//! ## Output
+//!
+//! Returns a [`BayesRResults`] populated with EM point estimates in the
+//! sample fields so the R-side API is identical to the MCMC runner.
+
 use ndarray::{Array1, Array2};
 use crate::types::BayesRResults;
 
