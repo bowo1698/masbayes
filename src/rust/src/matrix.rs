@@ -3,12 +3,26 @@
 use ndarray::Array2;
 use std::collections::HashMap;
 
-fn project_sum_to_zero(w_block: &mut Array2<f64>, freqs: &[(i32, f64)]) {
+/// Frequency-weighted row shrinkage (per haplotype block).
+///
+/// Applied after Da (2015) Eqs. 22-24 encoding as a per-row rank-1
+/// deflation along the allele-frequency vector p:
+///     W'_{i,k} = W_{i,k} - p_k * S / F
+/// where S = sum_l p_l W_{i,l} and F = sum_l p_l.
+///
+/// The p-weighted row sum is partially damped to S * (1 - Q/F)
+/// with Q = sum_l p_l^2.
+fn frequency_weighted_row_shrinkage(
+    w_block: &mut Array2<f64>,
+    freqs: &[(i32, f64)],
+) {
     let n_ind = w_block.nrows();
     let n_alleles = w_block.ncols();
     let freq_vals: Vec<f64> = freqs.iter().map(|(_, f)| *f).collect();
     let freq_sum: f64 = freq_vals.iter().sum();
-    if freq_sum < 1e-10 { return; }
+    if freq_sum < 1e-10 {
+        return;
+    }
     for i in 0..n_ind {
         let weighted_sum: f64 = (0..n_alleles)
             .map(|k| freq_vals[k] * w_block[[i, k]])
@@ -198,7 +212,7 @@ impl WMatrixBuilder {
                 });
             }
             
-            project_sum_to_zero(&mut w_block, &informative_alleles);
+            frequency_weighted_row_shrinkage(&mut w_block, &informative_alleles);
             w_blocks.push(w_block);
         }
         
