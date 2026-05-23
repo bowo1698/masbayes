@@ -3,15 +3,21 @@
 # Simulation proof-of-concept: SNP vs MH under two QTL architecture scenarios
 #
 # Demonstrates the Marker-QTL Unit Congruence Theory
-# Hypothesis: Prediction accuracy is maximized when marker unit aligns with the biological QTL unit.
+# Hypothesis: Prediction accuracy is maximized when marker unit aligns with the
+# biological QTL unit.
 #
-# Two QTL scenarios are contrasted:
-#   QTL@SNP — true genetic effects defined at individual SNP level
-#   QTL@MH  — true genetic effects defined at haplotype block level
+# Two QTL scenarios are contrasted (mirrors the production design in
+# `MicrohapsSel/simulation/simulation_scenario/simulationG1.R`):
+#   QTL@SNP — true genetic effects defined at individual SNP level (S1/S2-style)
+#             stratified random SNPs with signed Gamma magnitudes.
+#   QTL@MH  — true genetic effects defined at haplotype-allele level within
+#             blocks (S3-S6-style): K causal haplotype-alleles per QTL block,
+#             each with its own additive effect β_{b,a}; TBV at the block is
+#             T_b = Σ_a β_{b,a} · count(allele_a in individual).
 #
-# In both scenarios, microhaplotype markers are derived from the same SNP data via phasing
-# and haplotype encoding, ensuring a fair comparison where the only difference
-# is the marker representation, not the underlying genotype data.
+# In both scenarios, microhaplotype markers are derived from the same SNP data
+# via phasing and haplotype encoding, ensuring a fair comparison where the only
+# difference is the marker representation, not the underlying genotype data.
 #
 # Models evaluated:
 #   - BayesR (4-component mixture prior, variable selection)
@@ -59,7 +65,9 @@ config <- list(
   n_blocks        = 50,
   n_snp_per_block = 2,
   h2_target       = 0.3,
-  n_qtl           = 10,
+  n_qtl           = 10,    # SNP QTL count (QTL@SNP scenario)
+  n_qtl_blocks_mh = 10,    # QTL block count (QTL@MH scenario)
+  K_BLK_QTL       = 2L,    # causal haplotype-alleles per QTL block (S3-S6 default)
   mcmc = list(
     n_iter = 20000L,
     n_burn = 10000L,
@@ -183,19 +191,55 @@ wah_all    <- construct_wah_matrix(
 W_mh_all   <- wah_all$W_ah
 
 # ── 6. Simulate y (continuous and binary) ───────────────────────────────────
-simulate_y <- function(W_source, idx_tr, label, h2_target = 0.3,
-                       n_qtl = 10, type = "snp") {
+# QTL@SNP: pick n_qtl SNPs at random, assign signed Gamma magnitudes (S1/S2-style).
+# QTL@MH:  pick n_qtl_blocks blocks, then within each block pick K causal
+#          haplotype-alleles from the W_ah columns belonging to that block;
+#          assign signed equal-or-Gamma magnitudes per causal allele
+#          (S3-S6-style block-level haplotype-additive design).
+simulate_y_snp <- function(W_source, idx_tr, label, h2_target = 0.3,
+                            n_qtl = 10) {
   n_col     <- ncol(W_source)
   beta_true <- rep(0, n_col)
   qtl_idx   <- sample(n_col, n_qtl)
-  if (type == "snp") {
-    raw <- rgamma(n_qtl, shape=0.4, scale=1) * sample(c(-1,1), n_qtl, replace=TRUE)
-    beta_true[qtl_idx] <- raw / sqrt(sum(raw^2))
-  } else {
-    raw <- rnorm(n_qtl)
-    beta_true[qtl_idx] <- raw / sqrt(sum(raw^2))
+  raw       <- rgamma(n_qtl, shape = 0.4, scale = 1) *
+               sample(c(-1, 1), n_qtl, replace = TRUE)
+  beta_true[qtl_idx] <- raw / sqrt(sum(raw^2))
+
+  finalise_y(W_source %*% beta_true, idx_tr, label, h2_target)
+}
+
+simulate_y_mh_block <- function(W_source, allele_info, idx_tr, label,
+                                 h2_target = 0.3, n_qtl_blocks = 10,
+                                 K_per_block = 2L) {
+  n_col     <- ncol(W_source)
+  beta_true <- rep(0, n_col)
+
+  # Group W_ah columns by block_id (from allele_info$block; same as drop_baseline path)
+  block_ids <- unique(allele_info$block)
+  if (length(block_ids) < n_qtl_blocks)
+    n_qtl_blocks <- length(block_ids)
+  qtl_blocks <- sample(block_ids, n_qtl_blocks)
+
+  for (blk in qtl_blocks) {
+    cols_in_blk <- which(allele_info$block == blk)
+    if (length(cols_in_blk) < 1L) next
+    k_actual <- min(K_per_block, length(cols_in_blk))
+    chosen   <- if (k_actual == length(cols_in_blk)) cols_in_blk
+                else sample(cols_in_blk, k_actual)
+    raw      <- rgamma(k_actual, shape = 0.4, scale = 1) *
+                sample(c(-1, 1), k_actual, replace = TRUE)
+    beta_true[chosen] <- raw
   }
-  tbv_all  <- as.vector(W_source %*% beta_true)
+  # Global normalisation ‖β‖² = 1 across all causal alleles (matches simulationG1.R)
+  nz <- which(beta_true != 0)
+  if (length(nz) > 0L)
+    beta_true[nz] <- beta_true[nz] / sqrt(sum(beta_true[nz]^2))
+
+  finalise_y(W_source %*% beta_true, idx_tr, label, h2_target)
+}
+
+finalise_y <- function(tbv_all_raw, idx_tr, label, h2_target) {
+  tbv_all  <- as.vector(tbv_all_raw)
   tbv_mean <- mean(tbv_all[idx_tr])
   tbv_sd   <- sd(tbv_all[idx_tr])
   tbv_std  <- (tbv_all - tbv_mean) / tbv_sd
@@ -205,24 +249,24 @@ simulate_y <- function(W_source, idx_tr, label, h2_target = 0.3,
 
   # Binary: threshold at median of training liability
   threshold <- median(y_cont[idx_tr])
-  y_bin  <- as.numeric(y_cont > threshold)
-  h2_obs <- sg / (sg + se)
+  y_bin     <- as.numeric(y_cont > threshold)
+  h2_obs    <- sg / (sg + se)
 
   cat(sprintf("[%s] h2=%.3f | sigma2_g=%.4f | sigma2_e=%.4f | prevalence=%.3f\n",
               label, h2_obs, sg, se, mean(y_bin[idx_tr])))
-  list(y_cont=y_cont, y_bin=y_bin, g=tbv_std, sigma2_g=sg, sigma2_e=se, h2=h2_obs)
+  list(y_cont = y_cont, y_bin = y_bin, g = tbv_std,
+       sigma2_g = sg, sigma2_e = se, h2 = h2_obs)
 }
 
 set.seed(config$seed)
-sc_snp <- simulate_y(W_snp_all, idx_train, "QTL@SNP",
-                     h2_target = config$h2_target,
-                     n_qtl     = config$n_qtl,
-                     type      = "snp")
+sc_snp <- simulate_y_snp(W_snp_all, idx_train, "QTL@SNP",
+                          h2_target = config$h2_target,
+                          n_qtl     = config$n_qtl)
 set.seed(config$seed)
-sc_mh  <- simulate_y(W_mh_all,  idx_train, "QTL@MH",
-                     h2_target = config$h2_target,
-                     n_qtl     = config$n_qtl,
-                     type      = "mh")
+sc_mh  <- simulate_y_mh_block(W_mh_all, wah_all$allele_info, idx_train, "QTL@MH",
+                               h2_target    = config$h2_target,
+                               n_qtl_blocks = config$n_qtl_blocks_mh,
+                               K_per_block  = config$K_BLK_QTL)
 
 # ── 7. Model fitting ─────────────────────────────────────────────────────────
 mcmc_p <- config$mcmc
@@ -549,14 +593,17 @@ final <- final[, c("Scenario","Trait","Marker","Model",
 final <- final[order(final$Scenario, final$Trait, final$Marker, final$Model), ]
 
 cat("\n\n=== COMBINED RESULTS ===\n")
-cat(sprintf("n_train=%d | n_test=%d | n_blocks=%d | n_snp_per_block=%d | h2=%.2f | n_qtl=%d\n\n",
-            n_train, n_test, n_blocks, n_snp_per_block,
-            config$h2_target, config$n_qtl))
+cat(sprintf("n_train=%d | n_test=%d | n_blocks=%d | n_snp_per_block=%d | h2=%.2f\n",
+            n_train, n_test, n_blocks, n_snp_per_block, config$h2_target))
+cat(sprintf("QTL@SNP: %d random SNPs (signed Gamma magnitudes)\n", config$n_qtl))
+cat(sprintf("QTL@MH : %d blocks × K=%d causal haplotype-alleles per block\n\n",
+            config$n_qtl_blocks_mh, config$K_BLK_QTL))
 print(final, row.names=FALSE)
 
 cat("\n--- Legend ---\n")
 cat("r_test_g : cor(GEBV, true BV) — primary accuracy metric\n")
 cat("bias     : regression coef y ~ GEBV (1=unbiased)\n")
 cat("AUC      : area under ROC curve (binary only, NA for continuous)\n")
-cat("QTL@SNP  : true genetic effects at SNP level\n")
-cat("QTL@MH   : true genetic effects at MH haplotype level\n")
+cat("QTL@SNP  : true genetic effects at SNP level (S1/S2-style)\n")
+cat("QTL@MH   : true genetic effects at haplotype-allele level within blocks\n")
+cat("           (S3-S6-style: K causal alleles per QTL block, additive)\n")
