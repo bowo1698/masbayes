@@ -4,11 +4,11 @@
 \alias{masbayes-package}
 \title{masbayes: Bayesian Genomic Prediction for SNP and Multi-allelic Markers}
 \description{
-Implements BayesR (four-class mixture prior) and BayesA
+masbayes implements BayesR (four-class mixture prior) and BayesA
 (marker-specific variance prior) for genomic prediction using biallelic
 SNP or multi-allelic markers. Both methods are available as full MCMC
 or stochastic EM; continuous (Gaussian) and binary (probit) traits are
-supported natively via a high-performance Rust backend.
+supported natively via Rust backend.
 }
 \section{Statistical model}{
 

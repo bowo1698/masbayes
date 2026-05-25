@@ -88,7 +88,7 @@ Two scales are bundled: \code{size = "large"} (n=200, p=500,
 n_qtl=20) and \code{size = "small"} (default; n=100, p=50, n_qtl=5) that run
 during \code{R CMD check --examples}.
 Both have the same family structure (10 full-sib families) and the
-same 12-field shape, so consumer code does not have to branch on size.
+same 12-field shape.
 
 The data simulates a small breeding-style population: 10 full-sib
 families (each from one sire-dam founder pair). The founders are kept in

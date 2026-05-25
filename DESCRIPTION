@@ -1,5 +1,5 @@
 Package: masbayes
-Title: Bayesian models for genomic prediction based on multi-allelic markers
+Title: Bayesian models for genomic prediction based on SNP and multi-allelic markers
 Version: 0.6.1
 Date: 2026-05-25
 Authors@R: c(
@@ -8,7 +8,7 @@ Authors@R: c(
            role = c("aut", "cre"))
     )
 Description: Rust-accelerated Bayesian genomic prediction methods (BayesR and BayesA) 
-    for multi-allelic markers. Implements both Markov Chain Monte Carlo 
+    for SNP and multi-allelic markers. Implements both Markov Chain Monte Carlo 
     (MCMC) sampling for full posterior inference and stochastic Expectation-Maximization 
     (EM) algorithms for efficient maximum likelihood estimation. Supports mixture-based 
     variable selection (BayesR) and marker-specific variance modeling (BayesA). Designed 
