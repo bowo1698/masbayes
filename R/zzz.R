@@ -8,7 +8,7 @@
   packageStartupMessage(
     "\n===============================================================\n",
     " masbayes v", version, "\n",
-    " Bayesian Genomic Prediction models for multi-allelic marker\n",
+    " Bayesian Genomic Prediction models for SNP and multi-allelic markers\n",
     "---------------------------------------------------------------\n",
     " Methods:    BayesR (mixture) | BayesA (marker-specific)\n",
     " Algorithms: MCMC (full Bayesian) | Stochastic EM (fast)\n",

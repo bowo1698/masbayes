@@ -50,3 +50,4 @@ RELEASE_NOTES_*.txt
 
 # the suite
 tests/
+backups/

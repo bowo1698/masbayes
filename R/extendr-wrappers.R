@@ -40,4 +40,20 @@ run_bayesa_em <- function(w, y, wtw_diag, x = NULL, nu, s_squared, sigma2_e_init
     .Call(wrap__run_bayesa_em, w, y, wtw_diag, x, nu, s_squared, sigma2_e_init, em_params, fold_id, verbose)
 }
 
+#' Run v0.6.1 SNP-mode BayesR MCMC (low-level binding).
+#' Internal Rust binding; end users should call \code{run_bayesr(marker_type = "snp")}.
+#' @noRd
+#' @export
+run_bayesr_snp_mcmc <- function(w, y, wtw_diag, x = NULL, pi_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id = 0L, is_binary = FALSE, verbose = TRUE) {
+    .Call(wrap__run_bayesr_snp_mcmc, w, y, wtw_diag, x, pi_vec, sigma2_e_init, sigma2_ah, prior_params, mcmc_params, fold_id, is_binary, verbose)
+}
+
+#' Run v0.6.1 SNP-mode BayesA MCMC (low-level binding).
+#' Internal Rust binding; end users should call \code{run_bayesa(marker_type = "snp")}.
+#' @noRd
+#' @export
+run_bayesa_snp_mcmc <- function(w, y, wtw_diag, x = NULL, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id = 0L, is_binary = FALSE, verbose = TRUE) {
+    .Call(wrap__run_bayesa_snp_mcmc, w, y, wtw_diag, x, nu, s_squared, sigma2_e_init, prior_params, mcmc_params, fold_id, is_binary, verbose)
+}
+
 # nolint end

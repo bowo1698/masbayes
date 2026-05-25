@@ -246,11 +246,20 @@ impl WMatrixBuilder {
             let allele1 = self.hap_matrix.column(col1);
             let allele2 = self.hap_matrix.column(col2);
             
-            // Sort alleles by frequency (descending)
+            // Sort alleles by (frequency desc, allele_label asc). The label
+            // tie-break is essential: freq_block is a HashMap, so its
+            // iteration order is non-deterministic across calls. Without a
+            // secondary key, two consecutive build() calls on identical
+            // inputs could pick different baselines when frequencies tie —
+            // changing W's column set (re-parameterisation, mathematically
+            // benign for predictions but breaks reproducibility tests).
             let mut freq_vec: Vec<(i32, f64)> = freq_block.iter()
                 .map(|(k, v)| (*k, *v))
                 .collect();
-            freq_vec.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+            freq_vec.sort_by(|a, b| {
+                b.1.partial_cmp(&a.1).unwrap()
+                    .then_with(|| a.0.cmp(&b.0))
+            });
             
             let mut informative_alleles = freq_vec;
             

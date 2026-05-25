@@ -43,28 +43,28 @@ of ones for the intercept; \eqn{\mu} is sampled separately.}
 
 \item{marker_type}{One of \code{"auto"} (default), \code{"snp"}, or
 \code{"multiallelic"}. \code{"auto"} resolves to
-\code{"multiallelic"}. Setting \code{"snp"} switches the default
-residual-variance prior to a flat \code{InvGamma(1, 0)}
-(\code{a0_e = 1, b0_e = 0}); the per-marker prior scale
-\code{s_squared} is unaffected because it already adapts via
-\code{sum_2pq}. Custom supply of \code{prior_params$a0_e} is always
-honoured and overrides the SNP-mode flat default.}
+\code{"multiallelic"}. Selects the default prior for the BayesA
+sampler — see \code{nu}, \code{sigma2_g}, \code{sigma2_e_init},
+\code{prior_params}.}
 
-\item{nu}{Degrees of freedom for the scaled inverse chi-squared prior on
-marker variances. Smaller values allow heavier tails. Must be > 2.
-Default \code{4.5}.}
+\item{nu}{Degrees of freedom for the scaled inverse chi-squared prior
+on marker variances. Smaller values give heavier tails. Must be > 2.
+Default: \code{4} for \code{"snp"}, \code{4.5} for \code{"multiallelic"}.}
 
-\item{sigma2_g}{Prior total genetic variance. Typically
-\code{var(y) * 0.5}; for binary traits use \code{1.0}.}
+\item{sigma2_g}{Prior total genetic variance. Default for
+\code{"snp"}: \code{var(y) / 4}. \code{"multiallelic"}: required
+(typically \code{var(y) * 0.5}; for binary use \code{1.0}).}
 
-\item{sigma2_e_init}{Initial residual variance. For binary traits fix
-at \code{1.0}.}
+\item{sigma2_e_init}{Initial residual variance. Default for
+\code{"snp"}: \code{var(y) / 2}. \code{"multiallelic"}: required
+(typically \code{var(y) * 0.5}; for binary use \code{1.0}).}
 
 \item{prior_params}{Optional named list. Only \code{a0_e} is used;
-\code{b0_e} is derived as \code{sigma2_e_init * (a0_e - 1)}. Default
-\code{a0_e} is 10 for \code{marker_type = "multiallelic"} and 1 for
-\code{marker_type = "snp"} (with \code{b0_e = 0}); supplying
-\code{a0_e} explicitly always overrides the default.}
+\code{b0_e} is computed as \code{sigma2_e_init * (a0_e - 1)},
+except when SNP-mode flat default applies (\code{a0_e = -1},
+\code{b0_e = 0}). User-supplied \code{a0_e} always wins. Default
+\code{a0_e}: \code{-1} for \code{"snp"}, \code{10} for
+\code{"multiallelic"}.}
 
 \item{mcmc_params}{Optional named list: \code{n_iter} (40000),
 \code{n_burn} (20000), \code{n_thin} (10), \code{seed} (123).}
@@ -145,24 +145,9 @@ where \eqn{y} is the phenotype vector, \eqn{\mu} is the intercept,
 is the allele-effect vector. When fixed effects are supplied via \code{X}:
 \deqn{y = \mathbf{1}\mu + X\alpha + W\beta + \varepsilon}
 \strong{BayesA prior.}
-Each allele effect has a marker-specific variance drawn from a scaled
-inverse chi-squared distribution (Meuwissen et al., 2001):
 \deqn{\beta_j \mid \sigma_{\beta_j}^2 \;\sim\; \mathcal{N}(0,\,\sigma_{\beta_j}^2),
   \quad \sigma_{\beta_j}^2 \;\sim\; \chi^{-2}(\nu,\,S^2)}
-where \eqn{\nu} is the degrees-of-freedom hyperparameter (\code{nu},
-default 4.5) and \eqn{S^2 = \sigma_\beta^2 / L} is the scale, with
-\eqn{L} denoting the total number of alleles (columns of \eqn{W}).
-The wrapper derives \code{s_squared} as
-\code{sigma2_g * (nu - 2) / (nu * sum_2pq)}, which sets
-\eqn{E[\sigma_{\beta_j}^2] = \sigma_\beta^2 / \sum_j \mathrm{Var}(w_j)}.
-
-\strong{Heritability.}
-\eqn{h^2} is estimated as:
-\deqn{h^2 = \frac{\mathrm{Var}(W\hat{\beta})}
-  {\mathrm{Var}(W\hat{\beta}) + \hat{\sigma}_e^2}}
-This estimator is identical for SNP and multi-allelic markers,
-treating heritability as a trait-and-population property rather than
-a marker-panel property.
+Residual: \eqn{\sigma_e^2 \sim \mathrm{InvGamma}(a_{0e},\,b_{0e})}.
 
 \strong{Algorithm choice.} MCMC uses marginalised Gibbs sampling and
 returns full posterior chains. EM is much faster but provides no
@@ -177,17 +162,6 @@ for CV loops.
 \code{summary()} + \code{predict()} support full-data fits,
 train-test splits, and k-fold CV uniformly. See
 \code{\link{run_bayesr}} for example loops.
-
-\strong{Derived parameter.} The wrapper computes
-\code{s_squared = sigma2_g * (nu - 2) / (nu * sum(apply(w, 2, var)))}
-so the prior expectation of each marker variance equals
-\code{sigma2_g / sum_2pq}. This adapts to the supplied design matrix
-and is therefore the same formula under both
-\code{marker_type = "multiallelic"} and \code{marker_type = "snp"}.
-
-\strong{Marker-specific heritability note.} The \eqn{h^2} estimator in
-the Statistical model section above is applied regardless of
-\code{marker_type}.
 }
 \examples{
 \dontrun{

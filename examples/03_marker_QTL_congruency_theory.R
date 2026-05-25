@@ -74,13 +74,15 @@ config <- list(
     n_thin = 10L,
     seed   = 123L
   ),
-  bayesr = list(
+  # SNP path uses package defaults (marker_type = "snp" auto-fills priors).
+  # MH path uses these explicit priors instead of the multiallelic defaults.
+  bayesr_mh = list(
     pi_vec         = c(0.90, 0.05, 0.03, 0.02),
     variance_class = c(0, 0.01, 0.1, 1),
     a0_e           = 5,
     a0_g           = 5
   ),
-  bayesa = list(
+  bayesa_mh = list(
     nu   = 4.5,
     a0_e = 10
   )
@@ -278,44 +280,67 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
   resp    <- if (trait_type == "binary") "binary" else "gaussian"
 
   mtype <- if (identical(marker_label, "SNP")) "snp" else "multiallelic"
+  is_snp <- identical(mtype, "snp")
+  is_bin <- identical(trait_type, "binary")
 
   wtw <- colSums(W_tr^2)
   rows <- list()
 
-  # sigma2_e_init: for binary use 1.0 (liability scale), for continuous use sc value
-  se_init <- if (trait_type == "binary") 1.0 else sc$sigma2_e
-  sg_init <- if (trait_type == "binary") 1.0 else sc$sigma2_g
+  # MH variance init: 1.0 for binary (liability scale; kernel fixes
+  # sigma2_e = 1), else var(y)/2. SNP path leaves variance args unset —
+  # wrapper auto-fills SNP-mode defaults.
+  mh_var_init <- if (is_bin) 1.0 else var(y_train) * 0.5
 
   for (model in c("BayesR", "BayesA")) {
     result <- tryCatch({
       if (model == "BayesR") {
-        res <- run_bayesr(
-          w=W_tr, y=y_train, wtw_diag=wtw,
-          marker_type   = mtype,
-          pi_vec        = config$bayesr$pi_vec,
-          sigma2_e_init = se_init,
-          sigma2_ah     = sg_init,
-          prior_params  = list(
-            a0_e           = config$bayesr$a0_e,
-            a0_g           = config$bayesr$a0_g,
-            variance_class = config$bayesr$variance_class
-          ),
-          mcmc_params   = mcmc_p,
-          method        = "mcmc",
-          response_type = resp,
-          fold_id       = 0L)
+        res <- if (is_snp) {
+          run_bayesr(
+            w=W_tr, y=y_train, wtw_diag=wtw,
+            marker_type   = mtype,
+            mcmc_params   = mcmc_p,
+            method        = "mcmc",
+            response_type = resp,
+            fold_id       = 0L)
+        } else {
+          run_bayesr(
+            w=W_tr, y=y_train, wtw_diag=wtw,
+            marker_type   = mtype,
+            pi_vec        = config$bayesr_mh$pi_vec,
+            sigma2_e_init = mh_var_init,
+            sigma2_ah     = mh_var_init,
+            prior_params  = list(
+              a0_e           = config$bayesr_mh$a0_e,
+              a0_g           = config$bayesr_mh$a0_g,
+              variance_class = config$bayesr_mh$variance_class
+            ),
+            mcmc_params   = mcmc_p,
+            method        = "mcmc",
+            response_type = resp,
+            fold_id       = 0L)
+        }
       } else {
-        res <- run_bayesa(
-          w=W_tr, y=y_train, wtw_diag=wtw,
-          marker_type   = mtype,
-          nu            = config$bayesa$nu,
-          sigma2_g      = sg_init,
-          sigma2_e_init = se_init,
-          prior_params  = list(a0_e = config$bayesa$a0_e),
-          mcmc_params   = mcmc_p,
-          method        = "mcmc",
-          response_type = resp,
-          fold_id       = 0L)
+        res <- if (is_snp) {
+          run_bayesa(
+            w=W_tr, y=y_train, wtw_diag=wtw,
+            marker_type   = mtype,
+            mcmc_params   = mcmc_p,
+            method        = "mcmc",
+            response_type = resp,
+            fold_id       = 0L)
+        } else {
+          run_bayesa(
+            w=W_tr, y=y_train, wtw_diag=wtw,
+            marker_type   = mtype,
+            nu            = config$bayesa_mh$nu,
+            sigma2_g      = mh_var_init,
+            sigma2_e_init = mh_var_init,
+            prior_params  = list(a0_e = config$bayesa_mh$a0_e),
+            mcmc_params   = mcmc_p,
+            method        = "mcmc",
+            response_type = resp,
+            fold_id       = 0L)
+        }
       }
 
       # Use the package's predict()

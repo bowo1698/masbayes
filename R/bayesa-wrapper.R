@@ -20,24 +20,9 @@
 #' is the allele-effect vector. When fixed effects are supplied via \code{X}:
 #' \deqn{y = \mathbf{1}\mu + X\alpha + W\beta + \varepsilon}
 #' \strong{BayesA prior.}
-#' Each allele effect has a marker-specific variance drawn from a scaled
-#' inverse chi-squared distribution (Meuwissen et al., 2001):
 #' \deqn{\beta_j \mid \sigma_{\beta_j}^2 \;\sim\; \mathcal{N}(0,\,\sigma_{\beta_j}^2),
 #'   \quad \sigma_{\beta_j}^2 \;\sim\; \chi^{-2}(\nu,\,S^2)}
-#' where \eqn{\nu} is the degrees-of-freedom hyperparameter (\code{nu},
-#' default 4.5) and \eqn{S^2 = \sigma_\beta^2 / L} is the scale, with
-#' \eqn{L} denoting the total number of alleles (columns of \eqn{W}).
-#' The wrapper derives \code{s_squared} as
-#' \code{sigma2_g * (nu - 2) / (nu * sum_2pq)}, which sets
-#' \eqn{E[\sigma_{\beta_j}^2] = \sigma_\beta^2 / \sum_j \mathrm{Var}(w_j)}.
-#'
-#' \strong{Heritability.}
-#' \eqn{h^2} is estimated as:
-#' \deqn{h^2 = \frac{\mathrm{Var}(W\hat{\beta})}
-#'   {\mathrm{Var}(W\hat{\beta}) + \hat{\sigma}_e^2}}
-#' This estimator is identical for SNP and multi-allelic markers,
-#' treating heritability as a trait-and-population property rather than
-#' a marker-panel property.
+#' Residual: \eqn{\sigma_e^2 \sim \mathrm{InvGamma}(a_{0e},\,b_{0e})}.
 #'
 #' \strong{Algorithm choice.} MCMC uses marginalised Gibbs sampling and
 #' returns full posterior chains. EM is much faster but provides no
@@ -53,17 +38,6 @@
 #' train-test splits, and k-fold CV uniformly. See
 #' \code{\link{run_bayesr}} for example loops.
 #'
-#' \strong{Derived parameter.} The wrapper computes
-#' \code{s_squared = sigma2_g * (nu - 2) / (nu * sum(apply(w, 2, var)))}
-#' so the prior expectation of each marker variance equals
-#' \code{sigma2_g / sum_2pq}. This adapts to the supplied design matrix
-#' and is therefore the same formula under both
-#' \code{marker_type = "multiallelic"} and \code{marker_type = "snp"}.
-#'
-#' \strong{Marker-specific heritability note.} The \eqn{h^2} estimator in
-#' the Statistical model section above is applied regardless of
-#' \code{marker_type}.
-#'
 #' @param w Numeric design matrix (\code{n x p}). Typically the
 #'   \code{$W_ah} element returned by \code{\link{construct_wah_matrix}}
 #'   or the \code{$W} element returned by \code{\link{construct_snp_matrix}}.
@@ -75,24 +49,24 @@
 #'   of ones for the intercept; \eqn{\mu} is sampled separately.
 #' @param marker_type One of \code{"auto"} (default), \code{"snp"}, or
 #'   \code{"multiallelic"}. \code{"auto"} resolves to
-#'   \code{"multiallelic"}. Setting \code{"snp"} switches the default
-#'   residual-variance prior to a flat \code{InvGamma(1, 0)}
-#'   (\code{a0_e = 1, b0_e = 0}); the per-marker prior scale
-#'   \code{s_squared} is unaffected because it already adapts via
-#'   \code{sum_2pq}. Custom supply of \code{prior_params$a0_e} is always
-#'   honoured and overrides the SNP-mode flat default.
-#' @param nu Degrees of freedom for the scaled inverse chi-squared prior on
-#'   marker variances. Smaller values allow heavier tails. Must be > 2.
-#'   Default \code{4.5}.
-#' @param sigma2_g Prior total genetic variance. Typically
-#'   \code{var(y) * 0.5}; for binary traits use \code{1.0}.
-#' @param sigma2_e_init Initial residual variance. For binary traits fix
-#'   at \code{1.0}.
+#'   \code{"multiallelic"}. Selects the default prior for the BayesA
+#'   sampler — see \code{nu}, \code{sigma2_g}, \code{sigma2_e_init},
+#'   \code{prior_params}.
+#' @param nu Degrees of freedom for the scaled inverse chi-squared prior
+#'   on marker variances. Smaller values give heavier tails. Must be > 2.
+#'   Default: \code{4} for \code{"snp"}, \code{4.5} for \code{"multiallelic"}.
+#' @param sigma2_g Prior total genetic variance. Default for
+#'   \code{"snp"}: \code{var(y) / 4}. \code{"multiallelic"}: required
+#'   (typically \code{var(y) * 0.5}; for binary use \code{1.0}).
+#' @param sigma2_e_init Initial residual variance. Default for
+#'   \code{"snp"}: \code{var(y) / 2}. \code{"multiallelic"}: required
+#'   (typically \code{var(y) * 0.5}; for binary use \code{1.0}).
 #' @param prior_params Optional named list. Only \code{a0_e} is used;
-#'   \code{b0_e} is derived as \code{sigma2_e_init * (a0_e - 1)}. Default
-#'   \code{a0_e} is 10 for \code{marker_type = "multiallelic"} and 1 for
-#'   \code{marker_type = "snp"} (with \code{b0_e = 0}); supplying
-#'   \code{a0_e} explicitly always overrides the default.
+#'   \code{b0_e} is computed as \code{sigma2_e_init * (a0_e - 1)},
+#'   except when SNP-mode flat default applies (\code{a0_e = -1},
+#'   \code{b0_e = 0}). User-supplied \code{a0_e} always wins. Default
+#'   \code{a0_e}: \code{-1} for \code{"snp"}, \code{10} for
+#'   \code{"multiallelic"}.
 #' @param mcmc_params Optional named list: \code{n_iter} (40000),
 #'   \code{n_burn} (20000), \code{n_thin} (10), \code{seed} (123).
 #' @param em_params Optional named list: \code{max_iter} (500), \code{tol}
@@ -229,19 +203,14 @@ run_bayesa <- function(w, y, wtw_diag,
     stop("response_type = 'binary' is only supported for method = 'mcmc'")
   }
 
-  # GWAS is BayesR-only. BayesA places a continuous prior on every marker
-  # variance (Scaled-Inv-Chi-Sq), so the mixture indicator that defines PIP
-  # in BayesR does not exist here. Reject up front rather than silently
-  # discarding the user's GWAS arguments.
+  # GWAS requires a zero-effect mixture mass (PIP); BayesA has no such mass.
   if (!is.null(map) || !is.null(windsize) || !is.null(windnum)) {
     stop("GWAS is only supported for run_bayesr(); BayesA has no ",
          "zero-effect mass required for PIP/WPPA. Use run_bayesr() instead.",
          call. = FALSE)
   }
 
-  # FFI integer contract: Rust calls `.as_integer().unwrap()` on fold_id and
-  # panics on REALSXP. Coerce here so callers may pass `fold_id = k` from a
-  # numeric loop counter without the `L` suffix.
+  # Rust FFI expects INTSXP for fold_id.
   fold_id <- as.integer(fold_id)
 
   if (!is.null(X)) {
@@ -253,26 +222,43 @@ run_bayesa <- function(w, y, wtw_diag,
     if (ncol(X) == 0L) X <- NULL
   }
 
+  # Track explicit supply so SNP-mode defaults only fill unsupplied fields.
+  user_supplied_a0e       <- !is.null(prior_params) && !is.null(prior_params$a0_e)
+  user_supplied_nu        <- !missing(nu) && !is.null(nu)
+  user_supplied_sigma2_g  <- !missing(sigma2_g) && !is.null(sigma2_g)
+  user_supplied_sigma2_e0 <- !missing(sigma2_e_init) && !is.null(sigma2_e_init)
+
+  # SNP-mode init defaults from h2=0.5, dfvg=4:
+  #   nu = 4,  sigma2_g = vary/4,  sigma2_e_init = vary/2
+  vary <- var(y)
+  if (marker_type == "snp") {
+    if (!user_supplied_nu)        nu            <- 4
+    if (!user_supplied_sigma2_g)  sigma2_g      <- vary / 4
+    if (!user_supplied_sigma2_e0) sigma2_e_init <- vary / 2
+  }
+  if (missing(sigma2_g) || is.null(sigma2_g)) {
+    stop("sigma2_g required for both MCMC and EM")
+  }
+  if (missing(sigma2_e_init) || is.null(sigma2_e_init)) {
+    stop("sigma2_e_init required for both MCMC and EM")
+  }
+
+  # Per-marker prior scale: s_squared = sigma2_g * (nu - 2) / (nu * sum_2pq)
   sum_2pq   <- sum(apply(w, 2, var))
   s_squared <- sigma2_g * (nu - 2) / (nu * sum_2pq)
-
-  # Track whether the caller explicitly supplied a0_e so SNP-mode does not
-  # silently override an intentional user choice.
-  user_supplied_a0e <- !is.null(prior_params) && !is.null(prior_params$a0_e)
 
   if (method == "mcmc") {
     mcmc_params <- modifyList(
       list(n_iter = 40000L, n_burn = 20000L, n_thin = 10L, seed = 123L),
       mcmc_params %||% list()
     )
-    # FFI integer contract: Rust parses these via `.as_integer().unwrap()`
-    # and panics on REALSXP. modifyList preserves the caller's storage mode,
-    # so coerce defensively after the merge.
+    # Rust FFI expects INTSXP for iter/burn/thin/seed.
     mcmc_params$n_iter <- as.integer(mcmc_params$n_iter)
     mcmc_params$n_burn <- as.integer(mcmc_params$n_burn)
     mcmc_params$n_thin <- as.integer(mcmc_params$n_thin)
     mcmc_params$seed   <- as.integer(mcmc_params$seed)
-    default_a0e <- if (marker_type == "snp" && !user_supplied_a0e) 1 else 10
+    # SNP-mode a0_e default = -1 (improper flat on sigma^2_e).
+    default_a0e <- if (marker_type == "snp" && !user_supplied_a0e) -1 else 10
     prior_params <- modifyList(
       list(a0_e = default_a0e),
       prior_params %||% list()
@@ -283,18 +269,26 @@ run_bayesa <- function(w, y, wtw_diag,
       prior_params$b0_e <- sigma2_e_init * (prior_params$a0_e - 1)
     }
 
+    # marker_type = "snp" routes to the dedicated SNP kernel (gaussian +
+    # binary via Albert-Chib); everything else uses the multiallelic kernel.
+    use_snp_kernel <- identical(marker_type, "snp")
     timing <- system.time({
-      raw <- run_bayesa_mcmc(w, y, wtw_diag, X, nu, s_squared,
-                             sigma2_e_init, prior_params, mcmc_params,
-                             fold_id, is_binary, isTRUE(verbose))
+      raw <- if (use_snp_kernel) {
+        run_bayesa_snp_mcmc(w, y, wtw_diag, X, nu, s_squared,
+                            sigma2_e_init, prior_params, mcmc_params,
+                            fold_id, is_binary, isTRUE(verbose))
+      } else {
+        run_bayesa_mcmc(w, y, wtw_diag, X, nu, s_squared,
+                        sigma2_e_init, prior_params, mcmc_params,
+                        fold_id, is_binary, isTRUE(verbose))
+      }
     })
   } else {
     em_params <- modifyList(
       list(max_iter = 500L, tol = 1e-6),
       em_params %||% list()
     )
-    # FFI integer contract: max_iter must be INTSXP for Rust. `tol` stays
-    # double (Rust uses `.as_real()`).
+    # Rust FFI expects INTSXP for max_iter (tol stays double).
     em_params$max_iter <- as.integer(em_params$max_iter)
 
     timing <- system.time({

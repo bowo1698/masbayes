@@ -201,9 +201,8 @@ predict_masbayes_common <- function(object, newdata = NULL, y_new = NULL,
         length(y_new), length(GEBV)
       ))
     }
+    # Binary GEBV is on liability scale; pnorm() → observed-scale prob.
     metrics <- if (identical(object$response_type, "binary"))
-      # GEBV is on the liability scale; convert to probability via probit
-      # inverse link so metrics are on the observed (probability) scale.
       compute_metrics_binary(as.numeric(y_new), stats::pnorm(GEBV))
     else
       compute_metrics_gaussian(as.numeric(y_new), GEBV)

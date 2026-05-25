@@ -45,6 +45,8 @@ mod bayesr;
 mod bayesa;
 mod bayesr_em;
 mod bayesa_em;
+mod bayesr_snp;
+mod bayesa_snp;
 mod utils;
 mod types;
 
@@ -632,9 +634,194 @@ fn run_bayesa_mcmc(
     )
 }
 
+/// Run the SNP-mode BayesA Gibbs MCMC fit (low-level binding).
+/// Called by `run_bayesa()` when `marker_type = "snp"`. Aggregates
+/// `sigma2_g` per iter as `var(W·β_iter)` via a running u accumulator;
+/// supports binary traits via Albert-Chib with `sigma2_e` fixed at 1.
+/// @export
+#[extendr]
+fn run_bayesa_snp_mcmc(
+    w: RMatrix<f64>,
+    y: Vec<f64>,
+    wtw_diag: Vec<f64>,
+    x: Nullable<RMatrix<f64>>,
+    nu: f64,
+    s_squared: f64,
+    sigma2_e_init: f64,
+    prior_params: List,
+    mcmc_params: List,
+    fold_id: i32,
+    is_binary: bool,
+    verbose: bool,
+) -> List {
+    let n_iter = mcmc_params.dollar("n_iter").unwrap().as_integer().unwrap() as usize;
+    let n_burn = mcmc_params.dollar("n_burn").unwrap().as_integer().unwrap() as usize;
+    let n_thin = mcmc_params.dollar("n_thin").unwrap().as_integer().unwrap() as usize;
+    let seed = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
+
+    let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
+    let b0_e = prior_params.dollar("b0_e").unwrap().as_real().unwrap();
+
+    let w_array = utils::rmatrix_to_array2(&w);
+    let x_array = match x {
+        NotNull(xm) => Some(utils::rmatrix_to_array2(&xm)),
+        Null => None,
+    };
+
+    let mut runner = bayesa_snp::BayesASNPRunner::new(
+        w_array,
+        y,
+        wtw_diag,
+        x_array,
+        nu,
+        s_squared,
+        sigma2_e_init,
+        a0_e, b0_e,
+        n_iter,
+        n_burn,
+        n_thin,
+        seed,
+        fold_id,
+        is_binary,
+        verbose,
+    );
+
+    let results = runner.run();
+
+    let alpha_samples_r = match results.alpha_samples {
+        Some(ref a) => array2_to_rmatrix(a).into_robj(),
+        None => ().into_robj(),
+    };
+    let alpha_hat_r = match results.alpha_hat {
+        Some(ref a) => array1_to_vec(a).into_robj(),
+        None => ().into_robj(),
+    };
+
+    let z_hat_r = match results.z_hat {
+        Some(ref z) => array1_to_vec(z).into_robj(),
+        None => ().into_robj(),
+    };
+
+    list!(
+        beta_samples = array2_to_rmatrix(&results.beta_samples),
+        sigma2_j_samples = array2_to_rmatrix(&results.sigma2_j_samples),
+        sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
+        mu_samples = array1_to_vec(&results.mu_samples),
+        alpha_samples = alpha_samples_r,
+        beta_hat = array1_to_vec(&results.beta_hat),
+        mu_hat = results.mu_hat,
+        sigma2_e_hat = results.sigma2_e_hat,
+        sigma2_j_hat = array1_to_vec(&results.sigma2_j_hat),
+        alpha_hat = alpha_hat_r,
+        pred_train = array1_to_vec(&results.pred_train),
+        sigma2_g = results.sigma2_g,
+        h2 = results.h2,
+        z_hat = z_hat_r
+    )
+}
+
 /// Run a BayesR stochastic-EM fit (low-level binding).
 ///
 /// Internal Rust binding called by the R wrapper `run_bayesr(method = "em")`.
+/// Run the SNP-mode BayesR Gibbs MCMC fit (low-level binding).
+/// Called by `run_bayesr()` when `marker_type = "snp"`. Softmax mixture
+/// indicator over 4 effect classes with a single base variance scaled by
+/// `fold[k]`; supports binary traits via Albert-Chib with `sigma2_e` fixed.
+/// @export
+#[extendr]
+fn run_bayesr_snp_mcmc(
+    w: RMatrix<f64>,
+    y: Vec<f64>,
+    wtw_diag: Vec<f64>,
+    x: Nullable<RMatrix<f64>>,
+    pi_vec: Vec<f64>,
+    sigma2_e_init: f64,
+    sigma2_ah: f64,
+    prior_params: List,
+    mcmc_params: List,
+    fold_id: i32,
+    is_binary: bool,
+    verbose: bool,
+) -> List {
+    // Extract MCMC parameters
+    let n_iter = mcmc_params.dollar("n_iter").unwrap().as_integer().unwrap() as usize;
+    let n_burn = mcmc_params.dollar("n_burn").unwrap().as_integer().unwrap() as usize;
+    let n_thin = mcmc_params.dollar("n_thin").unwrap().as_integer().unwrap() as usize;
+    let seed = mcmc_params.dollar("seed").unwrap().as_integer().unwrap() as u64;
+
+    // Extract prior parameters (same shape as MH BayesR kernel)
+    let a0_e = prior_params.dollar("a0_e").unwrap().as_real().unwrap();
+    let b0_e = prior_params.dollar("b0_e").unwrap().as_real().unwrap();
+    let a0_g = prior_params.dollar("a0_g").unwrap().as_real().unwrap();
+    let b0_g = prior_params.dollar("b0_g").unwrap().as_real().unwrap();
+    let variance_class = prior_params.dollar("variance_class").unwrap()
+        .as_real_vector()
+        .expect("'variance_class' must be numeric vector");
+
+    // Convert R matrix to ndarray
+    let w_array = utils::rmatrix_to_array2(&w);
+    let x_array = match x {
+        NotNull(xm) => Some(utils::rmatrix_to_array2(&xm)),
+        Null => None,
+    };
+
+    let mut runner = bayesr_snp::BayesRSNPRunner::new(
+        w_array,
+        y,
+        wtw_diag,
+        x_array,
+        pi_vec,
+        variance_class,
+        sigma2_e_init,
+        sigma2_ah,
+        a0_e, b0_e,
+        a0_g, b0_g,
+        n_iter,
+        n_burn,
+        n_thin,
+        seed,
+        fold_id,
+        is_binary,
+        verbose,
+    );
+
+    let results = runner.run();
+
+    let alpha_samples_r = match results.alpha_samples {
+        Some(ref a) => array2_to_rmatrix(a).into_robj(),
+        None => ().into_robj(),
+    };
+    let alpha_hat_r = match results.alpha_hat {
+        Some(ref a) => array1_to_vec(a).into_robj(),
+        None => ().into_robj(),
+    };
+
+    let z_hat_r = match results.z_hat {
+        Some(ref z) => array1_to_vec(z).into_robj(),
+        None => ().into_robj(),
+    };
+
+    list!(
+        beta_samples = array2_to_rmatrix(&results.beta_samples),
+        gamma_samples = array2_to_rmatrix(&results.gamma_samples),
+        sigma2_e_samples = array1_to_vec(&results.sigma2_e_samples),
+        sigma2_small_samples = array1_to_vec(&results.sigma2_small_samples),
+        sigma2_medium_samples = array1_to_vec(&results.sigma2_medium_samples),
+        sigma2_large_samples = array1_to_vec(&results.sigma2_large_samples),
+        pi_samples = array2_to_rmatrix(&results.pi_samples),
+        mu_samples = array1_to_vec(&results.mu_samples),
+        alpha_samples = alpha_samples_r,
+        beta_hat = array1_to_vec(&results.beta_hat),
+        mu_hat = results.mu_hat,
+        sigma2_e_hat = results.sigma2_e_hat,
+        alpha_hat = alpha_hat_r,
+        pred_train = array1_to_vec(&results.pred_train),
+        sigma2_g = results.sigma2_g,
+        h2 = results.h2,
+        z_hat = z_hat_r
+    )
+}
+
 /// Replaces the full Gibbs sampling of [`run_bayesr_mcmc`] with an EM-style
 /// coordinate-ascent fit that returns point estimates of marker effects
 /// and variance components rather than posterior samples.
@@ -837,6 +1024,8 @@ extendr_module! {
     fn run_bayesr_mcmc;
     fn run_bayesa_mcmc;
     fn run_bayesr_em;
-    fn run_bayesa_em; 
+    fn run_bayesa_em;
+    fn run_bayesr_snp_mcmc;
+    fn run_bayesa_snp_mcmc;
     fn construct_wah_matrix;
 }

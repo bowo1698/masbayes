@@ -272,9 +272,7 @@ finalise_fit <- function(raw, w, y, model_type, method, response_type,
 
   yhat_train <- as.numeric(raw$pred_train)
   if (is_binary) {
-    # Albert-Chib augmentation uses N(eta, 1) latents → probit link.
-    # Convert liability predictions to probabilities before scoring so that
-    # bias is the calibration slope and RMSE^2 ≈ Brier score.
+    # pnorm(eta) maps liability to probability for binary metrics.
     prob_train <- stats::pnorm(yhat_train)
     raw$prob_train <- prob_train
     metrics <- compute_metrics_binary(y, prob_train)
@@ -305,14 +303,9 @@ finalise_fit <- function(raw, w, y, model_type, method, response_type,
   raw$mcmc_params         <- mcmc_params
   raw$em_params           <- em_params
 
-  # GWAS branch — only when caller supplied `map`. Pre-validated by
-  # `.validate_map()` in the wrapper, so we can trust the schema here.
-  # Backward-compat invariant: with map=NULL, no new fields appear on the
-  # fit object, preserving bitwise equivalence with v1.4.0.
+  # GWAS branch attaches pip/gwas/gwas_meta when caller supplied `map`.
   if (!is.null(map)) {
     if (!identical(model_type, "bayesr")) {
-      # Defensive: bayesa-wrapper guards upstream. If we reach here with
-      # bayesa, the upstream contract was violated.
       stop("GWAS branch is only valid for BayesR (internal contract violation)",
            call. = FALSE)
     }
@@ -349,18 +342,8 @@ maybe_save_rds <- function(fit, save_rds, save_path) {
   path
 }
 
-# ---------------------------------------------------------------------------
-# GWAS helpers (v0.5.0 +)
-#
-# These helpers turn the raw BayesR posterior samples into per-allele PIP,
-# per-block PIP, and per-window WPPA. They are only called when the user
-# supplies a `map` argument to run_bayesr(). All are non-exported and live
-# in this file alongside the other post-fit helpers.
-#
-# Why dot-prefix: visually flags them as the GWAS-specific internals added
-# in v0.5.0, distinct from the pre-existing compute_* / varcomp_* helpers.
-# R does not enforce privacy via prefix; export is controlled by NAMESPACE.
-# ---------------------------------------------------------------------------
+# GWAS helpers: per-allele PIP, per-block PIP, per-window WPPA from
+# BayesR posterior samples. Called only when run_bayesr() receives `map`.
 
 #' Validate the user-supplied map data.frame against W.
 #'
@@ -510,7 +493,7 @@ maybe_save_rds <- function(fit, save_rds, save_path) {
 
 #' Cut units into windows by physical position.
 #'
-#' Mirrors hibayes/src/cutwind.cpp: windows never cross chromosome
+#' Per-chromosome window cutting; windows never cross chromosome
 #' boundaries. In `windsize` mode a window closes when the next unit's
 #' position exceeds `window_start + windsize`. In `windnum` mode each
 #' chromosome is partitioned into chunks of `windnum` consecutive units
@@ -535,8 +518,7 @@ maybe_save_rds <- function(fit, save_rds, save_path) {
     pos <- as.integer(map$POS)
     chr <- as.integer(map$CHROM)
   } else {
-    # Integer midpoint chosen for determinism; %/% rounds toward -Inf, which
-    # is fine because start_pos / end_pos are non-negative.
+    # Integer midpoint via %/% (start_pos / end_pos non-negative).
     pos <- as.integer(
       (as.numeric(map$start_pos) + as.numeric(map$end_pos)) %/% 2L)
     chr <- as.integer(map$chr)
