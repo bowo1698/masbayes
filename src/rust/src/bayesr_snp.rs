@@ -255,7 +255,9 @@ impl BayesRSNPRunner {
             for i in 0..self.n_alleles {
                 let xx = self.wtw_diag[i];
                 if xx < 1e-30 {
-                    snp_class_count[0] += 1;
+                    // Monomorphic marker: skip mixture assignment and Pi
+                    // count so Pi[0] posterior reflects only informative
+                    // markers (pre-v0.6.2 counted these into class 0).
                     continue;
                 }
                 let old_gi = self.beta[i];

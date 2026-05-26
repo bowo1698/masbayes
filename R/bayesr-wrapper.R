@@ -405,15 +405,18 @@ run_bayesr <- function(w, y, wtw_diag,
       prior_params$variance_class <- prior_params$variance_class *
                                      (ncol(w) / sum_2pq)
     }
-    if (marker_type == "snp" && !user_supplied_a0e) {
+    # SNP path: b0_e = 0 always (no s2ve user knob in masbayes); b0_g on
+    # the rescaled varg axis. Default a0_g=2 + sigma2_ah=vary/4 reduces to
+    # vary/(0.2*ncol(w)); user-supplied a0_g/sigma2_ah picks up the
+    # generalised (a0_g-1) form on the same axis. Pre-v0.6.2 the
+    # user-supplied path fell back to the multiallelic-style (a0_g-2)/a0_g
+    # formula which is discontinuous at a0_g=2 (yields b0_g=0).
+    if (marker_type == "snp") {
       prior_params$b0_e <- 0
+      prior_params$b0_g <- sigma2_ah * (prior_params$a0_g - 1) /
+                           ((1 - pi_vec[1]) * ncol(w))
     } else {
       prior_params$b0_e <- sigma2_e_init * (prior_params$a0_e - 1)
-    }
-    # SNP-mode b0_g = vary / (0.2 * sum_2pq).
-    if (marker_type == "snp" && !user_supplied_a0g) {
-      prior_params$b0_g <- vary / (0.2 * sum_2pq)
-    } else {
       prior_params$b0_g <- sigma2_ah * (prior_params$a0_g - 2) /
                           prior_params$a0_g / (1 - pi_vec[1])
     }
