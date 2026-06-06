@@ -10,3 +10,5 @@
 # Local backups (created before edits to Rust kernel or R/ code; never commit)
 *.bak
 *.bak.*
+/.cargo
+/vendor

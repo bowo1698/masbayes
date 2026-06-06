@@ -111,6 +111,14 @@ construct_wah_matrix <- function(hap_matrix,
     as.logical(drop_baseline)
   )
 
+  # The Rust kernel returns W_ah without R row names; propagate the individual
+  # IDs from the input haplotype matrix so downstream GEBVs can be named
+  # (finalise_fit() reads rownames(w)). Rows of W_ah align 1:1 with hap_matrix.
+  if (!is.null(rownames(hap_matrix)) &&
+      nrow(result$W_ah) == nrow(hap_matrix)) {
+    rownames(result$W_ah) <- rownames(hap_matrix)
+  }
+
   if (length(result$allele_info) > 0) {
     result$allele_info <- data.frame(
       allele_id        = result$allele_info$allele_id,

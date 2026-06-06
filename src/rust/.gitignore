@@ -8,3 +8,4 @@ target/
 
 # Don't ignore Cargo.lock
 !Cargo.lock
+vendor*

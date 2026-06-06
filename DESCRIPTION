@@ -1,7 +1,7 @@
 Package: masbayes
 Title: Bayesian models for genomic prediction based on SNP and multi-allelic markers
-Version: 0.6.1
-Date: 2026-05-25
+Version: 0.6.2
+Date: 2026-06-06
 Authors@R: c(
     person("Agus", "Wibowo", 
            email = "aguswibowo1698@gmail.com", 
@@ -26,7 +26,7 @@ Imports:
 Suggests:
     pROC,
     testthat (>= 3.0.0)
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Config/rextendr/version: 0.4.2
 Config/testthat/edition: 3
 SystemRequirements: Cargo (Rust's package manager), rustc >= 1.78, xz

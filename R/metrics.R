@@ -271,6 +271,18 @@ finalise_fit <- function(raw, w, y, model_type, method, response_type,
   is_binary <- identical(response_type, "binary")
 
   yhat_train <- as.numeric(raw$pred_train)
+
+  # Re-attach individual IDs.
+  # Prefer the design-matrix rownames, fall back to the
+  # phenotype names; only when the length matches. Names do not affect any
+  # numeric result, so all metrics/variance components stay identical.
+  .ids <- rownames(w)
+  if (is.null(.ids)) .ids <- names(y)
+  if (!is.null(.ids) && length(.ids) == length(yhat_train)) {
+    names(yhat_train)     <- .ids
+    names(raw$pred_train) <- .ids
+  }
+
   if (is_binary) {
     # pnorm(eta) maps liability to probability for binary metrics.
     prob_train <- stats::pnorm(yhat_train)
