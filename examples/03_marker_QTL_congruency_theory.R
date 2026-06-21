@@ -283,7 +283,6 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
   is_snp <- identical(mtype, "snp")
   is_bin <- identical(trait_type, "binary")
 
-  wtw <- colSums(W_tr^2)
   rows <- list()
 
   # MH variance init: 1.0 for binary (liability scale; kernel fixes
@@ -296,7 +295,7 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
       if (model == "BayesR") {
         res <- if (is_snp) {
           run_bayesr(
-            w=W_tr, y=y_train, wtw_diag=wtw,
+            w=W_tr, y=y_train, 
             marker_type   = mtype,
             mcmc_params   = mcmc_p,
             method        = "mcmc",
@@ -304,7 +303,7 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
             fold_id       = 0L)
         } else {
           run_bayesr(
-            w=W_tr, y=y_train, wtw_diag=wtw,
+            w=W_tr, y=y_train, 
             marker_type   = mtype,
             pi_vec        = config$bayesr_mh$pi_vec,
             sigma2_e_init = mh_var_init,
@@ -322,7 +321,7 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
       } else {
         res <- if (is_snp) {
           run_bayesa(
-            w=W_tr, y=y_train, wtw_diag=wtw,
+            w=W_tr, y=y_train, 
             marker_type   = mtype,
             mcmc_params   = mcmc_p,
             method        = "mcmc",
@@ -330,7 +329,7 @@ run_scenario <- function(sc, W_tr, W_te, y_tr, y_te, g_te,
             fold_id       = 0L)
         } else {
           run_bayesa(
-            w=W_tr, y=y_train, wtw_diag=wtw,
+            w=W_tr, y=y_train, 
             marker_type   = mtype,
             nu            = config$bayesa_mh$nu,
             sigma2_g      = mh_var_init,

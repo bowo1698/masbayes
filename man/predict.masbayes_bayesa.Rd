@@ -35,7 +35,6 @@ W_test  <- W[d$test_idx, ]
 fit  <- run_bayesa(
   w             = W_train,
   y             = y_bin[d$train_idx],
-  wtw_diag      = colSums(W_train^2),
   nu            = 4.5,
   sigma2_g      = 1.0,
   sigma2_e_init = 1.0,

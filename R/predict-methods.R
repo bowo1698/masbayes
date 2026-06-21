@@ -71,7 +71,6 @@
 #' fit  <- run_bayesr(
 #'   w             = W_train,
 #'   y             = y_train,
-#'   wtw_diag      = colSums(W_train^2),
 #'   sigma2_e_init = var(y_train) / 2,
 #'   sigma2_ah     = var(y_train) / 2,
 #'   mcmc_params   = list(n_iter = 1000L, n_burn = 500L,
@@ -123,7 +122,6 @@ predict.masbayes_bayesr <- function(object, newdata = NULL, y_new = NULL,
 #' fit  <- run_bayesa(
 #'   w             = W_train,
 #'   y             = y_bin[d$train_idx],
-#'   wtw_diag      = colSums(W_train^2),
 #'   nu            = 4.5,
 #'   sigma2_g      = 1.0,
 #'   sigma2_e_init = 1.0,

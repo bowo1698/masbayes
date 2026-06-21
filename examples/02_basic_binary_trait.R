@@ -37,8 +37,6 @@ X     <- model.matrix(~ sex - 1, data = d$pheno)
 cat(sprintf("Prevalence: %.3f | n_cases=%d | n_controls=%d\n",
             mean(y_bin), sum(y_bin), sum(1 - y_bin)))
 
-wtw <- colSums(W ^ 2)
-
 mcmc_p <- list(n_iter = 2000L, n_burn = 1000L, n_thin = 5L, seed = 123L)
 
 # ── BayesR (binary) ──────────────────────────────────────────────────────────
@@ -46,7 +44,6 @@ fit_r <- run_bayesr(
   w             = W,
   X             = X,
   y             = y_bin,
-  wtw_diag      = wtw,
   pi_vec        = c(0.90, 0.05, 0.03, 0.02),
   sigma2_e_init = 1.0,                        # liability scale
   sigma2_ah     = 1.0,                        # liability scale
@@ -63,7 +60,6 @@ fit_a <- run_bayesa(
   w             = W,
   X             = X,
   y             = y_bin,
-  wtw_diag      = wtw,
   nu            = 4.5,
   sigma2_g      = 1.0,
   sigma2_e_init = 1.0,
@@ -124,7 +120,6 @@ fit_train <- run_bayesr(
   w             = W_train,
   X             = X_train,
   y             = y_train,
-  wtw_diag      = colSums(W_train ^ 2),
   pi_vec        = c(0.90, 0.05, 0.03, 0.02),
   sigma2_e_init = 1.0,
   sigma2_ah     = 1.0,

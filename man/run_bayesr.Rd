@@ -7,7 +7,6 @@
 run_bayesr(
   w,
   y,
-  wtw_diag,
   X = NULL,
   marker_type = c("auto", "snp", "multiallelic"),
   pi_vec = c(0.95, 0.02, 0.02, 0.01),
@@ -35,8 +34,6 @@ or the \code{$W} element returned by \code{\link{construct_snp_matrix}}.}
 
 \item{y}{Phenotype vector (length \code{n}). For binary traits use 0/1
 coding.}
-
-\item{wtw_diag}{Pre-computed \code{colSums(w^2)}, length \code{p}.}
 
 \item{X}{Optional fixed-effects design matrix (\code{n x q}). When
 supplied, the model is \eqn{y = X\alpha + W\beta + \mu + \epsilon}
@@ -273,7 +270,6 @@ X_train   <- model.matrix(~ sex - 1, data = d$pheno[d$train_idx, ])
 fit_snp <- run_bayesr(
   w             = W_train,
   y             = y_train,
-  wtw_diag      = colSums(W_train^2),
   X             = X_train,
   marker_type   = "snp",
   sigma2_e_init = var(y_train) * 0.5,
@@ -305,7 +301,6 @@ map_snp <- data.frame(
 fit_gwas <- run_bayesr(
   w             = W_train,
   y             = y_train,
-  wtw_diag      = colSums(W_train^2),
   marker_type   = "snp",
   sigma2_e_init = var(y_train) * 0.5,
   sigma2_ah     = var(y_train) * 0.5,
@@ -319,7 +314,6 @@ head(fit_gwas$gwas[order(-fit_gwas$gwas$WPPA), ], 5)
 fit_mh <- run_bayesr(
   w             = W_mh,
   y             = y_mh,
-  wtw_diag      = colSums(W_mh^2),
   X             = X_train,
   sigma2_e_init = var(y_mh) * 0.5,
   sigma2_ah     = var(y_mh) * 0.5,

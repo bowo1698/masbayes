@@ -42,7 +42,6 @@
 #'   \code{$W_ah} element returned by \code{\link{construct_wah_matrix}}
 #'   or the \code{$W} element returned by \code{\link{construct_snp_matrix}}.
 #' @param y Phenotype vector (length \code{n}). Use 0/1 for binary traits.
-#' @param wtw_diag Pre-computed \code{colSums(w^2)}.
 #' @param X Optional fixed-effects design matrix (\code{n x q}). When
 #'   supplied, the model is \eqn{y = X\alpha + W\beta + \mu + \epsilon}
 #'   with a flat prior on \eqn{\alpha}. Do \strong{not} include a column
@@ -132,7 +131,6 @@
 #' fit_snp <- run_bayesa(
 #'   w             = W_train,
 #'   y             = y_train,
-#'   wtw_diag      = colSums(W_train^2),
 #'   X             = X_train,
 #'   marker_type   = "snp",
 #'   nu            = 4.5,
@@ -153,7 +151,6 @@
 #' fit_mh <- run_bayesa(
 #'   w             = W_mh,
 #'   y             = y_mh,
-#'   wtw_diag      = colSums(W_mh^2),
 #'   X             = X_train,
 #'   nu            = 4.5,
 #'   sigma2_g      = var(y_mh) * 0.5,
@@ -174,7 +171,7 @@
 #' \doi{10.1093/genetics/157.4.1819}
 #'
 #' @export
-run_bayesa <- function(w, y, wtw_diag,
+run_bayesa <- function(w, y,
                        X             = NULL,
                        marker_type   = c("auto", "snp", "multiallelic"),
                        nu            = 4.5,
@@ -198,6 +195,11 @@ run_bayesa <- function(w, y, wtw_diag,
   marker_type   <- match.arg(marker_type)
   if (marker_type == "auto") marker_type <- "multiallelic"
   is_binary     <- response_type == "binary"
+
+  # FFI expects REALSXP; coerce integer y (e.g. 0/1 binary) to double and
+  # derive the W'W diagonal here so callers never pass wtw_diag.
+  storage.mode(y) <- "double"
+  wtw_diag        <- colSums(w^2)
 
   if (is_binary && method == "em") {
     stop("response_type = 'binary' is only supported for method = 'mcmc'")

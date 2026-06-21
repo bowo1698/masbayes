@@ -34,9 +34,6 @@ n <- nrow(W)
 y <- d$pheno$y_cont_qtl_mh
 X <- model.matrix(~ sex - 1, data = d$pheno)
 
-# Sufficient statistic
-wtw <- colSums(W ^ 2)
-
 mcmc_p <- list(n_iter = 2000L, n_burn = 1000L, n_thin = 5L, seed = 123L)
 
 # ── BayesR ───────────────────────────────────────────────────────────────────
@@ -44,7 +41,6 @@ fit_r <- run_bayesr(
   w             = W,
   X             = X,
   y             = y,
-  wtw_diag      = wtw,
   pi_vec        = c(0.90, 0.05, 0.03, 0.02),
   sigma2_e_init = var(y) * 0.5,
   sigma2_ah     = var(y) * 0.5,
@@ -60,7 +56,6 @@ fit_a <- run_bayesa(
   w             = W,
   X             = X,
   y             = y,
-  wtw_diag      = wtw,
   nu            = 4.5,
   sigma2_g      = var(y) * 0.5,
   sigma2_e_init = var(y) * 0.5,
@@ -105,7 +100,6 @@ fit_train <- run_bayesr(
   w             = W_train,
   X             = X_train,
   y             = y_train,
-  wtw_diag      = colSums(W_train ^ 2),
   pi_vec        = c(0.90, 0.05, 0.03, 0.02),
   sigma2_e_init = var(y_train) * 0.5,
   sigma2_ah     = var(y_train) * 0.5,

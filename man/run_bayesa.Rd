@@ -7,7 +7,6 @@
 run_bayesa(
   w,
   y,
-  wtw_diag,
   X = NULL,
   marker_type = c("auto", "snp", "multiallelic"),
   nu = 4.5,
@@ -33,8 +32,6 @@ run_bayesa(
 or the \code{$W} element returned by \code{\link{construct_snp_matrix}}.}
 
 \item{y}{Phenotype vector (length \code{n}). Use 0/1 for binary traits.}
-
-\item{wtw_diag}{Pre-computed \code{colSums(w^2)}.}
 
 \item{X}{Optional fixed-effects design matrix (\code{n x q}). When
 supplied, the model is \eqn{y = X\alpha + W\beta + \mu + \epsilon}
@@ -177,7 +174,6 @@ X_train   <- model.matrix(~ sex - 1, data = d$pheno[d$train_idx, ])
 fit_snp <- run_bayesa(
   w             = W_train,
   y             = y_train,
-  wtw_diag      = colSums(W_train^2),
   X             = X_train,
   marker_type   = "snp",
   nu            = 4.5,
@@ -198,7 +194,6 @@ y_mh   <- d$pheno$y_cont_qtl_mh[d$train_idx]
 fit_mh <- run_bayesa(
   w             = W_mh,
   y             = y_mh,
-  wtw_diag      = colSums(W_mh^2),
   X             = X_train,
   nu            = 4.5,
   sigma2_g      = var(y_mh) * 0.5,

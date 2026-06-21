@@ -78,7 +78,6 @@ y_test  <- y[d$test_idx]
 fit  <- run_bayesr(
   w             = W_train,
   y             = y_train,
-  wtw_diag      = colSums(W_train^2),
   sigma2_e_init = var(y_train) / 2,
   sigma2_ah     = var(y_train) / 2,
   mcmc_params   = list(n_iter = 1000L, n_burn = 500L,

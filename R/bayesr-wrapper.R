@@ -59,7 +59,6 @@
 #'   or the \code{$W} element returned by \code{\link{construct_snp_matrix}}.
 #' @param y Phenotype vector (length \code{n}). For binary traits use 0/1
 #'   coding.
-#' @param wtw_diag Pre-computed \code{colSums(w^2)}, length \code{p}.
 #' @param X Optional fixed-effects design matrix (\code{n x q}). When
 #'   supplied, the model is \eqn{y = X\alpha + W\beta + \mu + \epsilon}
 #'   with a flat prior on \eqn{\alpha}. Do \strong{not} include a column
@@ -222,7 +221,6 @@
 #' fit_snp <- run_bayesr(
 #'   w             = W_train,
 #'   y             = y_train,
-#'   wtw_diag      = colSums(W_train^2),
 #'   X             = X_train,
 #'   marker_type   = "snp",
 #'   sigma2_e_init = var(y_train) * 0.5,
@@ -254,7 +252,6 @@
 #' fit_gwas <- run_bayesr(
 #'   w             = W_train,
 #'   y             = y_train,
-#'   wtw_diag      = colSums(W_train^2),
 #'   marker_type   = "snp",
 #'   sigma2_e_init = var(y_train) * 0.5,
 #'   sigma2_ah     = var(y_train) * 0.5,
@@ -268,7 +265,6 @@
 #' fit_mh <- run_bayesr(
 #'   w             = W_mh,
 #'   y             = y_mh,
-#'   wtw_diag      = colSums(W_mh^2),
 #'   X             = X_train,
 #'   sigma2_e_init = var(y_mh) * 0.5,
 #'   sigma2_ah     = var(y_mh) * 0.5,
@@ -295,7 +291,7 @@
 #' \doi{10.1186/s12711-014-0082-4}
 #'
 #' @export
-run_bayesr <- function(w, y, wtw_diag,
+run_bayesr <- function(w, y,
                        X             = NULL,
                        marker_type   = c("auto", "snp", "multiallelic"),
                        pi_vec        = c(0.95, 0.02, 0.02, 0.01),
@@ -330,6 +326,11 @@ run_bayesr <- function(w, y, wtw_diag,
   marker_type   <- match.arg(marker_type)
   if (marker_type == "auto") marker_type <- "multiallelic"
   is_binary     <- response_type == "binary"
+
+  # FFI expects REALSXP; coerce integer y (e.g. 0/1 binary) to double and
+  # derive the W'W diagonal here so callers never pass wtw_diag.
+  storage.mode(y) <- "double"
+  wtw_diag        <- colSums(w^2)
 
   if (is_binary && method == "em") {
     stop("response_type = 'binary' is only supported for method = 'mcmc'")

@@ -86,7 +86,6 @@ y_t <- d$pheno$y_cont_qtl_snp[d$train_idx]
 fit_snp <- run_bayesr(
   w             = W,
   y             = y_t,
-  wtw_diag      = colSums(W^2),
   sigma2_e_init = var(y_t) * 0.5,
   sigma2_ah     = var(y_t) * 0.5,
   marker_type   = "snp"
@@ -105,7 +104,6 @@ y_h  <- d$pheno$y_cont_qtl_mh[d$train_idx]
 fit_mh <- run_bayesr(
   w             = W_mh,
   y             = y_h,
-  wtw_diag      = colSums(W_mh^2),
   sigma2_e_init = var(y_h) * 0.5,
   sigma2_ah     = var(y_h) * 0.5,
   marker_type   = "multiallelic"

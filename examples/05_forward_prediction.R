@@ -73,20 +73,19 @@ build_pack <- function(scenario, marker) {
        tbv_te = test_cohort$pheno$tbv_qtl_mh_true,
        y_te   = test_cohort$pheno$y_cont_qtl_mh,
        marker_type = mtype,
-       wtw_diag = colSums(W_tr ^ 2),
        sigma2_init = var(train_pheno$y_cont_qtl_mh) * 0.5)
 }
 
 fit_one <- function(model_name, p) {
   if (model_name == "bayesa") {
-    run_bayesa(w = p$W_tr, X = p$X_tr, y = p$y_tr, wtw_diag = p$wtw_diag,
+    run_bayesa(w = p$W_tr, X = p$X_tr, y = p$y_tr, 
                marker_type = p$marker_type,
                nu = 4.5, sigma2_g = p$sigma2_init,
                sigma2_e_init = p$sigma2_init,
                prior_params = list(a0_e = 10), mcmc_params = MCMC_P,
                method = "mcmc", save_rds = FALSE, verbose = FALSE)
   } else {
-    run_bayesr(w = p$W_tr, X = p$X_tr, y = p$y_tr, wtw_diag = p$wtw_diag,
+    run_bayesr(w = p$W_tr, X = p$X_tr, y = p$y_tr, 
                marker_type = p$marker_type,
                pi_vec = c(0.90, 0.05, 0.03, 0.02),
                sigma2_e_init = p$sigma2_init, sigma2_ah = p$sigma2_init,

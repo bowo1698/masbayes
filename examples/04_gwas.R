@@ -31,7 +31,6 @@ map_snp <- d$map_snp
 fit_snp <- run_bayesr(
   w             = W_snp,
   y             = y_snp,
-  wtw_diag      = colSums(W_snp^2),
   marker_type   = "snp",
   sigma2_e_init = var(y_snp) * 0.5,
   sigma2_ah     = var(y_snp) * 0.5,
@@ -60,7 +59,6 @@ map_mh <- d$map_mh
 fit_mh <- run_bayesr(
   w             = W_mh,
   y             = y_mh,
-  wtw_diag      = colSums(W_mh^2),
   sigma2_e_init = var(y_mh) * 0.5,
   sigma2_ah     = var(y_mh) * 0.5,
   mcmc_params   = mcmc,
