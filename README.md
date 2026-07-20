@@ -132,7 +132,7 @@ Full tutorials (GP + GWAS, SNP + MH, continuous + binary):
 
 ## Development Team
 
-**Lead Developer**
+**Maintainer**
 
 - Agus Wibowo — James Cook University
 
